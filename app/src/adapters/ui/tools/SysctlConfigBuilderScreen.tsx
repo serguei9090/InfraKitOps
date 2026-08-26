@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { BalancedFlowScaffold } from '@/adapters/ui/shell/BalancedFlowScaffold'
 import {
   SysctlConfigBuilder,
   kSysctlParameterCatalog,
@@ -68,11 +68,13 @@ export function SysctlConfigBuilderScreen() {
   const selectedCount = Object.keys(selectedValues).length
 
   return (
-    <ToolDetailScaffold
+    <BalancedFlowScaffold
       title="Kernel Parameter Config Builder"
       copyText={result.value ?? undefined}
-      inputPanel={
-        <div className="flex max-w-2xl flex-col gap-5">
+      resultsLabel="PARAMETER CATALOG"
+      previewLabel="GENERATED SNIPPET"
+      configPanel={
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div>
             <p className="mb-2 text-sm font-medium">Change type</p>
             <div className="flex gap-2">
@@ -110,7 +112,10 @@ export function SysctlConfigBuilderScreen() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-
+        </div>
+      }
+      resultsPanel={
+        <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
               {selectedCount} parameter{selectedCount === 1 ? '' : 's'} selected — only these appear in the output
@@ -164,7 +169,7 @@ export function SysctlConfigBuilderScreen() {
           </div>
         </div>
       }
-      outputPanel={
+      previewPanel={
         result.error ? (
           <p className="text-sm text-destructive">{result.error}</p>
         ) : (

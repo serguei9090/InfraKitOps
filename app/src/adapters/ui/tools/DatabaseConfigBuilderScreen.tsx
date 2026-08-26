@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { BalancedFlowScaffold } from '@/adapters/ui/shell/BalancedFlowScaffold'
 import {
   DatabaseConfigBuilder,
   dbPolicyOptionsForEngine,
@@ -170,11 +170,14 @@ export function DatabaseConfigBuilderScreen() {
   }, [engine, pg, ma, pgPolicyValues, maPolicyValues])
 
   return (
-    <ToolDetailScaffold
+    <BalancedFlowScaffold
       title="Database Config Builder"
       copyText={result.text ?? undefined}
-      inputPanel={
-        <div className="flex max-w-md flex-col gap-6">
+      configLabel="MACHINE & WORKLOAD"
+      resultsLabel="POLICY OPTIONS"
+      previewLabel={databaseEngineSuggestedFileName(engine).toUpperCase() + ' (PREVIEW)'}
+      configPanel={
+        <div className="flex flex-col gap-6">
           <div>
             <p className="text-sm font-medium">Engine</p>
             <div className="mt-2 flex gap-2">
@@ -197,58 +200,53 @@ export function DatabaseConfigBuilderScreen() {
             </div>
           </div>
 
-          {engine === 'postgresql' ? (
-            <PostgresMetricsForm state={pg} onChange={(patch) => setPg((s) => ({ ...s, ...patch }))} />
-          ) : (
-            <MariaDbMetricsForm state={ma} onChange={(patch) => setMa((s) => ({ ...s, ...patch }))} />
-          )}
-
-          <div>
-            <p className="text-sm font-medium">Policy options</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Only the options you select appear in the generated file.
-            </p>
-            <div className="mt-3 flex flex-col gap-4">
-              {sectionsInOrder(activeCatalog).map((section) => {
-                const options = activeCatalog.filter((o) => o.section === section && dependencyMet(activeValues, o))
-                if (options.length === 0) return null
-                return (
-                  <div key={section}>
-                    <p className="text-xs font-semibold tracking-wide text-muted-foreground">{section}</p>
-                    <div className="mt-2 flex flex-col gap-3">
-                      {options.map((option) => (
-                        <PolicyOptionRow
-                          key={option.key}
-                          option={option}
-                          checked={Object.prototype.hasOwnProperty.call(activeValues, option.key)}
-                          value={activeValues[option.key] ?? option.defaultValue}
-                          onToggle={(checked) => toggleOption(option, checked)}
-                          onValueChange={(value) => updateOptionValue(option, value)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+          <div className="max-w-2xl">
+            {engine === 'postgresql' ? (
+              <PostgresMetricsForm state={pg} onChange={(patch) => setPg((s) => ({ ...s, ...patch }))} />
+            ) : (
+              <MariaDbMetricsForm state={ma} onChange={(patch) => setMa((s) => ({ ...s, ...patch }))} />
+            )}
           </div>
         </div>
       }
-      outputPanel={
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground">
-            Suggested filename: {databaseEngineSuggestedFileName(engine)}
-          </p>
-          {result.error ? (
-            <Alert variant="destructive">
-              <AlertDescription>{result.error}</AlertDescription>
-            </Alert>
-          ) : (
-            <pre className="overflow-x-auto rounded-md border border-border/60 bg-muted/40 p-3 font-mono text-sm">
-              {result.text}
-            </pre>
-          )}
+      resultsPanel={
+        <div>
+          <p className="text-xs text-muted-foreground">Only the options you select appear in the generated file.</p>
+          <div className="mt-3 flex flex-col gap-4">
+            {sectionsInOrder(activeCatalog).map((section) => {
+              const options = activeCatalog.filter((o) => o.section === section && dependencyMet(activeValues, o))
+              if (options.length === 0) return null
+              return (
+                <div key={section}>
+                  <p className="text-xs font-semibold tracking-wide text-muted-foreground">{section}</p>
+                  <div className="mt-2 flex flex-col gap-3">
+                    {options.map((option) => (
+                      <PolicyOptionRow
+                        key={option.key}
+                        option={option}
+                        checked={Object.prototype.hasOwnProperty.call(activeValues, option.key)}
+                        value={activeValues[option.key] ?? option.defaultValue}
+                        onToggle={(checked) => toggleOption(option, checked)}
+                        onValueChange={(value) => updateOptionValue(option, value)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
+      }
+      previewPanel={
+        result.error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{result.error}</AlertDescription>
+          </Alert>
+        ) : (
+          <pre className="overflow-x-auto rounded-md border border-border/60 bg-muted/40 p-3 font-mono text-sm">
+            {result.text}
+          </pre>
+        )
       }
     />
   )

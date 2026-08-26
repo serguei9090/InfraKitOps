@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
 import { PdfMerger, PdfPageExtractor, PdfPageRangeParser } from '@/core/office_media/pdfSplitMerge'
 import { PdfInspector } from '@/core/office_media/pdfInspector'
 
@@ -162,10 +162,18 @@ export function PdfSplitMergeScreen() {
     }
   }
 
+  const hasSource = mode === 'merge' ? mergeSources.length > 0 : splitSource != null
+  const hasResult = mode === 'merge' ? mergedResult != null : extractedFiles.length > 0
+  const activeStep = !hasSource ? 0 : !hasResult ? 1 : 2
+
   return (
-    <ToolDetailScaffold
+    <StepperWorkspaceScaffold
       title="PDF Split & Merge"
-      inputPanel={
+      steps={[{ label: 'Choose Mode & Files' }, { label: 'Configure' }, { label: 'Result & Download' }]}
+      activeStep={activeStep}
+      builderLabel="SOURCE FILES"
+      outputLabel="RESULT"
+      builderPanel={
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <p className="text-sm font-medium">Mode</p>

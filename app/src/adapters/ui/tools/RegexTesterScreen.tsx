@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { BalancedFlowScaffold } from '@/adapters/ui/shell/BalancedFlowScaffold'
 import {
   RegexTester,
   groupLabel,
@@ -53,34 +53,39 @@ export function RegexTesterScreen() {
   }, [result])
 
   return (
-    <ToolDetailScaffold
+    <BalancedFlowScaffold
       title="Regex Tester & Explainer"
       copyText={copyText}
-      inputPanel={
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pattern">Pattern</Label>
-            <Input
-              id="pattern"
-              className="font-mono"
-              placeholder={String.raw`e.g. (?<year>\d{4})-\d{2}-\d{2}`}
-              value={pattern}
-              onChange={(e) => setPattern(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label>Flags</Label>
-            <div className="flex flex-col gap-2">
-              <FlagCheckbox label="i — case-insensitive" checked={caseInsensitive} onCheckedChange={setCaseInsensitive} />
-              <FlagCheckbox label="m — multiline" checked={multiLine} onCheckedChange={setMultiLine} />
-              <FlagCheckbox label="s — dot all" checked={dotAll} onCheckedChange={setDotAll} />
-              <FlagCheckbox label="u — unicode" checked={unicode} onCheckedChange={setUnicode} />
+      configLabel="PATTERN & SUBJECT"
+      resultsLabel="MATCHES"
+      previewLabel="PATTERN BREAKDOWN"
+      configPanel={
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="pattern">Pattern</Label>
+              <Input
+                id="pattern"
+                className="font-mono"
+                placeholder={String.raw`e.g. (?<year>\d{4})-\d{2}-\d{2}`}
+                value={pattern}
+                onChange={(e) => setPattern(e.target.value)}
+              />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Unicode property escapes (<code className="font-mono">\p{'{...}'}</code>) and named backreferences (
-              <code className="font-mono">\k&lt;name&gt;</code>) only work correctly with the "u" flag enabled —
-              without it they silently degrade to literal character matches.
-            </p>
+            <div className="flex flex-col gap-2">
+              <Label>Flags</Label>
+              <div className="flex flex-col gap-2">
+                <FlagCheckbox label="i — case-insensitive" checked={caseInsensitive} onCheckedChange={setCaseInsensitive} />
+                <FlagCheckbox label="m — multiline" checked={multiLine} onCheckedChange={setMultiLine} />
+                <FlagCheckbox label="s — dot all" checked={dotAll} onCheckedChange={setDotAll} />
+                <FlagCheckbox label="u — unicode" checked={unicode} onCheckedChange={setUnicode} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Unicode property escapes (<code className="font-mono">\p{'{...}'}</code>) and named backreferences (
+                <code className="font-mono">\k&lt;name&gt;</code>) only work correctly with the "u" flag enabled —
+                without it they silently degrade to literal character matches.
+              </p>
+            </div>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="subject">Subject</Label>
@@ -94,7 +99,8 @@ export function RegexTesterScreen() {
           </div>
         </div>
       }
-      outputPanel={<OutputPanel result={result} subject={subject} />}
+      resultsPanel={<MatchesPanel result={result} subject={subject} />}
+      previewPanel={<Explanation result={result} />}
     />
   )
 }
@@ -116,7 +122,7 @@ function FlagCheckbox({
   )
 }
 
-function OutputPanel({ result, subject }: { result: RegexTesterResult; subject: string }) {
+function MatchesPanel({ result, subject }: { result: RegexTesterResult; subject: string }) {
   if (!result.isValid) {
     return (
       <div className="flex flex-col gap-4">
@@ -125,7 +131,6 @@ function OutputPanel({ result, subject }: { result: RegexTesterResult; subject: 
           <p className="text-sm font-medium">Invalid pattern</p>
         </div>
         <p className="text-sm text-destructive">{result.errorMessage ?? 'Enter a pattern to see matches.'}</p>
-        {result.explanation.length > 0 ? <Explanation result={result} /> : null}
       </div>
     )
   }
@@ -157,7 +162,6 @@ function OutputPanel({ result, subject }: { result: RegexTesterResult; subject: 
       ) : null}
 
       <div>
-        <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground">MATCHES</p>
         {result.matches.length === 0 ? (
           <p className="text-sm text-muted-foreground">No matches.</p>
         ) : (
@@ -168,8 +172,6 @@ function OutputPanel({ result, subject }: { result: RegexTesterResult; subject: 
           </div>
         )}
       </div>
-
-      <Explanation result={result} />
     </div>
   )
 }
@@ -216,10 +218,9 @@ function MatchCard({ match }: { match: RegexMatchResult }) {
 }
 
 function Explanation({ result }: { result: RegexTesterResult }) {
-  if (result.explanation.length === 0) return null
+  if (result.explanation.length === 0) return <p className="text-sm text-muted-foreground">Nothing to break down yet.</p>
   return (
     <div>
-      <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground">PATTERN BREAKDOWN</p>
       <div className="flex flex-col gap-1.5 rounded-lg border border-border/60 p-3">
         {result.explanation.map((token, i) => (
           <p key={i} className="text-xs" style={{ paddingLeft: token.depth * 16 }}>

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
 import {
   FirewallRuleBuilder,
   PortRange,
@@ -116,12 +116,18 @@ export function FirewallRuleBuilderScreen() {
     }
   }, [rows, dialect, incoming, outgoing, forward, sshPort, includeHeader, allowLoopback, allowEstablished, allowIcmp])
 
+  const activeStep = rows.length === 0 ? 0 : result.error ? 1 : 2
+
   return (
-    <ToolDetailScaffold
+    <StepperWorkspaceScaffold
       title="Firewall Rule Builder"
       copyText={result.value?.script}
-      inputPanel={
-        <div className="flex max-w-2xl flex-col gap-5">
+      steps={[{ label: 'Set Dialect & Policy' }, { label: 'Add Rules' }, { label: 'Review & Copy' }]}
+      activeStep={activeStep}
+      builderLabel="DIALECT, POLICY & RULES"
+      outputLabel="GENERATED SCRIPT"
+      builderPanel={
+        <div className="flex flex-col gap-5">
           <div>
             <p className="mb-2 text-sm font-medium">Dialect</p>
             <div className="flex gap-2">

@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
 import {
   SshConfigBuilder,
   sshDeprecatedAlgorithmsIn,
@@ -83,12 +83,22 @@ export function SshConfigBuilderScreen() {
     setHostBlocks((blocks) => blocks.map((b) => (b.id === id ? { ...b, values } : b)))
   }
 
+  const hasAnyConfig =
+    mode === 'client'
+      ? hostBlocks.some((b) => Object.keys(b.values).length > 0) || Object.keys(globalDefaults).length > 0
+      : Object.keys(serverValues).length > 0
+  const activeStep = !hasAnyConfig ? 0 : result.error ? 1 : 2
+
   return (
-    <ToolDetailScaffold
+    <StepperWorkspaceScaffold
       title="OpenSSH Config Builder"
       copyText={result.value?.configText}
-      inputPanel={
-        <div className="flex max-w-2xl flex-col gap-5">
+      steps={[{ label: 'Choose Mode' }, { label: 'Configure Directives' }, { label: 'Review Output' }]}
+      activeStep={activeStep}
+      builderLabel="MODE & DIRECTIVES"
+      outputLabel="GENERATED CONFIG"
+      builderPanel={
+        <div className="flex flex-col gap-5">
           <div>
             <div className="flex gap-2">
               <Button type="button" size="sm" variant={mode === 'client' ? 'default' : 'outline'} onClick={() => setMode('client')}>

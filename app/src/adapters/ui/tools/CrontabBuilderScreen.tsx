@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { BalancedFlowScaffold } from '@/adapters/ui/shell/BalancedFlowScaffold'
 import {
   CrontabBuilder,
   cronEvery,
@@ -179,11 +179,13 @@ export function CrontabBuilderScreen() {
   const globalError = mode === 'build' ? buildResult.error : explainResult.error
 
   return (
-    <ToolDetailScaffold
+    <BalancedFlowScaffold
       title="Crontab Expression Builder"
       copyText={result?.expression}
-      inputPanel={
-        <div className="flex max-w-md flex-col gap-4">
+      resultsLabel="NEXT 5 RUN TIMES"
+      previewLabel="EXPRESSION & MEANING"
+      configPanel={
+        <div className="flex flex-col gap-4">
           <div className="flex gap-2">
             <Button
               type="button"
@@ -204,7 +206,7 @@ export function CrontabBuilderScreen() {
           </div>
 
           {mode === 'build' ? (
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {columns.map((meta) => (
                 <ColumnPicker
                   key={meta.key}
@@ -216,7 +218,7 @@ export function CrontabBuilderScreen() {
               ))}
             </div>
           ) : (
-            <div className="flex flex-col gap-1.5">
+            <div className="flex max-w-md flex-col gap-1.5">
               <Label htmlFor="explain-expression">Crontab expression</Label>
               <Input
                 id="explain-expression"
@@ -235,14 +237,31 @@ export function CrontabBuilderScreen() {
           {globalError ? <p className="text-sm text-destructive">{globalError}</p> : null}
         </div>
       }
-      outputPanel={
+      resultsPanel={
         !result ? (
           <p className="text-sm text-muted-foreground">
             {mode === 'build'
               ? 'Fix the highlighted fields to generate an expression.'
               : 'Paste a crontab expression to explain it.'}
           </p>
+        ) : result.isReboot ? (
+          <p className="text-sm text-muted-foreground">
+            Runs once at system startup — there is no wall-clock schedule to list.
+          </p>
+        ) : result.nextRuns.length === 0 ? (
+          <p className="text-sm text-muted-foreground">This schedule never matches a real calendar date (e.g. Feb 30).</p>
         ) : (
+          <div className="flex flex-col divide-y divide-border/60 rounded-md border border-border/60">
+            {result.nextRuns.map((run, i) => (
+              <p key={i} className="px-3 py-2 font-mono text-sm">
+                {formatRun(run)}
+              </p>
+            ))}
+          </div>
+        )
+      }
+      previewPanel={
+        result ? (
           <div className="flex flex-col gap-5">
             <div>
               <p className="text-xs text-muted-foreground">Expression</p>
@@ -254,26 +273,8 @@ export function CrontabBuilderScreen() {
               <p className="text-xs text-muted-foreground">Meaning</p>
               <p className="mt-1.5 text-sm">{result.description}</p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Next 5 run times</p>
-              {result.isReboot ? (
-                <p className="mt-1.5 text-sm">
-                  Runs once at system startup — there is no wall-clock schedule to list.
-                </p>
-              ) : result.nextRuns.length === 0 ? (
-                <p className="mt-1.5 text-sm">This schedule never matches a real calendar date (e.g. Feb 30).</p>
-              ) : (
-                <div className="mt-1.5 flex flex-col divide-y divide-border/60 rounded-md border border-border/60">
-                  {result.nextRuns.map((run, i) => (
-                    <p key={i} className="px-3 py-2 font-mono text-sm">
-                      {formatRun(run)}
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
-        )
+        ) : null
       }
     />
   )
