@@ -26,12 +26,11 @@ export function ToolDetailScaffold({ title, inputPanel, outputPanel, copyText }:
   return (
     <div className="flex h-full flex-col">
       <ToolScaffoldHeader title={title} copyText={copyText} />
-      <div className="flex flex-1 flex-col overflow-auto lg:flex-row">
-        <ToolScaffoldPanel label="INPUT PARAMETERS & CONTROLS" className="bg-background">
+      <div className="flex flex-1 flex-col gap-4 overflow-auto p-5 lg:flex-row">
+        <ToolScaffoldPanel label="INPUT PARAMETERS & CONTROLS" bordered className="bg-background">
           {inputPanel}
         </ToolScaffoldPanel>
-        <div className="h-px w-full shrink-0 bg-border/60 lg:h-auto lg:w-px" />
-        <ToolScaffoldPanel label="GENERATED OUTPUT & LIVE PREVIEW" className="bg-card">
+        <ToolScaffoldPanel label="GENERATED OUTPUT & LIVE PREVIEW" bordered className="bg-card">
           {outputPanel}
         </ToolScaffoldPanel>
       </div>
