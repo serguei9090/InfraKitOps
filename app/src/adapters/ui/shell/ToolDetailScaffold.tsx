@@ -1,8 +1,9 @@
-import { Copy, Eye } from 'lucide-react'
+import { Copy, Download, Eye } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { downloadBlob } from '@/lib/downloadFile'
 import { cn } from '@/lib/utils'
 
 interface ToolDetailScaffoldProps {
@@ -11,6 +12,10 @@ interface ToolDetailScaffoldProps {
   outputPanel: ReactNode
   /** Text to copy when the toolbar's copy button is pressed. Undefined hides it. */
   copyText?: string
+  /** Opens `preview.content` in a modal from a header button. Undefined hides it. */
+  preview?: ToolScaffoldPreview
+  /** Downloads `download.content` as a file from a header button. Undefined hides it. */
+  download?: ToolScaffoldDownload
 }
 
 /**
@@ -22,10 +27,10 @@ interface ToolDetailScaffoldProps {
  * three archetypes stay visually consistent as more tools are added
  * independently.
  */
-export function ToolDetailScaffold({ title, inputPanel, outputPanel, copyText }: ToolDetailScaffoldProps) {
+export function ToolDetailScaffold({ title, inputPanel, outputPanel, copyText, preview, download }: ToolDetailScaffoldProps) {
   return (
     <div className="flex min-h-full flex-col">
-      <ToolScaffoldHeader title={title} copyText={copyText} />
+      <ToolScaffoldHeader title={title} copyText={copyText} preview={preview} download={download} />
       <div className="flex flex-1 flex-col gap-4 p-5 lg:flex-row">
         <ToolScaffoldPanel label="INPUT PARAMETERS & CONTROLS" bordered className="bg-background">
           {inputPanel}
@@ -43,10 +48,15 @@ interface ToolScaffoldPreview {
   content: ReactNode
 }
 
+interface ToolScaffoldDownload {
+  fileName: string
+  content: string
+  mimeType?: string
+}
+
 /**
- * Title bar with an optional copy-to-clipboard action and an optional
- * "Preview" button (opens `preview.content` in a modal), shared by all
- * three layout archetypes. Both stay reachable without scrolling — the
+ * Title bar with optional Download / Preview / Copy actions, shared by all
+ * three layout archetypes. All stay reachable without scrolling — the
  * header sits outside the scaffold's scrollable body — which matters most
  * for `StepperWorkspaceScaffold` (T3), where a long dynamic rule/row list
  * can otherwise push the generated output far below the fold.
@@ -55,10 +65,12 @@ export function ToolScaffoldHeader({
   title,
   copyText,
   preview,
+  download,
 }: {
   title: string
   copyText?: string
   preview?: ToolScaffoldPreview
+  download?: ToolScaffoldDownload
 }) {
   const [copied, setCopied] = useState(false)
 
@@ -73,6 +85,17 @@ export function ToolScaffoldHeader({
     <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-5">
       <h1 className="text-[17px] font-semibold tracking-tight">{title}</h1>
       <div className="flex-1" />
+      {download ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => downloadBlob(download.content, download.fileName, download.mimeType)}
+        >
+          <Download className="size-4" />
+          Download
+        </Button>
+      ) : null}
       {preview ? (
         <Dialog>
           <DialogTrigger render={<Button variant="ghost" size="sm" className="gap-1.5" />}>

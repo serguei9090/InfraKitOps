@@ -1,10 +1,10 @@
-import { FolderOpen, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, FolderOpen, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch, type Control } from 'react-hook-form'
 import { useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -34,6 +34,13 @@ function messageOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
+const FORMAT_EXTENSIONS: Record<SourceFormat, string> = { xml: 'xml', yaml: 'yaml', json: 'json' }
+const FORMAT_MIME_TYPES: Record<SourceFormat, string> = {
+  xml: 'application/xml',
+  yaml: 'application/x-yaml',
+  json: 'application/json',
+}
+
 /**
  * Reclassifies `field` to `newType`. object<->array keep their children
  * (same shape: a list of named sub-fields). Any other transition drops
@@ -61,6 +68,7 @@ export function FormFlowBuilderScreen() {
   const [templateNames, setTemplateNames] = useState<string[] | null>(null)
   const [templatesError, setTemplatesError] = useState<string | null>(null)
   const [toDelete, setToDelete] = useState<string | null>(null)
+  const [sourceExpanded, setSourceExpanded] = useState(initialTemplate == null)
 
   const { control, register, reset } = useForm<Record<string, unknown>>({
     defaultValues: initialTemplate?.values ?? {},
@@ -86,6 +94,7 @@ export function FormFlowBuilderScreen() {
     setTemplateName(template.name)
     setSaveStatus(null)
     setParseError(null)
+    setSourceExpanded(false)
     reset(template.values)
   }
 
@@ -102,6 +111,7 @@ export function FormFlowBuilderScreen() {
       const parsed = parser.parse(pasteText, formatOverride)
       setSchema(parsed)
       setParseError(null)
+      setSourceExpanded(false)
       reset(defaultValuesFromFields(parsed.fields))
     } catch (e) {
       setSchema(null)
@@ -146,40 +156,77 @@ export function FormFlowBuilderScreen() {
       <ToolDetailScaffold
       title="FormFlow Builder"
       copyText={output.text ?? undefined}
+      preview={
+        output.text
+          ? {
+              label: 'Generated Output',
+              content: (
+                <pre className="overflow-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
+                  {output.text}
+                </pre>
+              ),
+            }
+          : undefined
+      }
+      download={
+        output.text && schema
+          ? {
+              fileName: `${templateName ?? schema.rootName}.${FORMAT_EXTENSIONS[schema.format]}`,
+              content: output.text,
+              mimeType: FORMAT_MIME_TYPES[schema.format],
+            }
+          : undefined
+      }
       inputPanel={
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium">Upload file</p>
-          <p className="text-sm text-muted-foreground">
-            Drop an XML, YAML or JSON file below — or paste its contents directly.
-          </p>
-          <Input type="file" accept=".xml,.yaml,.yml,.json" onChange={handleFilePicked} />
-          <Textarea
-            value={pasteText}
-            onChange={(e) => setPasteText(e.target.value)}
-            rows={10}
-            className="font-mono text-xs"
-            placeholder={'<config>\n  <server>...</server>\n</config>'}
-          />
-          <div className="flex gap-2">
-            <Select
-              value={formatOverride ?? 'auto'}
-              onValueChange={(v) => setFormatOverride(v === 'auto' ? undefined : ((v as SourceFormat) ?? undefined))}
-            >
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Auto-detect format" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Auto-detect format</SelectItem>
-                {SOURCE_FORMATS.map((f) => (
-                  <SelectItem key={f} value={f}>
-                    {f.toUpperCase()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={handleParse}>Parse</Button>
-          </div>
-          {parseError ? <p className="text-sm text-destructive">Could not parse: {parseError}</p> : null}
+          <button
+            type="button"
+            onClick={() => setSourceExpanded((v) => !v)}
+            className="flex items-center gap-1.5 text-sm font-medium"
+          >
+            {sourceExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+            Upload file
+            {!sourceExpanded && schema ? (
+              <span className="font-normal text-muted-foreground">
+                — {schema.rootName} ({schema.format.toUpperCase()})
+              </span>
+            ) : null}
+          </button>
+          {sourceExpanded ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Drop an XML, YAML or JSON file below — or paste its contents directly.
+              </p>
+              <Input type="file" accept=".xml,.yaml,.yml,.json" onChange={handleFilePicked} />
+              <Textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                rows={10}
+                className="font-mono text-xs"
+                placeholder={'<config>\n  <server>...</server>\n</config>'}
+              />
+              <div className="flex gap-2">
+                <Select
+                  value={formatOverride ?? 'auto'}
+                  onValueChange={(v) => setFormatOverride(v === 'auto' ? undefined : ((v as SourceFormat) ?? undefined))}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Auto-detect format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto-detect format</SelectItem>
+                    {SOURCE_FORMATS.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f.toUpperCase()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleParse}>Parse</Button>
+              </div>
+              {parseError ? <p className="text-sm text-destructive">Could not parse: {parseError}</p> : null}
+            </>
+          ) : null}
 
           <div className="mt-4 flex flex-col gap-2 border-t border-border/60 pt-4">
             <p className="text-sm font-medium">Saved Templates</p>
@@ -241,7 +288,7 @@ export function FormFlowBuilderScreen() {
                       onChange={(e) => setSaveDialogName(e.target.value)}
                     />
                     <DialogFooter>
-                      <DialogTrigger render={<Button onClick={handleSaveTemplate}>Save</Button>} />
+                      <DialogClose render={<Button onClick={() => void handleSaveTemplate()}>Save</Button>} />
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -292,7 +339,7 @@ export function FormFlowBuilderScreen() {
           </DialogHeader>
           <p className="text-sm text-muted-foreground">"{toDelete}" will be permanently deleted. This cannot be undone.</p>
           <DialogFooter>
-            <DialogTrigger render={<Button variant="outline">Cancel</Button>} />
+            <DialogClose render={<Button variant="outline">Cancel</Button>} />
             <Button variant="destructive" onClick={() => void confirmDeleteTemplate()}>
               Delete
             </Button>
