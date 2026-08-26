@@ -1,4 +1,4 @@
-import { Plus, Save, X } from 'lucide-react'
+import { FolderOpen, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch, type Control } from 'react-hook-form'
 import { useLocation } from 'react-router-dom'
@@ -58,10 +58,44 @@ export function FormFlowBuilderScreen() {
   const [templateName, setTemplateName] = useState<string | null>(initialTemplate?.name ?? null)
   const [saveDialogName, setSaveDialogName] = useState('')
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
+  const [templateNames, setTemplateNames] = useState<string[] | null>(null)
+  const [templatesError, setTemplatesError] = useState<string | null>(null)
+  const [toDelete, setToDelete] = useState<string | null>(null)
 
   const { control, register, reset } = useForm<Record<string, unknown>>({
     defaultValues: initialTemplate?.values ?? {},
   })
+
+  function refreshTemplates() {
+    repository
+      .listNames()
+      .then(setTemplateNames)
+      .catch((e: unknown) => setTemplatesError(messageOf(e)))
+  }
+
+  useEffect(refreshTemplates, [])
+
+  async function handleEditTemplate(name: string) {
+    const raw = await repository.load(name)
+    if (raw == null) {
+      refreshTemplates()
+      return
+    }
+    const template = JSON.parse(raw) as SavedFormFlowTemplate
+    setSchema(template.schema)
+    setTemplateName(template.name)
+    setSaveStatus(null)
+    setParseError(null)
+    reset(template.values)
+  }
+
+  async function confirmDeleteTemplate() {
+    if (!toDelete) return
+    await repository.delete(toDelete)
+    if (templateName === toDelete) setTemplateName(null)
+    setToDelete(null)
+    refreshTemplates()
+  }
 
   function handleParse() {
     try {
@@ -102,12 +136,14 @@ export function FormFlowBuilderScreen() {
     setTemplateName(name)
     setSaveStatus(`Saved "${name}"`)
     setSaveDialogName('')
+    refreshTemplates()
   }
 
   const output = useOutput(schema, control)
 
   return (
-    <ToolDetailScaffold
+    <>
+      <ToolDetailScaffold
       title="FormFlow Builder"
       copyText={output.text ?? undefined}
       inputPanel={
@@ -144,6 +180,41 @@ export function FormFlowBuilderScreen() {
             <Button onClick={handleParse}>Parse</Button>
           </div>
           {parseError ? <p className="text-sm text-destructive">Could not parse: {parseError}</p> : null}
+
+          <div className="mt-4 flex flex-col gap-2 border-t border-border/60 pt-4">
+            <p className="text-sm font-medium">Saved Templates</p>
+            {templatesError ? (
+              <p className="text-sm text-destructive">Could not load saved templates: {templatesError}</p>
+            ) : templateNames === null ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : templateNames.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-8 text-center">
+                <FolderOpen className="size-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">No saved templates yet</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {templateNames.map((name) => (
+                  <div key={name} className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+                    <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
+                    <Button variant="ghost" size="sm" onClick={() => void handleEditTemplate(name)} className="gap-1.5">
+                      <Pencil className="size-3.5" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Delete "${name}"`}
+                      onClick={() => setToDelete(name)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {schema ? (
             <>
@@ -214,6 +285,21 @@ export function FormFlowBuilderScreen() {
         )
       }
     />
+      <Dialog open={toDelete !== null} onOpenChange={(open) => !open && setToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete template?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">"{toDelete}" will be permanently deleted. This cannot be undone.</p>
+          <DialogFooter>
+            <DialogTrigger render={<Button variant="outline">Cancel</Button>} />
+            <Button variant="destructive" onClick={() => void confirmDeleteTemplate()}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 

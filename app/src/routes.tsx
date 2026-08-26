@@ -55,7 +55,6 @@ import { QrReaderScreen } from './adapters/ui/tools/QrReaderScreen'
 
 // Phase 5 — FormFlow Dynamic Builder
 import { FormFlowBuilderScreen } from './adapters/ui/tools/FormFlowBuilderScreen'
-import { SavedTemplatesScreen } from './adapters/ui/tools/SavedTemplatesScreen'
 
 export const router = createBrowserRouter([
   {
@@ -119,7 +118,6 @@ export const router = createBrowserRouter([
 
       // Phase 5 — FormFlow Dynamic Builder
       { path: 'tools/formflow-builder', element: <FormFlowBuilderScreen /> },
-      { path: 'tools/saved-templates', element: <SavedTemplatesScreen /> },
     ],
   },
 ])

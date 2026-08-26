@@ -13,7 +13,6 @@ import {
   Activity,
   Archive,
   Box,
-  BookMarked,
   BookOpen,
   Braces,
   Cable,
@@ -245,7 +244,6 @@ export const kModuleTaxonomy: ModuleDef[] = [
     icon: Workflow,
     tools: [
       { id: 'formflow-builder', name: 'XML/YAML Form Designer', description: 'Auto-detect schema & loops', icon: Workflow, route: '/tools/formflow-builder' },
-      { id: 'saved-templates', name: 'Custom Saved Templates', description: 'Your saved form library', icon: BookMarked, route: '/tools/saved-templates' },
     ],
   },
   {
