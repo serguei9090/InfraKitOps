@@ -112,6 +112,8 @@ export function FormFlowBuilderScreen() {
       setSchema(parsed)
       setParseError(null)
       setSourceExpanded(false)
+      setTemplateName(null)
+      setSaveStatus(null)
       reset(defaultValuesFromFields(parsed.fields))
     } catch (e) {
       setSchema(null)
@@ -155,9 +157,9 @@ export function FormFlowBuilderScreen() {
     <>
       <ToolDetailScaffold
       title="FormFlow Builder"
-      copyText={output.text ?? undefined}
+      copyText={templateName && output.text ? output.text : undefined}
       preview={
-        output.text
+        templateName && output.text
           ? {
               label: 'Generated Output',
               content: (
@@ -169,9 +171,9 @@ export function FormFlowBuilderScreen() {
           : undefined
       }
       download={
-        output.text && schema
+        templateName && output.text && schema
           ? {
-              fileName: `${templateName ?? schema.rootName}.${FORMAT_EXTENSIONS[schema.format]}`,
+              fileName: `${templateName}.${FORMAT_EXTENSIONS[schema.format]}`,
               content: output.text,
               mimeType: FORMAT_MIME_TYPES[schema.format],
             }
