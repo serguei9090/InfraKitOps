@@ -1,7 +1,8 @@
-import { Copy } from 'lucide-react'
+import { Copy, Eye } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 interface ToolDetailScaffoldProps {
@@ -38,8 +39,28 @@ export function ToolDetailScaffold({ title, inputPanel, outputPanel, copyText }:
   )
 }
 
-/** Title bar + optional copy-to-clipboard action, shared by all three layout archetypes. */
-export function ToolScaffoldHeader({ title, copyText }: { title: string; copyText?: string }) {
+interface ToolScaffoldPreview {
+  label: string
+  content: ReactNode
+}
+
+/**
+ * Title bar with an optional copy-to-clipboard action and an optional
+ * "Preview" button (opens `preview.content` in a modal), shared by all
+ * three layout archetypes. Both stay reachable without scrolling — the
+ * header sits outside the scaffold's scrollable body — which matters most
+ * for `StepperWorkspaceScaffold` (T3), where a long dynamic rule/row list
+ * can otherwise push the generated output far below the fold.
+ */
+export function ToolScaffoldHeader({
+  title,
+  copyText,
+  preview,
+}: {
+  title: string
+  copyText?: string
+  preview?: ToolScaffoldPreview
+}) {
   const [copied, setCopied] = useState(false)
 
   async function handleCopy() {
@@ -53,6 +74,20 @@ export function ToolScaffoldHeader({ title, copyText }: { title: string; copyTex
     <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 px-5">
       <h1 className="text-[17px] font-semibold tracking-tight">{title}</h1>
       <div className="flex-1" />
+      {preview ? (
+        <Dialog>
+          <DialogTrigger render={<Button variant="ghost" size="sm" className="gap-1.5" />}>
+            <Eye className="size-4" />
+            Preview
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{preview.label}</DialogTitle>
+            </DialogHeader>
+            <div className="max-h-[70vh] overflow-auto">{preview.content}</div>
+          </DialogContent>
+        </Dialog>
+      ) : null}
       {copyText !== undefined ? (
         <Button variant="ghost" size="sm" onClick={handleCopy} className="gap-1.5">
           <Copy className="size-4" />

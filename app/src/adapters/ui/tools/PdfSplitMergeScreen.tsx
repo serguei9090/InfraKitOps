@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
+import { downloadBlob } from '@/lib/downloadFile'
 import { PdfMerger, PdfPageExtractor, PdfPageRangeParser } from '@/core/office_media/pdfSplitMerge'
 import { PdfInspector } from '@/core/office_media/pdfInspector'
 
@@ -37,13 +38,7 @@ function stemOf(fileName: string): string {
 }
 
 function downloadBytes(bytes: Uint8Array, fileName: string) {
-  const blob = new Blob([bytes.slice()], { type: 'application/pdf' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = fileName
-  anchor.click()
-  URL.revokeObjectURL(url)
+  downloadBlob(bytes.slice(), fileName, 'application/pdf')
 }
 
 async function readFiles(files: FileList): Promise<SourceFile[]> {

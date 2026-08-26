@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { downloadBlob } from '@/lib/downloadFile'
 import {
   ImageConverter,
   IMAGE_OUTPUT_FORMATS,
@@ -101,13 +102,11 @@ export function ImageConverterScreen() {
   function handleDownload() {
     if (!result || !source) return
     const extension = extensionForFormat(result.outputFormat)
-    const blob = new Blob([result.outputBytes.slice()], { type: `image/${extension === 'jpg' ? 'jpeg' : extension}` })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = suggestedOutputName(source.name, extension)
-    anchor.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(
+      result.outputBytes.slice(),
+      suggestedOutputName(source.name, extension),
+      `image/${extension === 'jpg' ? 'jpeg' : extension}`,
+    )
   }
 
   const qualityLabel =

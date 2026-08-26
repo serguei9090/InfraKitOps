@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { downloadBlob } from '@/lib/downloadFile'
 import {
   JsonToCsvConverter,
   CSV_DELIMITERS,
@@ -68,13 +69,7 @@ export function JsonToCsvScreen() {
 
   function download() {
     if (!result.value) return
-    const blob = new Blob([result.value.csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'output.csv'
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(result.value.csv, 'output.csv', 'text/csv;charset=utf-8')
   }
 
   return (

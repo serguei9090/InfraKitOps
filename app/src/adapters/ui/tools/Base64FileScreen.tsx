@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { downloadBlob } from '@/lib/downloadFile'
 import {
   Base64FileDecoder,
   Base64FileEncoder,
@@ -87,13 +88,7 @@ export function Base64FileScreen() {
     const value = decodeResult.value
     if (!value) return
     const extension = extensionForMimeType(value.mimeType)
-    const blob = new Blob([value.bytes.slice()], { type: value.mimeType ?? 'application/octet-stream' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `decoded.${extension}`
-    anchor.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(value.bytes.slice(), `decoded.${extension}`, value.mimeType ?? 'application/octet-stream')
   }
 
   const copyText = direction === 'encode' ? encodeResult.value?.output : undefined
