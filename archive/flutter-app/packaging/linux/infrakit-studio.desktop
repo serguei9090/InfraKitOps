@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=InfraKit Studio
+Comment=Local-first SRE, SysAdmin & Developer Workbench
+Exec=infrakit_studio
+Icon=infrakit-studio
+Categories=Development;Utility;
+Terminal=false

@@ -1,0 +1,8 @@
+#!/bin/sh
+# AppImage entrypoint. The Flutter Linux embedder resolves its data/ and
+# lib/ directories relative to the executable's own path, so the whole
+# bundle (binary + lib/*.so + data/ + the web/ folder copied in at package
+# time) is staged together under usr/bin/ rather than split across the
+# usual FHS-style usr/lib + usr/share layout.
+HERE="$(dirname "$(readlink -f "${0}")")"
+exec "$HERE/usr/bin/infrakit_studio" "$@"

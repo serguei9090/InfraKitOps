@@ -1,0 +1,160 @@
+# InfraKit Studio — CLAUDE.md
+
+Project guidance for Claude Code sessions working in this repo. Product context lives in
+[`InfraKit Studio Specification.md`](InfraKit%20Studio%20Specification.md), UI/architecture
+rationale in [`design.md`](design.md), migration rationale/steps in
+[`MIGRATION_PLAN.md`](MIGRATION_PLAN.md).
+
+## Stack decision (2026-08-25)
+
+Migrating off Flutter. Target stack:
+
+- **Frontend**: React 18 + TypeScript + Vite. Runs unmodified as a static web app AND
+  inside a Tauri webview as the desktop app — one codebase, two targets, same property
+  the old Flutter app had (`flutter build web` / `flutter build windows`).
+- **Desktop shell**: Tauri v2 (stable, currently 2.10.x). WebView2 (Windows) / WebKitGTK
+  (Linux), not bundled Chromium — small binary, native installer (MSI/NSIS) via the
+  built-in bundler, replaces the old Inno Setup script.
+- **Backend (later phase, not yet started)**: Go service for ansible/ssh command
+  execution and local model serving (Ollama-style). Ships either as a standalone HTTP
+  service the web build talks to, or as a **Tauri sidecar** (external binary Tauri
+  spawns/manages) for the desktop build — see
+  [Tauri sidecar docs](https://v2.tauri.app/develop/sidecar/). Until this phase starts,
+  the app stays client-only, same constraint the Flutter version had.
+- **UI kit**: shadcn/ui + Tailwind CSS. Deliberately chosen to match the existing
+  "Linear/Vercel-style premium dev tool" visual target in `design.md` — shadcn's default
+  aesthetic already reads that way, so the theme port is a token translation, not a
+  redesign. Icons: `lucide-react` (closest match to the Material icons used today).
+- **State**: Zustand for the small amount of global state (theme, module
+  order/visibility prefs). Most tools are locally self-contained (mirrors the old
+  Riverpod usage — most providers were screen-scoped, not global).
+- **Routing**: `react-router` (v6+), one `ShellRoute`-equivalent layout route wrapping
+  the persistent rail + swap pane, matching `app_shell.dart`'s current structure.
+- **Forms**: `react-hook-form` + `zod`. Chosen specifically for FormFlow (dynamic
+  array-loop fields) — `useFieldArray` is the direct equivalent of the current dynamic
+  array loop handling in `formflow_parser.dart`.
+- **Testing**: Vitest + React Testing Library for units/components (mirrors
+  `test/core/**` Dart unit tests).
+
+## Why this over Tauri+Rust-for-everything or staying Flutter
+
+Compared during planning (see chat history, not re-litigated here): Go was picked over
+Rust for the eventual backend because this app's backend work is infra-tooling-shaped
+(concurrent ssh/ansible process exec, model serving) — Go's ecosystem (Ollama itself is
+Go) and simpler concurrency model fit better than Rust's, and it's faster to iterate on
+with AI assistance. React was picked over keeping Flutter for ecosystem size (component
+libraries, AI training coverage, faster "vibecode" iteration) and because it collapses
+naturally into both a webapp and a Tauri desktop app from the same build, whereas
+Flutter's dual-target story required its own web/desktop split. Tauri was kept over
+Electron for bundle size (WebView2 vs bundled Chromium) and because it wraps the same
+React output rather than requiring a separate app shell language.
+
+## Architecture — hexagonal, ported 1:1
+
+The Flutter app's ports & adapters structure carries over directly; only the language
+and adapter implementations change:
+
+| Flutter (old)                  | React (new)                          | Notes |
+|---------------------------------|---------------------------------------|-------|
+| `lib/core/**`                   | `src/core/**`                         | Pure TS, zero React imports — same rule as the old "zero `package:flutter` imports" check |
+| `lib/core/ports/**`             | `src/core/ports/**`                   | TS interfaces (`IToolUseCase`, `IStoragePort`, etc.) |
+| `lib/adapters/ui/shell/**`      | `src/adapters/ui/shell/**`            | Icon rail + swap pane shell, theme, module taxonomy |
+| `lib/adapters/ui/tools/**`      | `src/adapters/ui/tools/**`            | One component per tool |
+| `lib/adapters/storage/**`       | `src/adapters/storage/**`             | Web: `localStorage`/IndexedDB. Desktop: Tauri `fs` + `dialog` plugins |
+| `lib/adapters/server/**` (`--serve`) | *(future, Go backend phase)*     | Static file serving moves to the Go service instead of the frontend |
+
+Rule carried over unchanged: **no UI framework imports in `src/core/**`.** Check before
+any PR:
+
+```bash
+grep -rl "from 'react" app/src/core   # must print nothing
+```
+
+Adding a new tool stays a small, mechanical change (same reason the Flutter version
+called this out — it's what let unrelated background agents build tools in parallel
+with zero file conflicts):
+
+1. Core logic: `src/core/<domain>/<tool>.ts`, implementing `IToolUseCase<TIn, TOut>`.
+   Unit test alongside it.
+2. Screen: `src/adapters/ui/tools/<Tool>Screen.tsx`, built on the shared
+   `ToolDetailScaffold` layout component.
+3. Register: one entry in `src/adapters/ui/shell/moduleTaxonomy.ts` + one route in
+   `src/routes.tsx`.
+
+All paths in this section and the table above are relative to `app/` (see Commands).
+
+## Status
+
+**Migration done, Phases 0–6 and 9 complete (2026-08-25).** Full 44-tool parity with
+the Flutter app reached; every tool is live at `/tools/*` with persistent storage.
+The Flutter implementation has been archived to
+[`archive/flutter-app/`](archive/flutter-app/) (its `lib/`, `windows/`, `linux/`,
+`web/`, `packaging/`, `test/`, `pubspec.*` — kept for reference, not deleted, in case
+a regression surfaces post-cutover; it is not built or maintained anymore). `app/`
+is now the only active codebase. Phases 7 (Tauri packaging) and 8 (Go backend) are
+intentionally not started — no Go backend work until the frontend is fully settled,
+matching the original spec's client-first constraint (§5). See `MIGRATION_PLAN.md`
+for the full phase-by-phase history.
+
+App in `app/`:
+- Vite + React 19 + TypeScript, Tailwind v4, shadcn/ui (indigo `#4F46E5` seed color
+  ported into `app/src/index.css`'s `--primary`/`--ring`/`--sidebar-primary` tokens,
+  light + dark). shadcn resolved to **Base UI primitives** (`@base-ui/react`), not
+  Radix — no `asChild`, composition via a `render` prop instead; keep that in mind in
+  later phases.
+- Tauri v2 shell in `app/src-tauri/` (`identifier: com.infrakit.studio`), `cargo check`
+  passes, `tauri info` reports a clean environment (WebView2, MSVC, Rust toolchain all
+  green).
+- Full shell UI working: icon rail + swap pane (`AppSidebar.tsx`), top bar with search +
+  theme toggle (`AppShellScaffold.tsx`), "All Tools"/per-module pages
+  (`HomeDashboardScreen.tsx`/`ModuleToolsScreen.tsx` + shared `ModuleSectionView.tsx`),
+  module reorder/hide dialog (`ModuleSettingsDialog.tsx`), and the full 44-tool
+  `moduleTaxonomy.ts`. Zustand stores in `app/src/stores/`.
+- `app/src/core/**` fully populated — every `lib/core/**` file ported, including
+  `office_media/` (Phase 4) and `form_flow/` (Phase 5, which also needed a
+  narrowly-scoped `ISchemaRepository` + `localStorage` adapter — see
+  `MIGRATION_PLAN.md`'s Phase 5/6 notes, not a general `IStoragePort` yet).
+  954 Vitest tests passing, zero React imports (hex boundary intact).
+- **All 44 tools are live** at `/tools/*`, built on `ToolDetailScaffold.tsx`
+  (`app/src/adapters/ui/tools/*.tsx`) — full parity with the Flutter reference app
+  reached. Two screens (Data Converter, Formatters) combine 4 core files each behind
+  `Tabs`; Knowledge Hub's 3 list-style tools share one `ResourceLinkListView.tsx`
+  component; FormFlow's designer/live-form is driven by `react-hook-form`'s
+  `useFieldArray` (the reason that library was picked back in the stack-decision
+  phase). Verified end-to-end in-browser throughout (not just typechecked): full
+  build clean, all 954 core tests passing, hex boundary intact, a real QR
+  generate→decode round trip through actual `File`/`DataTransfer` upload
+  simulation, and a full FormFlow round trip (parse → retype a field to a dynamic
+  array loop → add/edit items with confirmed per-index isolation → save → reload →
+  byte-for-byte restore → delete). Known follow-up: the production bundle is
+  ~820KB gzipped now — route-based code-splitting (`React.lazy`) is worth doing
+  before Phase 7 packaging, more pressing now than when first flagged.
+- `npm run build` (web) and `cargo check` (desktop shell) both verified early on. **Not
+  yet verified**: `npm run tauri dev` opening an actual native window — that launches a
+  GUI process this environment can't observe; run it yourself once to confirm.
+- Package manager: **bun** (user preference, 2026-08-25 — switched from the initial npm
+  scaffold; `bun.lock` is the lockfile, `package-lock.json` removed). Use `bun`/`bunx`,
+  not `npm`/`npx`, for everything in `app/` from here on.
+
+## Commands (run from `app/`)
+
+```bash
+bun install              # install deps
+bun run dev               # Vite dev server (web) — http://localhost:1420
+bun run tauri dev         # Tauri desktop dev (wraps the same Vite dev server)
+bun run build              # static web build (tsc -b && vite build)
+bun run tauri build        # desktop installer (MSI/NSIS via Tauri bundler)
+bun run test                # Vitest, core logic unit tests
+bunx shadcn@latest add <x>  # add a shadcn/ui component
+```
+
+## Working conventions
+
+- Keep `src/core/**` framework-free — this is the part every future backend/frontend
+  swap (there's been one already) needs to survive untouched.
+- Match `design.md`'s existing rules where they're UI-framework-agnostic (e.g. the
+  "selected-state must come from one shared token, never a one-off color" rule) —
+  translate the *rule*, not the Flutter code, into the shadcn/Tailwind equivalent.
+- Don't start the Go backend phase opportunistically while porting tools — it's a
+  separate, later phase (see `MIGRATION_PLAN.md`). Keep the frontend client-only until
+  that phase is explicitly started, same constraint the original spec had (§5).

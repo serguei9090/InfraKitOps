@@ -1,0 +1,11 @@
+Package: infrakit-studio
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: InfraKit Studio <noreply@example.com>
+Description: Local-first SRE, SysAdmin & Developer Workbench
+ InfraKit Studio bundles tuning calculators, dev utilities, FormFlow,
+ office/media tools, and cheatsheets into one offline-first Flutter app.
+ Run with --serve to headlessly serve the web UI over HTTP instead of
+ opening the native GUI window.
