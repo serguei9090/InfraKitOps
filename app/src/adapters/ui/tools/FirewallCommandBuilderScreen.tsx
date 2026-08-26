@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
+import { BalancedFlowScaffold } from '@/adapters/ui/shell/BalancedFlowScaffold'
 import {
   FirewallCommandBuilder,
   firewallCmdProviderDescription,
@@ -172,18 +172,15 @@ export function FirewallCommandBuilderScreen() {
     }
   }
 
-  const activeStep = rows.length === 0 ? 0 : copyText ? 2 : 1
-
   return (
-    <StepperWorkspaceScaffold
+    <BalancedFlowScaffold
       title="Firewall Command Builder"
       copyText={copyText}
-      steps={[{ label: 'Define Target' }, { label: 'Add Rules' }, { label: 'Review & Copy' }]}
-      activeStep={activeStep}
-      builderLabel="TARGET & RULES"
-      outputLabel="GENERATED COMMANDS"
-      builderPanel={
-        <div className="flex flex-col gap-6">
+      configLabel="TARGET"
+      resultsLabel="RULES"
+      previewLabel="GENERATED COMMANDS"
+      configPanel={
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label>Target</Label>
             <Select value={provider} onValueChange={(v) => setProvider(v as FirewallCmdProvider)}>
@@ -226,18 +223,20 @@ export function FirewallCommandBuilderScreen() {
               ))}
             </div>
           </div>
-
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <Label>Rules</Label>
-              <Button type="button" variant="ghost" size="sm" onClick={() => addRow()}>
-                <Plus className="size-3.5" />
-                Add rule
-              </Button>
-            </div>
-            {rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No rules yet — add one above.</p>
-            ) : null}
+        </div>
+      }
+      resultsPanel={
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-end">
+            <Button type="button" variant="ghost" size="sm" onClick={() => addRow()}>
+              <Plus className="size-3.5" />
+              Add rule
+            </Button>
+          </div>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No rules yet — add one above.</p>
+          ) : null}
+          <div className="flex flex-col gap-3">
             {rows.map((row) => (
               <div key={row.id} className="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 p-3">
                 <div className="flex flex-wrap items-end gap-3">
@@ -364,7 +363,7 @@ export function FirewallCommandBuilderScreen() {
           </div>
         </div>
       }
-      outputPanel={
+      previewPanel={
         <div className="flex flex-col gap-3">
           {generated.length === 0 ? (
             <p className="text-sm text-muted-foreground">Add a rule to see its commands here.</p>
@@ -399,12 +398,13 @@ function CommandLine({ label, command }: { label: string; command: string }) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <div className="mt-1 flex items-center gap-2 rounded-md bg-muted/40 px-2.5 py-2">
-        <pre className="flex-1 overflow-x-auto font-mono text-xs">{command}</pre>
+      <div className="mt-1 flex items-start gap-2 rounded-md bg-muted/40 px-2.5 py-2">
+        <pre className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-xs">{command}</pre>
         <Button
           type="button"
           variant="ghost"
           size="icon-xs"
+          className="shrink-0"
           onClick={() => void navigator.clipboard.writeText(command)}
           aria-label={`Copy ${label} command`}
         >
