@@ -24,9 +24,9 @@ interface ToolDetailScaffoldProps {
  */
 export function ToolDetailScaffold({ title, inputPanel, outputPanel, copyText }: ToolDetailScaffoldProps) {
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-full flex-col">
       <ToolScaffoldHeader title={title} copyText={copyText} />
-      <div className="flex flex-1 flex-col gap-4 overflow-auto p-5 lg:flex-row">
+      <div className="flex flex-1 flex-col gap-4 p-5 lg:flex-row">
         <ToolScaffoldPanel label="INPUT PARAMETERS & CONTROLS" bordered className="bg-background">
           {inputPanel}
         </ToolScaffoldPanel>
@@ -70,7 +70,7 @@ export function ToolScaffoldHeader({
   }
 
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 px-5">
+    <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-5">
       <h1 className="text-[17px] font-semibold tracking-tight">{title}</h1>
       <div className="flex-1" />
       {preview ? (

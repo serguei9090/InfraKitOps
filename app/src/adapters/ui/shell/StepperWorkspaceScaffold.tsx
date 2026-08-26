@@ -42,13 +42,13 @@ export function StepperWorkspaceScaffold({
   copyText,
 }: StepperWorkspaceScaffoldProps) {
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-full flex-col">
       <ToolScaffoldHeader
         title={title}
         copyText={copyText}
         preview={{ label: outputLabel, content: outputPanel }}
       />
-      <div className="flex flex-1 flex-col gap-4 overflow-auto p-5">
+      <div className="flex flex-1 flex-col gap-4 p-5">
         <StepperBar steps={steps} activeStep={activeStep} />
         <ToolScaffoldPanel label={builderLabel} bordered className="flex-none bg-background">
           {builderPanel}
