@@ -173,7 +173,7 @@ export function SysctlConfigBuilderScreen() {
         result.error ? (
           <p className="text-sm text-destructive">{result.error}</p>
         ) : (
-          <pre className="max-w-full overflow-x-auto whitespace-pre rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
+          <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
             {result.value}
           </pre>
         )

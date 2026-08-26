@@ -80,11 +80,11 @@ export function ToolScaffoldHeader({
             <Eye className="size-4" />
             Preview
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] flex-col sm:max-w-2xl md:max-w-4xl lg:max-w-5xl">
             <DialogHeader>
               <DialogTitle>{preview.label}</DialogTitle>
             </DialogHeader>
-            <div className="max-h-[70vh] overflow-auto">{preview.content}</div>
+            <div className="min-h-0 flex-1 overflow-auto">{preview.content}</div>
           </DialogContent>
         </Dialog>
       ) : null}

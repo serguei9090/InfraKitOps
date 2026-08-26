@@ -217,7 +217,7 @@ export function SshConfigBuilderScreen() {
                   ))}
                 </div>
               ) : null}
-              <pre className="max-w-full overflow-x-auto whitespace-pre rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
+              <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
                 {result.value.configText}
               </pre>
             </>
