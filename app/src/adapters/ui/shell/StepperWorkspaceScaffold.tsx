@@ -49,7 +49,7 @@ export function StepperWorkspaceScaffold({
         <ToolScaffoldPanel label={builderLabel} bordered className="flex-none bg-background">
           {builderPanel}
         </ToolScaffoldPanel>
-        <ToolScaffoldPanel label={outputLabel} bordered className="flex-1 bg-card font-mono text-sm">
+        <ToolScaffoldPanel label={outputLabel} bordered className="flex-1 bg-card">
           {outputPanel}
         </ToolScaffoldPanel>
       </div>

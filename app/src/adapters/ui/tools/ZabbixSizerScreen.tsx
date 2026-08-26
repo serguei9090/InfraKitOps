@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { BalancedFlowScaffold } from '@/adapters/ui/shell/BalancedFlowScaffold'
 import {
   ZabbixSizer,
   formatZabbixBytes,
@@ -57,11 +57,13 @@ export function ZabbixSizerScreen() {
   }
 
   return (
-    <ToolDetailScaffold
+    <BalancedFlowScaffold
       title="Zabbix Monitoring Sizer"
       copyText={result.value?.configText}
-      inputPanel={
-        <div className="flex max-w-md flex-col gap-6">
+      resultsLabel="SIZING RESULTS & DB GROWTH"
+      previewLabel="zabbix_server.conf (PREVIEW)"
+      configPanel={
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <div className="flex flex-col gap-3">
             <Label>Monitored environment</Label>
             <div className="grid grid-cols-2 gap-3">
@@ -124,7 +126,7 @@ export function ZabbixSizerScreen() {
           </div>
         </div>
       }
-      outputPanel={
+      resultsPanel={
         result.error ? (
           <p className="text-sm text-destructive">{result.error}</p>
         ) : result.value ? (
@@ -182,18 +184,18 @@ export function ZabbixSizerScreen() {
               />
             </div>
 
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">zabbix_server.conf</p>
-              <pre className="mt-2 max-w-full overflow-x-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
-                {result.value.configText}
-              </pre>
-            </div>
-
             <p className="text-xs text-muted-foreground">
               Cache and worker figures are heuristic starting points — verify against the internal items Zabbix
               exposes once the server is running, e.g. zabbix[wcache,values], zabbix[vcache,buffer,pfree].
             </p>
           </div>
+        ) : null
+      }
+      previewPanel={
+        result.value ? (
+          <pre className="max-w-full overflow-x-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
+            {result.value.configText}
+          </pre>
         ) : null
       }
     />

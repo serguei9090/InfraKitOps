@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
 import {
   FirewallCommandBuilder,
   firewallCmdProviderDescription,
@@ -172,12 +172,18 @@ export function FirewallCommandBuilderScreen() {
     }
   }
 
+  const activeStep = rows.length === 0 ? 0 : copyText ? 2 : 1
+
   return (
-    <ToolDetailScaffold
+    <StepperWorkspaceScaffold
       title="Firewall Command Builder"
       copyText={copyText}
-      inputPanel={
-        <div className="flex max-w-2xl flex-col gap-6">
+      steps={[{ label: 'Define Target' }, { label: 'Add Rules' }, { label: 'Review & Copy' }]}
+      activeStep={activeStep}
+      builderLabel="TARGET & RULES"
+      outputLabel="GENERATED COMMANDS"
+      builderPanel={
+        <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-1.5">
             <Label>Target</Label>
             <Select value={provider} onValueChange={(v) => setProvider(v as FirewallCmdProvider)}>
@@ -360,7 +366,6 @@ export function FirewallCommandBuilderScreen() {
       }
       outputPanel={
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground">Generated commands</p>
           {generated.length === 0 ? (
             <p className="text-sm text-muted-foreground">Add a rule to see its commands here.</p>
           ) : (
