@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { backendPost } from '@/adapters/backend/backendClient'
+import { useCallback, useEffect, useState } from 'react'
+import { backendGet, backendPost } from '@/adapters/backend/backendClient'
 import {
   NetworkToolScaffold,
   QueryBar,
@@ -50,6 +50,26 @@ export function Iperf3Screen() {
 
   const { running, error, result, completions, start, stop, restore } = useNetworkRun<IperfResult>({ run })
   const d = result?.detail
+
+  const [server, setServer] = useState<{ running: boolean; port: number }>({ running: false, port: 5201 })
+  const refreshServer = useCallback(() => {
+    backendGet<{ running: boolean; port: number }>('/iperf3/server')
+      .then(setServer)
+      .catch(() => {})
+  }, [])
+  useEffect(refreshServer, [refreshServer])
+
+  async function toggleServer() {
+    try {
+      const next = await backendPost<{ running: boolean; port: number }>('/iperf3/server', {
+        running: !server.running,
+        port,
+      })
+      setServer(next)
+    } catch {
+      /* not-installed handled by the results banner */
+    }
+  }
 
   return (
     <NetworkToolScaffold
@@ -106,6 +126,14 @@ export function Iperf3Screen() {
               <Button type="button" size="sm" variant={override ? 'secondary' : 'outline'} onClick={() => setOverride((v) => !v)}>
                 {override ? 'Custom MTU/buffers' : 'Use defaults'}
               </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={server.running ? 'secondary' : 'outline'}
+                onClick={() => void toggleServer()}
+              >
+                {server.running ? `Stop local server (:${server.port})` : 'Start local server'}
+              </Button>
               {override ? (
                 <>
                   <QueryField label="MSS (--set-mss)" htmlFor="ip-mss">
@@ -132,11 +160,15 @@ export function Iperf3Screen() {
       results={
         error ? (
           error.includes('503') ? (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+            <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
               <p className="font-medium">iperf3 is not installed.</p>
-              <p className="mt-1">
-                Install the <code>iperf3</code> binary (it&apos;s on the system&apos;s PATH that this tool checks) or add
-                the bundled copy, then reload. On the peer, run <code>iperf3 -s</code>.
+              <p>
+                Linux/macOS ship a bundled static copy. On Windows, install it once — every build links{' '}
+                <code>cygwin1.dll</code> (GPL), so it can&apos;t be bundled:
+              </p>
+              <pre className="rounded bg-black/10 p-2 font-mono text-xs dark:bg-white/10">winget install ar51an.iPerf3</pre>
+              <p className="text-xs">
+                Then reload. (<code>choco install iperf3</code> or a manual download also work.)
               </p>
             </div>
           ) : (
@@ -146,7 +178,8 @@ export function Iperf3Screen() {
           <p className="text-sm text-muted-foreground">Running test…</p>
         ) : !result ? (
           <p className="text-sm text-muted-foreground">
-            Enter the host running an iperf3 server (<code>iperf3 -s</code>) and press Run.
+            Enter a host running <code>iperf3 -s</code> and press Run — or hit <em>Start local server</em> (Advanced) and
+            run <code>iperf3 -c &lt;this machine&gt;</code> from the other end.
           </p>
         ) : d && !d.ok ? (
           <p className="text-sm text-destructive">{d.error || 'test failed'}</p>

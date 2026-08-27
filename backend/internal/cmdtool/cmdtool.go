@@ -18,7 +18,7 @@ import (
 // pass an arg slice so nothing is word-split or interpreted.
 func Run(ctx context.Context, bin string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, bin, args...)
-	hideConsole(cmd)
+	HideConsole(cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

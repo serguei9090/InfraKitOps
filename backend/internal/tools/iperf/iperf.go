@@ -8,7 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
 )
@@ -58,16 +61,39 @@ type Result struct {
 	Raw    string `json:"raw,omitempty"`
 }
 
-// Available reports whether an iperf3 binary is on PATH.
+// resolveBin finds the iperf3 binary: the copy bundled next to the backend
+// (`iperf3` / `iperf3.exe`, placed by build-sidecar from vendor-tools), else
+// one on PATH.
+func resolveBin() (string, bool) {
+	names := []string{"iperf3"}
+	if runtime.GOOS == "windows" {
+		names = []string{"iperf3.exe"}
+	}
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		for _, n := range names {
+			cand := filepath.Join(dir, n)
+			if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
+				return cand, true
+			}
+		}
+	}
+	if p, err := exec.LookPath("iperf3"); err == nil {
+		return p, true
+	}
+	return "", false
+}
+
+// Available reports whether an iperf3 binary can be found.
 func Available() bool {
-	_, err := exec.LookPath("iperf3")
-	return err == nil
+	_, ok := resolveBin()
+	return ok
 }
 
 // Run performs a client test and parses the JSON output.
 func Run(ctx context.Context, opts Options) (Result, error) {
-	bin, err := exec.LookPath("iperf3")
-	if err != nil {
+	bin, ok := resolveBin()
+	if !ok {
 		return Result{}, ErrNotInstalled
 	}
 

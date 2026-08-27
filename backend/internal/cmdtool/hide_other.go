@@ -4,4 +4,4 @@ package cmdtool
 
 import "os/exec"
 
-func hideConsole(*exec.Cmd) {}
+func HideConsole(*exec.Cmd) {}

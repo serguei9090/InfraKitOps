@@ -19,6 +19,8 @@ function Build($goos, $goarch, $triple, $ext) {
   $env:CGO_ENABLED = "0"; $env:GOOS = $goos; $env:GOARCH = $goarch
   go build -trimpath -ldflags $ldflags -o "$out/infrakit-backend-$triple$ext" ./cmd/infrakit-backend
   go build -trimpath -ldflags "-s -w" -o "$out/infrakit-helper-$triple$ext" ./cmd/infrakit-helper
+  $vt = "../vendor-tools/bin/iperf3-$goos-$goarch"
+  if (Test-Path $vt) { Copy-Item $vt "$out/iperf3$ext" -Force }
 }
 
 $hostTriple = (rustc -vV | Select-String '^host: ').ToString().Replace("host: ", "").Trim()

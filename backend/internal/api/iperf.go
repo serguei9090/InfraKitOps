@@ -74,3 +74,32 @@ func Iperf3(w http.ResponseWriter, r *http.Request) {
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"envelope": env})
 }
+
+// Iperf3Server: GET returns { running, port }; POST { running: bool, port? }
+// starts / stops the managed local `iperf3 -s`.
+func Iperf3Server(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		running, port := iperf.ServerStatus()
+		WriteJSON(w, http.StatusOK, map[string]any{"running": running, "port": port})
+		return
+	}
+	var body struct {
+		Running bool `json:"running"`
+		Port    int  `json:"port"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if body.Running {
+		if err := iperf.StartServer(body.Port); err != nil {
+			if errors.Is(err, iperf.ErrNotInstalled) {
+				WriteJSON(w, http.StatusServiceUnavailable, map[string]any{"error": err.Error(), "notInstalled": true})
+				return
+			}
+			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+	} else {
+		iperf.StopServer()
+	}
+	running, port := iperf.ServerStatus()
+	WriteJSON(w, http.StatusOK, map[string]any{"running": running, "port": port})
+}

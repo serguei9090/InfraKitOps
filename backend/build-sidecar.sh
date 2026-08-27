@@ -25,6 +25,14 @@ build() {
   CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
     go build -trimpath -ldflags "-s -w" \
     -o "$OUT/infrakit-helper-${triple}${ext}" ./cmd/infrakit-helper
+  # bundled third-party tools (see ../vendor-tools/) — copy the matching arch
+  # next to the backend as `iperf3<ext>` (fixed name; the backend resolves it
+  # by exact name next to itself). Windows iperf3 is not bundled — none exists.
+  local vt="../vendor-tools/bin"
+  if [ -f "$vt/iperf3-${goos}-${goarch}" ]; then
+    cp "$vt/iperf3-${goos}-${goarch}" "$OUT/iperf3${ext}"
+    chmod +x "$OUT/iperf3${ext}"
+  fi
 }
 
 host_triple="$(rustc -vV | sed -n 's/host: //p')"

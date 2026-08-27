@@ -1,0 +1,10 @@
+# Pinned third-party binaries bundled with InfraKit Studio.
+# Format:  <tool>  <goos>  <goarch>  <sha256>  <url>
+# Only MIT / BSD / ISC / Apache-2.0 / MPL-2.0 licensed binaries — see vendor-tools/TOOLS.md.
+# fetch-tools.{sh,ps1} downloads each to bin/<tool>-<goos>-<goarch> and verifies the sha256.
+# build-sidecar then copies bin/<tool>-<goos>-<goarch> next to the backend as <tool>-<triple>.
+
+iperf3	linux	amd64	fde45980958b6a5b32e947d379699a8a3b54152d4971cce87ffa4c93ca2d2b9e	https://github.com/userdocs/iperf3-static/releases/download/3.21/iperf3-amd64
+iperf3	linux	arm64	6c005b04dfab35840fbf1d1b3202c8997afed95de3db0b78fe95c3834dc5233a	https://github.com/userdocs/iperf3-static/releases/download/3.21/iperf3-arm64v8
+iperf3	darwin	amd64	71474bb614e2d48f3c5fcb63ae7b77b51e37043f989478ee9021223db856a8e6	https://github.com/userdocs/iperf3-static/releases/download/3.21/iperf3-amd64-osx-15
+iperf3	darwin	arm64	3347bb7cf23fd05773625b49665cf5f9723fb1eda51f19bfe1fbe396af6c6b98	https://github.com/userdocs/iperf3-static/releases/download/3.21/iperf3-arm64-osx-15

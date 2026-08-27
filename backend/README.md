@@ -45,6 +45,8 @@ headers). CORS is locked to the Tauri and Vite-dev origins.
 | GET | `/health` | liveness + `{ os, elevated, version, pid, uptimeSec }` |
 | GET | `/capabilities` | per-tool `{ available, reason?, needsElevation? }` map |
 | GET | `/interfaces` | host network interfaces (name, MTU, addrs, flags) for the source-interface picker |
+| POST | `/iperf3` | throughput test (needs iperf3 — bundled on Linux/macOS, `winget install ar51an.iPerf3` on Windows) |
+| GET/POST | `/iperf3/server` | status / start-stop a managed local `iperf3 -s` |
 | GET | `/history` | run summaries — `?tool=&target=&limit=` |
 | POST | `/history` | store a `RunEnvelope`; `?retentionDays=&maxPerTarget=` override the prune defaults |
 | GET | `/history/{id}` | one full stored run |
@@ -67,8 +69,17 @@ internal/envelope/      the RunEnvelope shape stored by the history layer
 internal/history/       embedded-SQLite run store + prune policy
 internal/privilege/     "is this process elevated?" (per-OS)
 internal/elevate/       spawn infrakit-helper with a UAC / polkit prompt
+internal/cmdtool/       exec + JSON-unmarshal helper for tools that shell out (not a framework)
 internal/tools/         one package per network tool (ping, traceroute, dnslookup, …)
 ```
+
+## Bundled binaries
+
+`../vendor-tools/` pins third-party binaries (see `TOOLS.md`, license gate in
+`../CLAUDE.md`). `vendor-tools/fetch-tools.sh` downloads + SHA-256-verifies them;
+`build-sidecar` copies the arch-matched one next to the backend. Today: **iperf3**
+(BSD-3, static, Linux + macOS — not Windows: every Windows build links GPL
+`cygwin1.dll`).
 
 ## Test
 

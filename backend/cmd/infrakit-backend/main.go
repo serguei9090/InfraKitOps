@@ -29,6 +29,7 @@ import (
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/server"
+	"github.com/infrakit/backend/internal/tools/iperf"
 )
 
 func main() {
@@ -58,6 +59,7 @@ func main() {
 	if store != nil {
 		defer store.Close()
 	}
+	defer iperf.StopServer() // kill any managed `iperf3 -s` child
 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {

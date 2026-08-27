@@ -9,6 +9,6 @@ import (
 
 // hideConsole stops a brief console window from flashing when the backend runs
 // as a GUI sidecar.
-func hideConsole(cmd *exec.Cmd) {
+func HideConsole(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 }
