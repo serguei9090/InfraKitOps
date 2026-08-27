@@ -21,6 +21,10 @@ build() {
   CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
     go build -trimpath -ldflags "$LDFLAGS" \
     -o "$OUT/infrakit-backend-${triple}${ext}" ./cmd/infrakit-backend
+  # the one-shot elevated helper (spawned by the backend for hosts-file writes)
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+    go build -trimpath -ldflags "-s -w" \
+    -o "$OUT/infrakit-helper-${triple}${ext}" ./cmd/infrakit-helper
 }
 
 host_triple="$(rustc -vV | sed -n 's/host: //p')"

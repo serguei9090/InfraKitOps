@@ -59,11 +59,15 @@ embedded SQLite (pure-Go `modernc.org/sqlite`); a store that fails to open makes
 
 ```
 cmd/infrakit-backend/   main: flags, listener, stdout contract, signals, history DB
-internal/server/        router wiring, middleware (auth/CORS/activity), SSE helper, idle watchdog
+cmd/infrakit-helper/    one-shot elevated helper (hosts-file write), spawned via UAC/pkexec
+internal/server/        router wiring, middleware (auth/CORS/activity), idle watchdog
+internal/sse/           channel-funnelled SSE writer for the streaming tools
 internal/api/           one file per endpoint concern
 internal/envelope/      the RunEnvelope shape stored by the history layer
 internal/history/       embedded-SQLite run store + prune policy
 internal/privilege/     "is this process elevated?" (per-OS)
+internal/elevate/       spawn infrakit-helper with a UAC / polkit prompt
+internal/tools/         one package per network tool (ping, traceroute, dnslookup, …)
 ```
 
 ## Test

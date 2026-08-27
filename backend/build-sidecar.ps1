@@ -18,6 +18,7 @@ function Build($goos, $goarch, $triple, $ext) {
   Write-Host "building $triple ..."
   $env:CGO_ENABLED = "0"; $env:GOOS = $goos; $env:GOARCH = $goarch
   go build -trimpath -ldflags $ldflags -o "$out/infrakit-backend-$triple$ext" ./cmd/infrakit-backend
+  go build -trimpath -ldflags "-s -w" -o "$out/infrakit-helper-$triple$ext" ./cmd/infrakit-helper
 }
 
 $hostTriple = (rustc -vV | Select-String '^host: ').ToString().Replace("host: ", "").Trim()

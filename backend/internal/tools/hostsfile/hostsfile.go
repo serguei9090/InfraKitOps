@@ -5,6 +5,7 @@
 package hostsfile
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/infrakit/backend/internal/elevate"
 )
 
 // Line is one parsed hosts-file line.
@@ -120,42 +123,51 @@ func Render(lines []Line) string {
 }
 
 // Apply writes the given lines to the hosts file: timestamped backup first,
-// then an atomic replace. Returns a needs-elevation sentinel on EACCES/EPERM.
+// then an atomic replace. On a permission error it spawns the elevated helper
+// (one UAC / polkit prompt); if the helper is missing or the prompt is declined
+// it returns ErrNeedsElevation.
 func Apply(lines []Line) error {
 	path := Path()
+	newContent := Render(lines)
+
+	if err := directWrite(path, newContent); err == nil {
+		return nil
+	} else if !os.IsPermission(err) {
+		return err
+	}
+
+	// Permission denied — escalate via the helper.
+	if err := elevate.Run(elevate.Request{Op: "hosts-write", Path: path, Content: newContent}); err != nil {
+		if errors.Is(err, elevate.ErrHelperMissing) {
+			return ErrNeedsElevation
+		}
+		return fmt.Errorf("elevated write: %w", err)
+	}
+	return nil
+}
+
+func directWrite(path, content string) error {
 	current, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-
-	backupDir := filepath.Dir(path)
-	backup := filepath.Join(backupDir, fmt.Sprintf("hosts.infrakit-backup-%s", time.Now().Format("20060102-150405")))
+	dir := filepath.Dir(path)
+	backup := filepath.Join(dir, fmt.Sprintf("hosts.infrakit-backup-%s", time.Now().Format("20060102-150405")))
 	if err := os.WriteFile(backup, current, 0o644); err != nil {
-		if os.IsPermission(err) {
-			return ErrNeedsElevation
-		}
-		return fmt.Errorf("write backup: %w", err)
+		return err
 	}
-
-	tmp := filepath.Join(backupDir, ".hosts.infrakit-tmp")
-	newContent := []byte(Render(lines))
-	if err := os.WriteFile(tmp, newContent, 0o644); err != nil {
-		if os.IsPermission(err) {
-			return ErrNeedsElevation
-		}
+	tmp := filepath.Join(dir, ".hosts.infrakit-tmp")
+	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
-		if os.IsPermission(err) {
-			return ErrNeedsElevation
-		}
 		return err
 	}
 	return nil
 }
 
-// ErrNeedsElevation signals the caller should prompt the user to run elevated.
+// ErrNeedsElevation signals the caller should ask the user to run the app elevated.
 var ErrNeedsElevation = fmt.Errorf("writing the hosts file requires administrator / root privileges")
 
 // Backups lists the timestamped backups this tool has made, newest first.
@@ -172,7 +184,8 @@ func Backups() ([]string, error) {
 	return matches, nil
 }
 
-// RestoreLatest copies the newest backup back over the hosts file.
+// RestoreLatest copies the newest backup back over the hosts file, escalating
+// if needed.
 func RestoreLatest() error {
 	backups, err := Backups()
 	if err != nil {
@@ -185,8 +198,13 @@ func RestoreLatest() error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(Path(), data, 0o644); err != nil {
-		if os.IsPermission(err) {
+	if err := os.WriteFile(Path(), data, 0o644); err == nil {
+		return nil
+	} else if !os.IsPermission(err) {
+		return err
+	}
+	if err := elevate.Run(elevate.Request{Op: "hosts-restore", Path: Path()}); err != nil {
+		if errors.Is(err, elevate.ErrHelperMissing) {
 			return ErrNeedsElevation
 		}
 		return err
