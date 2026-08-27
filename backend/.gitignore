@@ -1,8 +1,9 @@
 # build output
 /bin/
 /dist/
-infrakit-backend
-infrakit-backend.exe
+/infrakit-backend
+/infrakit-backend.exe
+/infrakit-backend-*
 *.out
 
 # go
