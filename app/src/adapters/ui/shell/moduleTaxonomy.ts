@@ -22,6 +22,7 @@ import {
   Clock,
   Code,
   Database,
+  FileCog,
   FileKey,
   Files,
   FileSearch,
@@ -289,7 +290,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
   {
     id: 'config',
     title: '6. Configuration Builders',
-    icon: Network,
+    icon: FileCog,
     tools: [
       {
         id: 'ssh-config-builder',
