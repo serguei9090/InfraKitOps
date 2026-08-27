@@ -35,22 +35,22 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	caps := map[string]Capability{
-		"subnet-calculator": {Available: true}, // pure client, always available
-		"dns-lookup":        notImpl,
-		"sntp":              notImpl,
-		"whois":             notImpl,
-		"ip-geolocation":    notImpl,
-		"connections":       notImpl,
-		"wake-on-lan":       notImpl,
-		"ping-monitor":      rawSocket(),
-		"traceroute":        rawSocket(),
-		"port-scanner":      notImpl,
-		"network-scanner":   rawSocket(),
-		"neighbor-table":    notImpl,
-		"hosts-editor":      notImpl,
-		"firewall-viewer":   notImpl,
-		"iperf3":            notImpl,
-		"snmp":              notImpl,
+		"subnet-calculator":  {Available: true}, // pure client, always available
+		"dns-lookup":         notImpl,
+		"sntp":               notImpl,
+		"whois":              notImpl,
+		"ip-geolocation":     notImpl,
+		"connections":        notImpl,
+		"wake-on-lan":        notImpl,
+		"ping-monitor":       rawSocket(),
+		"traceroute":         rawSocket(),
+		"port-scanner":       notImpl,
+		"network-scanner":    rawSocket(),
+		"neighbor-table":     notImpl,
+		"hosts-editor":       notImpl,
+		"firewall-viewer":    notImpl,
+		"iperf3":             notImpl,
+		"snmp":               notImpl,
 		"discovery-protocol": rawSocket(),
 	}
 

@@ -40,7 +40,7 @@ type Envelope struct {
 	StartedAt   int64          `json:"startedAt"`            // unix ms UTC
 	FinishedAt  int64          `json:"finishedAt,omitempty"` // unix ms UTC
 	Status      Status         `json:"status"`
-	Params      map[string]any `json:"params"`  // canonicalized (sorted keys) by the caller
+	Params      map[string]any `json:"params"` // canonicalized (sorted keys) by the caller
 	ResultShape ResultShape    `json:"resultShape"`
 	Result      any            `json:"result"`            // tool-specific, self-versioned { v: N, ... }
 	Summary     map[string]any `json:"summary,omitempty"` // headline metrics for the history list row
