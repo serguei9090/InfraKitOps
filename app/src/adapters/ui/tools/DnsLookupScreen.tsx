@@ -5,6 +5,7 @@ import {
   NetworkToolScaffold,
   QueryBar,
   QueryField,
+  SavedTargetsPane,
   StatusStrip,
   useNetworkRun,
   type ResultColumn,
@@ -56,6 +57,12 @@ export function DnsLookupScreen() {
     setSelectedTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]))
   }
 
+  function applyParams(p: Record<string, unknown>) {
+    if (typeof p.name === 'string') setName(p.name)
+    if (Array.isArray(p.types)) setSelectedTypes(p.types as string[])
+    if (typeof p.resolver === 'string') setResolver(p.resolver)
+  }
+
   return (
     <NetworkToolScaffold
       title="DNS Lookup"
@@ -63,11 +70,17 @@ export function DnsLookupScreen() {
       historyTarget={name.trim()}
       historyRefreshKey={completions}
       onRestoreRun={(stored) => {
-        if (typeof stored.params.name === 'string') setName(stored.params.name)
-        if (Array.isArray(stored.params.types)) setSelectedTypes(stored.params.types as string[])
-        if (typeof stored.params.resolver === 'string') setResolver(stored.params.resolver)
+        applyParams(stored.params)
         restore(runToEnvelope(stored))
       }}
+      savedTargets={
+        <SavedTargetsPane
+          tool="dns-lookup"
+          currentParams={name.trim() ? { name: name.trim(), types: selectedTypes, resolver: resolver.trim() } : null}
+          currentLabel={name.trim()}
+          onLoad={applyParams}
+        />
+      }
       statusStrip={
         <StatusStrip
           running={running}

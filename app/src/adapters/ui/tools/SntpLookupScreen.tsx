@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { backendPost } from '@/adapters/backend/backendClient'
-import { NetworkToolScaffold, QueryBar, QueryField, StatusStrip } from '@/adapters/ui/network'
+import { NetworkToolScaffold, QueryBar, QueryField, SavedTargetsPane, StatusStrip } from '@/adapters/ui/network'
 import { useNetworkRun } from '@/adapters/ui/network/useNetworkRun'
 import { runToEnvelope } from '@/core/network/history'
 import { Button } from '@/components/ui/button'
@@ -55,6 +55,14 @@ export function SntpLookupScreen() {
         if (list.length) setServersText(list.join('; '))
         restore(runToEnvelope(stored))
       }}
+      savedTargets={
+        <SavedTargetsPane
+          tool="sntp"
+          currentParams={servers.length ? { servers } : null}
+          currentLabel={servers[0]}
+          onLoad={(p) => Array.isArray(p.servers) && setServersText((p.servers as string[]).join('; '))}
+        />
+      }
       statusStrip={
         <StatusStrip
           running={running}

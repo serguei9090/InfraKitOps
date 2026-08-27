@@ -1,6 +1,14 @@
 import { useCallback, useState } from 'react'
 import { backendPost } from '@/adapters/backend/backendClient'
-import { NetworkToolScaffold, QueryBar, QueryField, StatusStrip, TextResultView, useNetworkRun } from '@/adapters/ui/network'
+import {
+  NetworkToolScaffold,
+  QueryBar,
+  QueryField,
+  SavedTargetsPane,
+  StatusStrip,
+  TextResultView,
+  useNetworkRun,
+} from '@/adapters/ui/network'
 import { runToEnvelope } from '@/core/network/history'
 import { Input } from '@/components/ui/input'
 import type { RunEnvelope } from '@/core/network/history'
@@ -33,6 +41,14 @@ export function IpGeolocationScreen() {
         if (typeof stored.params.query === 'string') setQuery(stored.params.query)
         restore(runToEnvelope(stored))
       }}
+      savedTargets={
+        <SavedTargetsPane
+          tool="ip-geolocation"
+          currentParams={query.trim() ? { query: query.trim() } : null}
+          currentLabel={query.trim()}
+          onLoad={(p) => typeof p.query === 'string' && setQuery(p.query)}
+        />
+      }
       statusStrip={
         <StatusStrip
           running={running}

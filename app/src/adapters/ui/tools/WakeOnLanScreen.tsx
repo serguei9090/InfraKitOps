@@ -1,7 +1,14 @@
 import { useCallback, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { backendPost } from '@/adapters/backend/backendClient'
-import { NetworkToolScaffold, QueryBar, QueryField, StatusStrip, useNetworkRun } from '@/adapters/ui/network'
+import {
+  NetworkToolScaffold,
+  QueryBar,
+  QueryField,
+  SavedTargetsPane,
+  StatusStrip,
+  useNetworkRun,
+} from '@/adapters/ui/network'
 import { runToEnvelope } from '@/core/network/history'
 import { Input } from '@/components/ui/input'
 import type { RunEnvelope } from '@/core/network/history'
@@ -30,6 +37,12 @@ export function WakeOnLanScreen() {
 
   const { running, error, result, envelope, completions, start, restore } = useNetworkRun<WolResult>({ run })
 
+  function applyParams(p: Record<string, unknown>) {
+    if (typeof p.mac === 'string') setMac(p.mac)
+    if (typeof p.broadcast === 'string' && p.broadcast) setBroadcast(p.broadcast)
+    if (typeof p.port === 'number' && p.port) setPort(p.port)
+  }
+
   return (
     <NetworkToolScaffold
       title="Wake on LAN"
@@ -37,11 +50,17 @@ export function WakeOnLanScreen() {
       historyTarget={mac.trim()}
       historyRefreshKey={completions}
       onRestoreRun={(stored) => {
-        if (typeof stored.params.mac === 'string') setMac(stored.params.mac)
-        if (typeof stored.params.broadcast === 'string' && stored.params.broadcast) setBroadcast(stored.params.broadcast)
-        if (typeof stored.params.port === 'number' && stored.params.port) setPort(stored.params.port)
+        applyParams(stored.params)
         restore(runToEnvelope(stored))
       }}
+      savedTargets={
+        <SavedTargetsPane
+          tool="wake-on-lan"
+          currentParams={macValid ? { mac: mac.trim(), broadcast: broadcast.trim(), port } : null}
+          currentLabel={mac.trim()}
+          onLoad={applyParams}
+        />
+      }
       statusStrip={<StatusStrip running={running} items={[result ? `${result.bytesSent} bytes sent` : '']} />}
       queryBar={
         <QueryBar
