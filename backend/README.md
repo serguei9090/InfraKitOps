@@ -1,0 +1,62 @@
+# infrakit-backend
+
+Network-tools backend for InfraKit Studio. One binary, two deployment modes:
+
+- **desktop** — a Tauri v2 sidecar spawned and supervised by `app/src-tauri`
+- **web** — a standalone HTTP service (or absent, in which case the network
+  tools show a "backend unavailable" state and the other 44 tools are unaffected)
+
+Full design: [`../NETWORK_MODULE_PLAN.md`](../NETWORK_MODULE_PLAN.md).
+
+## Run
+
+```bash
+cd backend
+go run ./cmd/infrakit-backend --addr 127.0.0.1:8765 --token dev
+# or let it pick a port and print a token:
+go run ./cmd/infrakit-backend
+```
+
+First stdout line is `LISTENING <host:port>`. If `--token` is omitted a random
+one is generated and printed as `TOKEN <token>` (dev only — the sidecar is
+always launched with an explicit token).
+
+## Startup flags
+
+| flag | default | meaning |
+|------|---------|---------|
+| `--addr` | `127.0.0.1:0` | bind address; `:0` = ephemeral port |
+| `--token` | *(generated)* | bearer token required on every request |
+| `--idle-timeout` | `0` (off) | exit after this long with no request |
+| `--parent-pid` | `0` (off) | exit when this process id disappears |
+| `--version` | | print version and exit |
+
+## API
+
+All routes are under `/api/v1` and require `Authorization: Bearer <token>`
+(EventSource streams accept `?token=<token>` instead, since they cannot set
+headers). CORS is locked to the Tauri and Vite-dev origins.
+
+| method | path | purpose |
+|--------|------|---------|
+| GET | `/health` | liveness + `{ os, elevated, version, pid, uptimeSec }` |
+| GET | `/capabilities` | per-tool `{ available, reason?, needsElevation? }` map |
+| GET | `/interfaces` | host network interfaces (name, MTU, addrs, flags) for the source-interface picker |
+
+Tool endpoints are added per phase (N1+). Streaming endpoints use SSE.
+
+## Layout
+
+```
+cmd/infrakit-backend/   main: flags, listener, stdout contract, signals
+internal/server/        router wiring, middleware (auth/CORS/activity), SSE helper, idle watchdog
+internal/api/           one file per endpoint concern
+internal/envelope/      the RunEnvelope shape stored by the history layer
+internal/privilege/     "is this process elevated?" (per-OS)
+```
+
+## Test
+
+```bash
+go test ./...
+```

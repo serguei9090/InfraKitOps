@@ -1,0 +1,9 @@
+# build output
+/bin/
+/dist/
+infrakit-backend
+infrakit-backend.exe
+*.out
+
+# go
+/vendor/
