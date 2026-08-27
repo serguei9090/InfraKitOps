@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'vendor-tools/**'
       - '.github/workflows/backend.yml'
   pull_request:
     paths:
       - 'backend/**'
+      - 'vendor-tools/**'
       - '.github/workflows/backend.yml'
   workflow_dispatch:
 
@@ -33,10 +35,19 @@ jobs:
       - run: go vet ./...
       - run: go test ./... -count=1
 
+  vendor-tools:
+    name: verify vendored binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: fetch + verify SHA-256
+        working-directory: vendor-tools
+        run: ./fetch-tools.sh
+
   build:
     name: cross-compile sidecar
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, vendor-tools]
     strategy:
       matrix:
         include:
@@ -54,19 +65,27 @@ jobs:
         with:
           go-version: '1.25'
           cache-dependency-path: backend/go.sum
-      - name: build
+      - name: build backend + helper
         env:
           CGO_ENABLED: '0'
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
           VERSION="$(git describe --tags --always --dirty)"
-          go build -trimpath \
-            -ldflags "-s -w -X github.com/infrakit/backend/internal/api.Version=${VERSION}" \
-            -o "infrakit-backend-${{ matrix.triple }}${{ matrix.ext }}" \
-            ./cmd/infrakit-backend
+          LDFLAGS="-s -w -X github.com/infrakit/backend/internal/api.Version=${VERSION}"
+          go build -trimpath -ldflags "$LDFLAGS" \
+            -o "dist/infrakit-backend-${{ matrix.triple }}${{ matrix.ext }}" ./cmd/infrakit-backend
+          go build -trimpath -ldflags "-s -w" \
+            -o "dist/infrakit-helper-${{ matrix.triple }}${{ matrix.ext }}" ./cmd/infrakit-helper
+      - name: bundle vendored tools
+        run: |
+          (cd ../vendor-tools && ./fetch-tools.sh)
+          if [ -f "../vendor-tools/bin/iperf3-${{ matrix.goos }}-${{ matrix.goarch }}" ]; then
+            cp "../vendor-tools/bin/iperf3-${{ matrix.goos }}-${{ matrix.goarch }}" \
+               "dist/iperf3${{ matrix.ext }}"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: infrakit-backend-${{ matrix.triple }}
-          path: backend/infrakit-backend-${{ matrix.triple }}${{ matrix.ext }}
+          path: backend/dist/*
           if-no-files-found: error
