@@ -3,7 +3,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
-import { SubnetCalculator, type SubnetCalculatorResult } from '@/core/utility/subnetCalculator'
+import { SubnetCalculator, type SubnetCalculatorResult } from '@/core/network/subnetCalculator'
 
 const calculator = new SubnetCalculator()
 
