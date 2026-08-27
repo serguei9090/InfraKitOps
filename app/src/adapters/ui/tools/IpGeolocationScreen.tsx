@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { backendPost } from '@/adapters/backend/backendClient'
 import { NetworkToolScaffold, QueryBar, QueryField, StatusStrip, TextResultView, useNetworkRun } from '@/adapters/ui/network'
+import { runToEnvelope } from '@/core/network/history'
 import { Input } from '@/components/ui/input'
 import type { RunEnvelope } from '@/core/network/history'
 import type { IpGeoResult } from '@/core/network/toolResults'
@@ -20,12 +21,18 @@ export function IpGeolocationScreen() {
     [query],
   )
 
-  const { running, error, result, start, stop } = useNetworkRun<IpGeoResult>({ run })
+  const { running, error, result, completions, start, stop, restore } = useNetworkRun<IpGeoResult>({ run })
 
   return (
     <NetworkToolScaffold
       title="IP Geolocation"
       toolId="ip-geolocation"
+      historyTarget={query.trim()}
+      historyRefreshKey={completions}
+      onRestoreRun={(stored) => {
+        if (typeof stored.params.query === 'string') setQuery(stored.params.query)
+        restore(runToEnvelope(stored))
+      }}
       statusStrip={
         <StatusStrip
           running={running}

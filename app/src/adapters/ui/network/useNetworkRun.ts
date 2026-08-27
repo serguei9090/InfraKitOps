@@ -23,6 +23,7 @@ interface UseNetworkRunOptions {
  */
 export function useNetworkRun<TResult = unknown>({ run, save = true }: UseNetworkRunOptions) {
   const [state, setState] = useState<RunState>({ status: 'idle' })
+  const [completions, setCompletions] = useState(0)
   const abortRef = useRef<AbortController | null>(null)
 
   const start = useCallback(async () => {
@@ -35,6 +36,7 @@ export function useNetworkRun<TResult = unknown>({ run, save = true }: UseNetwor
       if (controller.signal.aborted) return
       const savedId = save ? await saveRun(envelope) : null
       setState({ status: 'done', envelope, savedId })
+      setCompletions((n) => n + 1)
     } catch (e) {
       if (controller.signal.aborted) return
       const message =
@@ -52,6 +54,12 @@ export function useNetworkRun<TResult = unknown>({ run, save = true }: UseNetwor
     setState({ status: 'idle' })
   }, [])
 
+  /** Show a stored run's envelope without re-running or re-saving it. */
+  const restore = useCallback((envelope: RunEnvelope) => {
+    abortRef.current?.abort()
+    setState({ status: 'done', envelope, savedId: null })
+  }, [])
+
   const envelope = state.status === 'done' ? state.envelope : undefined
   return {
     status: state.status,
@@ -60,7 +68,10 @@ export function useNetworkRun<TResult = unknown>({ run, save = true }: UseNetwor
     envelope,
     result: envelope?.result as TResult | undefined,
     savedId: state.status === 'done' ? state.savedId : null,
+    /** Increments each time a run finishes successfully — use as a history refresh key. */
+    completions,
     start,
     stop,
+    restore,
   }
 }

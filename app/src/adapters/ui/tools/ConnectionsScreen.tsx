@@ -8,6 +8,7 @@ import {
   useNetworkRun,
   type ResultColumn,
 } from '@/adapters/ui/network'
+import { runToEnvelope } from '@/core/network/history'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { RunEnvelope } from '@/core/network/history'
@@ -45,7 +46,7 @@ export function ConnectionsScreen() {
     [kind],
   )
 
-  const { running, error, result, start, stop } = useNetworkRun<ConnectionsResult>({ run })
+  const { running, error, result, completions, start, stop, restore } = useNetworkRun<ConnectionsResult>({ run })
 
   const rows = useMemo(() => {
     const all = result?.connections ?? []
@@ -64,6 +65,13 @@ export function ConnectionsScreen() {
     <NetworkToolScaffold
       title="Connections & Listeners"
       toolId="connections"
+      historyRefreshKey={completions}
+      onRestoreRun={(stored) => {
+        if (stored.params.kind === 'tcp' || stored.params.kind === 'udp' || stored.params.kind === 'all') {
+          setKind(stored.params.kind)
+        }
+        restore(runToEnvelope(stored))
+      }}
       statusStrip={
         <StatusStrip
           running={running}

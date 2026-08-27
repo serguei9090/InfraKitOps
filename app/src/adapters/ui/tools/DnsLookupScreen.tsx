@@ -9,6 +9,7 @@ import {
   useNetworkRun,
   type ResultColumn,
 } from '@/adapters/ui/network'
+import { runToEnvelope } from '@/core/network/history'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { RunEnvelope } from '@/core/network/history'
@@ -48,7 +49,7 @@ export function DnsLookupScreen() {
     [name, selectedTypes, resolver, tcp],
   )
 
-  const { running, error, result, start, stop } = useNetworkRun<DnsResult>({ run })
+  const { running, error, result, completions, start, stop, restore } = useNetworkRun<DnsResult>({ run })
   const records = useMemo(() => result?.records ?? [], [result])
 
   function toggleType(t: string) {
@@ -59,6 +60,14 @@ export function DnsLookupScreen() {
     <NetworkToolScaffold
       title="DNS Lookup"
       toolId="dns-lookup"
+      historyTarget={name.trim()}
+      historyRefreshKey={completions}
+      onRestoreRun={(stored) => {
+        if (typeof stored.params.name === 'string') setName(stored.params.name)
+        if (Array.isArray(stored.params.types)) setSelectedTypes(stored.params.types as string[])
+        if (typeof stored.params.resolver === 'string') setResolver(stored.params.resolver)
+        restore(runToEnvelope(stored))
+      }}
       statusStrip={
         <StatusStrip
           running={running}

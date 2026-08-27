@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { backendPost } from '@/adapters/backend/backendClient'
 import { NetworkToolScaffold, QueryBar, QueryField, StatusStrip } from '@/adapters/ui/network'
 import { useNetworkRun } from '@/adapters/ui/network/useNetworkRun'
+import { runToEnvelope } from '@/core/network/history'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -41,12 +42,19 @@ export function SntpLookupScreen() {
     [servers, timeoutMs],
   )
 
-  const { running, error, result, envelope, start, stop } = useNetworkRun<SntpResult>({ run })
+  const { running, error, result, envelope, completions, start, stop, restore } = useNetworkRun<SntpResult>({ run })
 
   return (
     <NetworkToolScaffold
       title="SNTP Lookup"
       toolId="sntp"
+      historyTarget={servers.join('; ')}
+      historyRefreshKey={completions}
+      onRestoreRun={(stored) => {
+        const list = (stored.params.servers as string[] | undefined) ?? []
+        if (list.length) setServersText(list.join('; '))
+        restore(runToEnvelope(stored))
+      }}
       statusStrip={
         <StatusStrip
           running={running}

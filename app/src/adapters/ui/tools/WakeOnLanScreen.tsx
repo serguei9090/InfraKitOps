@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { backendPost } from '@/adapters/backend/backendClient'
 import { NetworkToolScaffold, QueryBar, QueryField, StatusStrip, useNetworkRun } from '@/adapters/ui/network'
+import { runToEnvelope } from '@/core/network/history'
 import { Input } from '@/components/ui/input'
 import type { RunEnvelope } from '@/core/network/history'
 import type { WolResult } from '@/core/network/toolResults'
@@ -27,12 +28,20 @@ export function WakeOnLanScreen() {
     [mac, broadcast, port],
   )
 
-  const { running, error, result, envelope, start } = useNetworkRun<WolResult>({ run })
+  const { running, error, result, envelope, completions, start, restore } = useNetworkRun<WolResult>({ run })
 
   return (
     <NetworkToolScaffold
       title="Wake on LAN"
       toolId="wake-on-lan"
+      historyTarget={mac.trim()}
+      historyRefreshKey={completions}
+      onRestoreRun={(stored) => {
+        if (typeof stored.params.mac === 'string') setMac(stored.params.mac)
+        if (typeof stored.params.broadcast === 'string' && stored.params.broadcast) setBroadcast(stored.params.broadcast)
+        if (typeof stored.params.port === 'number' && stored.params.port) setPort(stored.params.port)
+        restore(runToEnvelope(stored))
+      }}
       statusStrip={<StatusStrip running={running} items={[result ? `${result.bytesSent} bytes sent` : '']} />}
       queryBar={
         <QueryBar

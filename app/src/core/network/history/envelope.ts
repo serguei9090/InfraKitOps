@@ -43,6 +43,21 @@ export interface StoredRun extends RunSummary {
   result: unknown
 }
 
+/** Rebuild a display envelope from a stored history run (for "restore"). */
+export function runToEnvelope(run: StoredRun): RunEnvelope {
+  return {
+    tool: run.tool,
+    target: run.target,
+    startedAt: run.startedAt,
+    finishedAt: run.finishedAt,
+    status: run.status,
+    params: run.params,
+    resultShape: run.resultShape,
+    result: run.result,
+    summary: run.summary,
+  }
+}
+
 // --- Shape contracts ---------------------------------------------------------
 // Tools whose resultShape is 'set' or 'scalar_series' put their result in one
 // of these shapes so the generic diff below works without per-tool code.

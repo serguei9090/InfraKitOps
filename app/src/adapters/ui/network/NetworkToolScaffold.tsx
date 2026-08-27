@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useBackendStore } from '@/stores/backendStore'
+import type { StoredRun } from '@/core/network/history'
 import { cn } from '@/lib/utils'
 import { BackendUnavailable } from './BackendUnavailable'
+import { HistoryDrawer } from './HistoryDrawer'
 
 interface NetworkToolScaffoldProps {
   title: string
@@ -15,8 +17,14 @@ interface NetworkToolScaffoldProps {
   statusStrip?: ReactNode
   /** Optional right-hand SavedTargetsPane (collapsible in the tool). */
   savedTargets?: ReactNode
-  /** Header actions (History / Export / Copy). */
+  /** Header actions (Export / Copy) placed left of the History button. */
   headerActions?: ReactNode
+  /** Enables the History drawer. `onRestoreRun` re-renders a past run. */
+  onRestoreRun?: (run: StoredRun) => void
+  /** Current target for the "this target" history filter. */
+  historyTarget?: string
+  /** Bump to refetch the history list (e.g. when a run finishes). */
+  historyRefreshKey?: number
 }
 
 /**
@@ -34,6 +42,9 @@ export function NetworkToolScaffold({
   statusStrip,
   savedTargets,
   headerActions,
+  onRestoreRun,
+  historyTarget,
+  historyRefreshKey,
 }: NetworkToolScaffoldProps) {
   const status = useBackendStore((s) => s.status)
   const retry = useBackendStore((s) => s.retry)
@@ -64,6 +75,14 @@ export function NetworkToolScaffold({
         <h1 className="text-[17px] font-semibold tracking-tight">{title}</h1>
         <div className="flex-1" />
         {headerActions}
+        {onRestoreRun ? (
+          <HistoryDrawer
+            toolId={toolId}
+            target={historyTarget}
+            refreshKey={historyRefreshKey}
+            onRestore={onRestoreRun}
+          />
+        ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1">

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { backendPost } from '@/adapters/backend/backendClient'
 import { NetworkToolScaffold, QueryBar, QueryField, StatusStrip, TextResultView, useNetworkRun } from '@/adapters/ui/network'
+import { runToEnvelope } from '@/core/network/history'
 import { Input } from '@/components/ui/input'
 import type { RunEnvelope } from '@/core/network/history'
 import type { WhoisResult } from '@/core/network/toolResults'
@@ -22,13 +23,19 @@ export function WhoisScreen() {
     [query, timeoutMs],
   )
 
-  const { running, error, result, start, stop } = useNetworkRun<WhoisResult>({ run })
+  const { running, error, result, completions, start, stop, restore } = useNetworkRun<WhoisResult>({ run })
   const p = result?.parsed
 
   return (
     <NetworkToolScaffold
       title="Whois"
       toolId="whois"
+      historyTarget={query.trim()}
+      historyRefreshKey={completions}
+      onRestoreRun={(stored) => {
+        if (typeof stored.params.query === 'string') setQuery(stored.params.query)
+        restore(runToEnvelope(stored))
+      }}
       statusStrip={<StatusStrip running={running} items={[p?.registrar ? `Registrar: ${p.registrar}` : '']} />}
       queryBar={
         <QueryBar onRun={start} onStop={stop} running={running} canRun={query.trim().length > 0} runLabel="Query">
