@@ -1,9 +1,10 @@
-import { History, Loader2, Pin, PinOff, RotateCcw, Trash2, X } from 'lucide-react'
+import { GitCompare, History, Loader2, Pin, PinOff, RotateCcw, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { deleteRun, getRun, listRuns, pinRun } from '@/adapters/backend/historyClient'
 import { Button } from '@/components/ui/button'
 import { diffRuns, type RunDiff, type RunSummary, type StoredRun } from '@/core/network/history'
 import { cn } from '@/lib/utils'
+import { RunComparePanel } from './RunComparePanel'
 
 interface HistoryDrawerProps {
   toolId: string
@@ -26,6 +27,7 @@ export function HistoryDrawer({ toolId, target, refreshKey, onRestore }: History
   const [runs, setRuns] = useState<RunSummary[] | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [diff, setDiff] = useState<{ id: number; value: RunDiff } | null>(null)
+  const [comparing, setComparing] = useState(false)
 
   const refresh = useCallback(async () => {
     const list = await listRuns(toolId, onlyTarget && target ? target : undefined, 100)
@@ -70,9 +72,19 @@ export function HistoryDrawer({ toolId, target, refreshKey, onRestore }: History
         <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-label="Run history">
           <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
           <div className="relative flex h-full w-[26rem] max-w-[90vw] flex-col border-l border-border bg-background shadow-xl">
+            {comparing && runs && runs.length >= 2 ? (
+              <RunComparePanel runs={runs} onBack={() => setComparing(false)} />
+            ) : (
+            <>
             <div className="flex h-14 items-center justify-between border-b border-border/60 px-4">
               <h2 className="text-sm font-semibold">Run history</h2>
               <div className="flex items-center gap-1">
+                {runs && runs.length >= 2 ? (
+                  <Button variant="outline" size="xs" className="gap-1" onClick={() => setComparing(true)}>
+                    <GitCompare className="size-3" />
+                    Compare
+                  </Button>
+                ) : null}
                 {target ? (
                   <Button variant="outline" size="xs" onClick={() => setOnlyTarget((v) => !v)}>
                     {onlyTarget ? 'This target' : 'All targets'}
@@ -153,6 +165,8 @@ export function HistoryDrawer({ toolId, target, refreshKey, onRestore }: History
                 </ul>
               )}
             </div>
+            </>
+            )}
           </div>
         </div>
       ) : null}

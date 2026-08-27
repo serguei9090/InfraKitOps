@@ -129,6 +129,20 @@ export function PingMonitorScreen() {
       title="Ping Monitor"
       toolId="ping-monitor"
       historyTarget={hosts[0]}
+      onRestoreRun={(stored) => {
+        if (Array.isArray(stored.params.hosts)) setHostsText((stored.params.hosts as string[]).join('; '))
+        const r = stored.result as { samples?: number[] }
+        const samples = r.samples ?? []
+        const base = stored.startedAt
+        const m = new Map<string, HostTrack>()
+        m.set(stored.target, {
+          host: stored.target,
+          color: COLORS[0],
+          stats: null,
+          points: samples.map((ms, i) => ({ t: base + i * 1000, ms })),
+        })
+        setTracksMap(m)
+      }}
       savedTargets={
         <SavedTargetsPane
           tool="ping-monitor"
