@@ -3,6 +3,13 @@
 Answers the question: *now that a Go backend exists, is each tool's current
 implementation the right one, or would a Go library / CLI wrapper be better?*
 
+> **Status: all four buckets implemented 2026-08-27** (commits `ab4e4cd`,
+> `a8c44cb`, `f6edffa`, `466bd99`). Each is an *optional* backend power-mode —
+> the client-first path is unchanged and every tool still works with no
+> backend. New endpoints: `POST /ssh-keygen`, `/pdf/inspect`, `/pdf/transform`,
+> `/config/validate`, `/qr/decode`, `/x509/fetch`. Shared frontend hook:
+> `adapters/backend/useOptionalBackend.ts`.
+
 Scope: all 44 tools across the 7 modules in
 [`moduleTaxonomy.ts`](app/src/adapters/ui/shell/moduleTaxonomy.ts). Applies the
 three-tier rule and the bundled-binary license gate from
@@ -17,12 +24,12 @@ Leave them alone.
 
 **Backend opportunity clusters in 4 buckets**, ranked by value:
 
-| # | Bucket | Tools | Approach | License | Effort |
+| # | Bucket | Tools | Approach | License | Status |
 |---|--------|-------|----------|---------|--------|
-| 1 | **PDF engine swap** | pdf-split-merge, pdf-inspector | replace `pdf-lib` with **`pdfcpu`** (pure Go) in the backend | Apache-2.0 ✅ tier 1 | ~2–3 pd, ~400 LOC |
-| 2 | **Config validation** | 5 config builders | one `POST /config/validate` endpoint that shells to the matching `-t` / check-mode validator *if installed* | OS built-ins ✅ tier 2 | ~2 pd, ~350 LOC |
-| 3 | **Key generation** | ssh-keygen | add RSA-2048/3072/4096 + ECDSA + passphrase via Go stdlib (`crypto/rsa`, `crypto/ecdsa`, `x/crypto/ssh`) | BSD-3 ✅ tier 1 | ~1.5 pd, ~250 LOC |
-| 4 | **Robust decode / live fetch** | qr-reader, x509-inspector | `gozxing` for QR; `crypto/x509` + `tls.Dial` for "inspect live host:443" | Apache-2.0 / BSD ✅ tier 1 | ~2 pd, ~300 LOC |
+| 1 | **PDF power-mode** | pdf-split-merge, pdf-inspector | **`pdfcpu`** (pure Go) backend adds inspect/validate, optimize, encrypt/decrypt alongside pdf-lib split/merge | Apache-2.0 ✅ tier 1 | **done** `a8c44cb` |
+| 2 | **Config validation** | 5 config builders | `POST /config/validate` shells to the matching `-t` / check-mode validator *if installed* | OS built-ins ✅ tier 2 | **done** `f6edffa` |
+| 3 | **Key generation** | ssh-keygen | RSA-2048/3072/4096 + ECDSA + passphrase via Go stdlib (`crypto/rsa`, `crypto/ecdsa`, `x/crypto/ssh`) | BSD-3 ✅ tier 1 | **done** `ab4e4cd` |
+| 4 | **Robust decode / live fetch** | qr-reader, x509-inspector | `gozxing` for QR; `crypto/x509` + `tls.Dial` for "fetch live host:443" | MIT / BSD ✅ tier 1 | **done** `466bd99` |
 
 Total if all four done: ~8–10 pd, ~1.3k LOC. **#1 and #2 are the ones worth
 scheduling** — the rest are quality-of-life.

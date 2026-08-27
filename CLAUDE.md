@@ -162,6 +162,20 @@ diagnostics only. Plan + roadmap: [`NETWORK_MODULE_PLAN.md`](NETWORK_MODULE_PLAN
 - CI: `.github/workflows/backend.yml` (vet/test + cross-compile). `bun run tauri dev`
   opening a real window still needs a manual pass — same caveat as the rest of the app.
 
+### Utility-tool "power mode" endpoints (added 2026-08-27)
+
+A handful of the 44 client-only tools now have an **optional** backend upgrade —
+see [`TOOL_STRATEGY_REVIEW.md`](TOOL_STRATEGY_REVIEW.md). The browser path is
+unchanged and still works with no backend; these light up only when the sidecar
+/ service is present, gated through `adapters/backend/useOptionalBackend.ts`
+(same capability map as the network tools). Endpoints, all non-history:
+`POST /ssh-keygen` (Go stdlib RSA/ECDSA/passphrase keys), `/pdf/inspect` +
+`/pdf/transform` (`pdfcpu` — validate/optimize/encrypt/decrypt), `/config/validate`
+(`nginx -t` / `sshd -t` / `nft -c` / … check-only, never applies), `/qr/decode`
+(`gozxing`), `/x509/fetch` (`tls.Dial` a live `host:443`). New Go deps:
+`pdfcpu` (Apache-2.0), `makiuchi-d/gozxing` (MIT), `golang.org/x/crypto`,
+`golang.org/x/image` — all pass the license gate as libraries.
+
 ### How to implement a network tool — three tiers, cheapest first
 
 1. **Pure-Go library** when a solid one exists (`miekg/dns`, `gosnmp`, `beevik/ntp`,
