@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { BalancedFlowScaffold } from '@/adapters/ui/shell/BalancedFlowScaffold'
+import { ConfigValidateButton } from '@/adapters/ui/config/ConfigValidateButton'
 import {
   ApacheConfigBuilder,
   NginxConfigBuilder,
@@ -101,9 +102,12 @@ export function WebServerConfigBuilderScreen() {
         result.error ? (
           <p className="text-sm text-destructive">{result.error}</p>
         ) : (
-          <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
-            {result.config}
-          </pre>
+          <div className="flex flex-col gap-3">
+            <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
+              {result.config}
+            </pre>
+            {engine === 'nginx' ? <ConfigValidateButton kind="nginx" text={result.config} /> : null}
+          </div>
         )
       }
     />

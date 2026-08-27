@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
+import { ConfigValidateButton } from '@/adapters/ui/config/ConfigValidateButton'
 import {
   SshConfigBuilder,
   sshDeprecatedAlgorithmsIn,
@@ -220,6 +221,7 @@ export function SshConfigBuilderScreen() {
               <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
                 {result.value.configText}
               </pre>
+              <ConfigValidateButton kind={mode === 'server' ? 'sshd' : 'ssh'} text={result.value.configText} />
             </>
           ) : null}
         </div>

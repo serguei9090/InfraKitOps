@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
+import { ConfigValidateButton } from '@/adapters/ui/config/ConfigValidateButton'
 import {
   FirewallRuleBuilder,
   PortRange,
@@ -214,6 +215,7 @@ export function FirewallRuleBuilderScreen() {
               <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
                 {result.value.script}
               </pre>
+              {dialect === 'nftables' ? <ConfigValidateButton kind="nftables" text={result.value.script} /> : null}
             </>
           ) : null}
         </div>

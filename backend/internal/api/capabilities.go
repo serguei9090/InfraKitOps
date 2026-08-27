@@ -62,6 +62,9 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"ssh-keygen":      {Available: true},
 		"pdf-split-merge": {Available: true},
 		"pdf-inspector":   {Available: true},
+		// The endpoint always exists; per-validator availability (nginx -t,
+		// sshd -t, …) is reported per-request in the response.
+		"config-validate": {Available: true},
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{

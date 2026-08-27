@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BalancedFlowScaffold } from '@/adapters/ui/shell/BalancedFlowScaffold'
+import { ConfigValidateButton } from '@/adapters/ui/config/ConfigValidateButton'
 import {
   SysctlConfigBuilder,
   kSysctlParameterCatalog,
@@ -173,9 +174,12 @@ export function SysctlConfigBuilderScreen() {
         result.error ? (
           <p className="text-sm text-destructive">{result.error}</p>
         ) : (
-          <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
-            {result.value}
-          </pre>
+          <div className="flex flex-col gap-3">
+            <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
+              {result.value}
+            </pre>
+            {mode === 'permanent' ? <ConfigValidateButton kind="sysctl" text={result.value} /> : null}
+          </div>
         )
       }
     />

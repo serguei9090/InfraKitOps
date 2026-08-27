@@ -73,6 +73,7 @@ func NewRouter(opts Options) http.Handler {
 		r.Post("/ssh-keygen", api.SSHKeygen)
 		r.Post("/pdf/inspect", api.PDFInspect)
 		r.Post("/pdf/transform", api.PDFTransform)
+		r.Post("/config/validate", api.ConfigValidate)
 
 		r.Route("/history", func(r chi.Router) {
 			r.Get("/", hist.List)
