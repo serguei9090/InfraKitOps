@@ -111,6 +111,59 @@ export function backendPost<T>(path: string, body: unknown, signal?: AbortSignal
   return backendRequest<T>('POST', path, body, signal)
 }
 
+/** POST a multipart form and parse a JSON response (e.g. PDF inspect). */
+export async function backendUpload<T>(path: string, form: FormData, signal?: AbortSignal): Promise<T> {
+  const conn = await resolveConnection()
+  if (!conn.available) throw new BackendUnavailableError()
+  const res = await fetch(`${conn.endpoint}/api/v1${path}`, {
+    method: 'POST',
+    headers: authHeaders(conn.token),
+    body: form,
+    signal,
+  })
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`
+    try {
+      const j = (await res.json()) as { error?: string }
+      if (j.error) msg = j.error
+    } catch {
+      /* keep status text */
+    }
+    throw new Error(msg)
+  }
+  return (await res.json()) as T
+}
+
+/**
+ * POST a multipart form and get the raw response body back (e.g. a transformed
+ * PDF). On a non-2xx, the JSON `error` field is thrown as an `Error`.
+ */
+export async function backendUploadForBlob(
+  path: string,
+  form: FormData,
+  signal?: AbortSignal,
+): Promise<{ blob: Blob; headers: Headers }> {
+  const conn = await resolveConnection()
+  if (!conn.available) throw new BackendUnavailableError()
+  const res = await fetch(`${conn.endpoint}/api/v1${path}`, {
+    method: 'POST',
+    headers: authHeaders(conn.token),
+    body: form,
+    signal,
+  })
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`
+    try {
+      const j = (await res.json()) as { error?: string }
+      if (j.error) msg = j.error
+    } catch {
+      /* keep status text */
+    }
+    throw new Error(msg)
+  }
+  return { blob: await res.blob(), headers: res.headers }
+}
+
 /**
  * Build the URL for an SSE stream endpoint. `EventSource` cannot set an
  * Authorization header, so the token rides as a query param — acceptable on a

@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { ArrowDown, ArrowUp, Download, Merge, Scissors, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Download, FileLock, Gauge, Merge, Scissors, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
 import { downloadBlob } from '@/lib/downloadFile'
+import { useOptionalBackend } from '@/adapters/backend/useOptionalBackend'
+import { pdfTransform } from '@/adapters/backend/pdfClient'
 import { PdfMerger, PdfPageExtractor, PdfPageRangeParser } from '@/core/office_media/pdfSplitMerge'
 import { PdfInspector } from '@/core/office_media/pdfInspector'
 
@@ -14,7 +17,7 @@ const extractor = new PdfPageExtractor()
 const rangeParser = new PdfPageRangeParser()
 const inspector = new PdfInspector()
 
-type Mode = 'merge' | 'split'
+type Mode = 'merge' | 'split' | 'optimize' | 'protect'
 
 interface SourceFile {
   name: string
@@ -64,9 +67,52 @@ export function PdfSplitMergeScreen() {
   const [rangesText, setRangesText] = useState('')
   const [extractedFiles, setExtractedFiles] = useState<ExtractedFile[]>([])
 
+  // Backend-only modes (optimize / protect).
+  const power = useOptionalBackend('pdf-split-merge')
+  const [toolFile, setToolFile] = useState<SourceFile | null>(null)
+  const [protectAction, setProtectAction] = useState<'encrypt' | 'decrypt'>('encrypt')
+  const [userPw, setUserPw] = useState('')
+  const [ownerPw, setOwnerPw] = useState('')
+  const [openPw, setOpenPw] = useState('')
+  const [transformed, setTransformed] = useState<{ name: string; bytes: Uint8Array; bytesIn: number; bytesOut: number } | null>(null)
+
   function switchMode(next: Mode) {
     setMode(next)
     setError(null)
+    setTransformed(null)
+  }
+
+  async function pickToolFile(files: FileList | null) {
+    const file = files?.[0]
+    if (!file) return
+    const buffer = await file.arrayBuffer()
+    setToolFile({ name: file.name, bytes: new Uint8Array(buffer) })
+    setError(null)
+    setTransformed(null)
+  }
+
+  async function runTransform() {
+    if (!toolFile) return
+    setIsBusy(true)
+    setError(null)
+    setTransformed(null)
+    try {
+      const op = mode === 'optimize' ? 'optimize' : protectAction
+      const params =
+        op === 'encrypt'
+          ? { userPw, ownerPw }
+          : op === 'decrypt'
+            ? { password: openPw }
+            : {}
+      const res = await pdfTransform(toolFile.bytes, op, params)
+      const stem = stemOf(toolFile.name)
+      const suffix = op === 'optimize' ? 'optimized' : op === 'encrypt' ? 'protected' : 'unlocked'
+      setTransformed({ name: `${stem}-${suffix}.pdf`, bytes: res.bytes, bytesIn: res.bytesIn, bytesOut: res.bytesOut })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setIsBusy(false)
+    }
   }
 
   async function handleMergeFilesPicked(files: FileList | null) {
@@ -157,8 +203,18 @@ export function PdfSplitMergeScreen() {
     }
   }
 
-  const hasSource = mode === 'merge' ? mergeSources.length > 0 : splitSource != null
-  const hasResult = mode === 'merge' ? mergedResult != null : extractedFiles.length > 0
+  const hasSource =
+    mode === 'merge'
+      ? mergeSources.length > 0
+      : mode === 'split'
+        ? splitSource != null
+        : toolFile != null
+  const hasResult =
+    mode === 'merge'
+      ? mergedResult != null
+      : mode === 'split'
+        ? extractedFiles.length > 0
+        : transformed != null
   const activeStep = !hasSource ? 0 : !hasResult ? 1 : 2
 
   return (
@@ -172,7 +228,7 @@ export function PdfSplitMergeScreen() {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <p className="text-sm font-medium">Mode</p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" variant={mode === 'merge' ? 'default' : 'outline'} onClick={() => switchMode('merge')}>
                 <Merge className="size-4" />
                 Merge
@@ -181,10 +237,93 @@ export function PdfSplitMergeScreen() {
                 <Scissors className="size-4" />
                 Split / Extract
               </Button>
+              {power.available ? (
+                <>
+                  <Button type="button" size="sm" variant={mode === 'optimize' ? 'default' : 'outline'} onClick={() => switchMode('optimize')}>
+                    <Gauge className="size-4" />
+                    Optimize
+                  </Button>
+                  <Button type="button" size="sm" variant={mode === 'protect' ? 'default' : 'outline'} onClick={() => switchMode('protect')}>
+                    <FileLock className="size-4" />
+                    Protect / Unlock
+                  </Button>
+                </>
+              ) : null}
             </div>
+            {power.available ? (
+              <p className="text-xs text-muted-foreground">Optimize and Protect / Unlock run on the pdfcpu backend.</p>
+            ) : null}
           </div>
 
-          {mode === 'merge' ? (
+          {mode === 'optimize' || mode === 'protect' ? (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="tool-source-file">Source PDF</Label>
+                <input
+                  id="tool-source-file"
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border file:border-input file:bg-transparent file:px-2.5 file:py-1 file:text-sm file:font-medium file:text-foreground"
+                  onChange={(e) => {
+                    void pickToolFile(e.target.files)
+                    e.target.value = ''
+                  }}
+                />
+                {toolFile ? (
+                  <p className="text-xs text-muted-foreground">
+                    {toolFile.name} · {formatBytes(toolFile.bytes.byteLength)}
+                  </p>
+                ) : null}
+              </div>
+
+              {mode === 'protect' ? (
+                <>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" variant={protectAction === 'encrypt' ? 'default' : 'outline'} onClick={() => setProtectAction('encrypt')}>
+                      Encrypt
+                    </Button>
+                    <Button type="button" size="sm" variant={protectAction === 'decrypt' ? 'default' : 'outline'} onClick={() => setProtectAction('decrypt')}>
+                      Remove password
+                    </Button>
+                  </div>
+                  {protectAction === 'encrypt' ? (
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="pdf-user-pw">Open password (optional)</Label>
+                        <p className="text-xs text-muted-foreground">Required to open the file. Leave blank for owner-only protection.</p>
+                        <Input id="pdf-user-pw" type="password" value={userPw} onChange={(e) => setUserPw(e.target.value)} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="pdf-owner-pw">Permissions password (optional)</Label>
+                        <p className="text-xs text-muted-foreground">Required to change permissions / remove protection. Defaults to the open password.</p>
+                        <Input id="pdf-owner-pw" type="password" value={ownerPw} onChange={(e) => setOwnerPw(e.target.value)} />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="pdf-open-pw">Current password</Label>
+                      <Input id="pdf-open-pw" type="password" value={openPw} onChange={(e) => setOpenPw(e.target.value)} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Rewrites the PDF with pdfcpu&apos;s optimizer — dedupes objects and uses cross-reference streams,
+                  usually shrinking the file with no visible change.
+                </p>
+              )}
+
+              <Button
+                type="button"
+                className="w-fit gap-1.5"
+                disabled={isBusy || !toolFile || (mode === 'protect' && protectAction === 'encrypt' && !userPw && !ownerPw)}
+                onClick={() => void runTransform()}
+              >
+                {mode === 'optimize' ? <Gauge className="size-4" /> : <FileLock className="size-4" />}
+                {isBusy ? 'Working…' : mode === 'optimize' ? 'Optimize' : protectAction === 'encrypt' ? 'Encrypt' : 'Remove password'}
+              </Button>
+            </>
+          ) : mode === 'merge' ? (
             <>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="merge-source-files">Source PDFs, in merge order</Label>
@@ -297,7 +436,37 @@ export function PdfSplitMergeScreen() {
         </div>
       }
       outputPanel={
-        mode === 'merge' ? (
+        mode === 'optimize' || mode === 'protect' ? (
+          transformed == null ? (
+            <p className="text-sm text-muted-foreground">
+              Choose a PDF and run {mode === 'optimize' ? 'the optimizer' : 'protect / unlock'} to get a
+              downloadable result here.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                <span className="text-muted-foreground">Input size</span>
+                <span className="text-right font-mono">{formatBytes(transformed.bytesIn)}</span>
+                <span className="text-muted-foreground">Output size</span>
+                <span className="text-right font-mono">{formatBytes(transformed.bytesOut)}</span>
+                {mode === 'optimize' ? (
+                  <>
+                    <span className="text-muted-foreground">Change</span>
+                    <span className="text-right font-mono">
+                      {transformed.bytesIn > 0
+                        ? `${(((transformed.bytesOut - transformed.bytesIn) / transformed.bytesIn) * 100).toFixed(1)}%`
+                        : '—'}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+              <Button type="button" className="w-fit gap-1.5" onClick={() => downloadBytes(transformed.bytes, transformed.name)}>
+                <Download className="size-4" />
+                Download {transformed.name}
+              </Button>
+            </div>
+          )
+        ) : mode === 'merge' ? (
           mergedResult == null ? (
             <p className="text-sm text-muted-foreground">
               Add source PDFs and merge them to get a single combined PDF here.

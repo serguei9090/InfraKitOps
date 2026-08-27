@@ -6,6 +6,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { useOptionalBackend } from '@/adapters/backend/useOptionalBackend'
+import { pdfInspect, type BackendPdfInfo } from '@/adapters/backend/pdfClient'
 import { PdfInspector, type PdfInspectionResult } from '@/core/office_media/pdfInspector'
 
 const inspector = new PdfInspector()
@@ -31,11 +33,14 @@ export function PdfInspectorScreen() {
   const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<PdfInspectionResult | null>(null)
+  const [backendInfo, setBackendInfo] = useState<BackendPdfInfo | null>(null)
+  const power = useOptionalBackend('pdf-inspector')
 
   async function inspect(file: SourceFile) {
     setIsBusy(true)
     setError(null)
     setResult(null)
+    setBackendInfo(null)
     try {
       const value = await inspector.execute({ bytes: file.bytes })
       setResult(value)
@@ -43,6 +48,13 @@ export function PdfInspectorScreen() {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setIsBusy(false)
+    }
+    if (power.available) {
+      try {
+        setBackendInfo(await pdfInspect(file.bytes))
+      } catch {
+        /* backend inspection is a bonus — client result already shown */
+      }
     }
   }
 
@@ -194,6 +206,70 @@ export function PdfInspectorScreen() {
                 </Table>
               )}
             </div>
+
+            {backendInfo ? (
+              <div>
+                <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground">
+                  STRUCTURE · pdfcpu backend
+                </p>
+                <Table>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="text-muted-foreground">PDF version</TableCell>
+                      <TableCell className="text-right font-mono">{backendInfo.version}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-muted-foreground">Validation</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant={backendInfo.valid ? 'secondary' : 'destructive'}>
+                          {backendInfo.valid ? 'Valid' : 'Issues found'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                    {!backendInfo.valid && backendInfo.validationMessage ? (
+                      <TableRow>
+                        <TableCell className="text-muted-foreground">Validator says</TableCell>
+                        <TableCell className="text-right break-all text-xs">{backendInfo.validationMessage}</TableCell>
+                      </TableRow>
+                    ) : null}
+                    {backendInfo.pageSizes.length > 0 ? (
+                      <TableRow>
+                        <TableCell className="text-muted-foreground">Page sizes</TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {backendInfo.pageSizes.join(', ')}
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                    {(
+                      [
+                        ['Linearized (fast web view)', backendInfo.linearized],
+                        ['Tagged (accessible)', backendInfo.tagged],
+                        ['Has AcroForm', backendInfo.form],
+                        ['Digitally signed', backendInfo.signatures],
+                        ['Watermarked', backendInfo.watermarked],
+                        ['Has bookmarks', backendInfo.bookmarks],
+                        ['Cross-reference streams', backendInfo.usingXRefStreams],
+                      ] as [string, boolean][]
+                    ).map(([label, value]) => (
+                      <TableRow key={label}>
+                        <TableCell className="text-muted-foreground">{label}</TableCell>
+                        <TableCell className="text-right">{value ? 'Yes' : 'No'}</TableCell>
+                      </TableRow>
+                    ))}
+                    {backendInfo.encrypted ? (
+                      <TableRow>
+                        <TableCell className="text-muted-foreground">Permission flags</TableCell>
+                        <TableCell className="text-right font-mono">
+                          0x{(backendInfo.permissions & 0xffff).toString(16).padStart(4, '0')}
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : power.available ? (
+              <p className="text-xs text-muted-foreground">Fetching structural detail from the backend…</p>
+            ) : null}
           </div>
         )
       }

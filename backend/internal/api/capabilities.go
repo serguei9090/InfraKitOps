@@ -59,7 +59,9 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 
 		// Utility-tool power-mode endpoints — pure Go stdlib, always available
 		// when the backend itself is.
-		"ssh-keygen": {Available: true},
+		"ssh-keygen":      {Available: true},
+		"pdf-split-merge": {Available: true},
+		"pdf-inspector":   {Available: true},
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{

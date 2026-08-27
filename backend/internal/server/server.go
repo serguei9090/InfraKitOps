@@ -71,6 +71,8 @@ func NewRouter(opts Options) http.Handler {
 
 		// Utility-tool "power mode" endpoints (not history-tracked).
 		r.Post("/ssh-keygen", api.SSHKeygen)
+		r.Post("/pdf/inspect", api.PDFInspect)
+		r.Post("/pdf/transform", api.PDFTransform)
 
 		r.Route("/history", func(r chi.Router) {
 			r.Get("/", hist.List)
