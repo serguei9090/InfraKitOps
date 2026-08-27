@@ -116,6 +116,19 @@ export interface PortScanResult {
   total: number
 }
 
+// --- Neighbor Table ---
+export interface NeighborEntry {
+  ip: string
+  mac: string
+  interface?: string
+  state?: string
+  family: 'v4' | 'v6'
+}
+export interface NeighborResult {
+  v: number
+  entries: NeighborEntry[]
+}
+
 // --- SNMP ---
 export interface SnmpRow {
   oid: string

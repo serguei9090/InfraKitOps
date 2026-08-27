@@ -46,7 +46,7 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"traceroute":         {Available: true},
 		"port-scanner":       {Available: true},
 		"network-scanner":    {Available: true}, // ICMP + port probe (ARP discovery needs elevation/Npcap — N4)
-		"neighbor-table":     notImpl,
+		"neighbor-table":     {Available: true},
 		"hosts-editor":       notImpl,
 		"firewall-viewer":    notImpl,
 		"iperf3":             notImpl,

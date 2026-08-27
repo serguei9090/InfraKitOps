@@ -60,6 +60,7 @@ func NewRouter(opts Options) http.Handler {
 		r.Get("/traceroute/stream", api.TracerouteStream)
 		r.Get("/network-scanner/stream", api.NetScanStream)
 		r.Post("/snmp", api.SNMP)
+		r.Get("/neighbor-table", api.NeighborTable)
 
 		r.Route("/history", func(r chi.Router) {
 			r.Get("/", hist.List)
