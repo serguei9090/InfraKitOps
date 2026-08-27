@@ -61,6 +61,9 @@ import { ZabbixConfigBuilderScreen } from './adapters/ui/tools/ZabbixConfigBuild
 import { Fail2banConfigBuilderScreen } from './adapters/ui/tools/Fail2banConfigBuilderScreen'
 import { WebServerConfigBuilderScreen } from './adapters/ui/tools/WebServerConfigBuilderScreen'
 
+// Network Toolkit (N1+)
+import { SntpLookupScreen } from './adapters/ui/tools/SntpLookupScreen'
+
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -128,6 +131,9 @@ export const router = createBrowserRouter([
       { path: 'tools/zabbix-config-builder', element: <ZabbixConfigBuilderScreen /> },
       { path: 'tools/fail2ban-config-builder', element: <Fail2banConfigBuilderScreen /> },
       { path: 'tools/web-server-config-builder', element: <WebServerConfigBuilderScreen /> },
+
+      // Network Toolkit
+      { path: 'tools/sntp', element: <SntpLookupScreen /> },
     ],
   },
 ])

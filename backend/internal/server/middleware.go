@@ -3,18 +3,33 @@ package server
 import (
 	"crypto/subtle"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
-// allowedOrigins are the exact browser origins permitted to call the API. The
-// Tauri webview reports one of the tauri.* origins; a dev web build runs on the
-// Vite port. Anything else (a random web page probing localhost) is refused.
-var allowedOrigins = map[string]bool{
+// tauriOrigins are the exact browser origins the desktop webview reports.
+var tauriOrigins = map[string]bool{
 	"http://tauri.localhost":  true,
 	"https://tauri.localhost": true,
 	"tauri://localhost":       true,
-	"http://localhost:1420":   true,
-	"http://127.0.0.1:1420":   true,
+}
+
+// originAllowed permits the Tauri webview origins and any loopback origin (a
+// dev Vite server on any port). The service binds 127.0.0.1 and every request
+// still needs the bearer token, so loopback pages are not a real exposure.
+func originAllowed(origin string) bool {
+	if origin == "" {
+		return true // non-browser / same-origin caller
+	}
+	if tauriOrigins[origin] {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	return host == "localhost" || host == "127.0.0.1" || host == "[::1]" || host == "::1"
 }
 
 // bearerAuth rejects any request whose bearer token (Authorization header, or
@@ -44,11 +59,11 @@ func bearerAuth(token string) func(http.Handler) http.Handler {
 func cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" && allowedOrigins[origin] {
+		if origin != "" && originAllowed(origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

@@ -5,7 +5,8 @@
       "name": "infrakit-dev",
       "runtimeExecutable": "bun",
       "runtimeArgs": ["run", "--cwd", "app", "dev"],
-      "port": 1420
+      "port": 1420,
+      "autoPort": true
     }
   ]
 }

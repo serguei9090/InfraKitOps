@@ -49,6 +49,8 @@ func NewRouter(opts Options) http.Handler {
 		r.Get("/capabilities", api.Capabilities)
 		r.Get("/interfaces", api.Interfaces)
 
+		r.Post("/sntp", api.SNTP)
+
 		r.Route("/history", func(r chi.Router) {
 			r.Get("/", hist.List)
 			r.Post("/", hist.Save)

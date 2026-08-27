@@ -241,7 +241,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
         route: '/tools/subnet-calculator',
       },
       { id: 'dns-lookup', name: 'DNS Lookup', description: 'Any record type against public presets or a custom resolver', icon: Globe },
-      { id: 'sntp', name: 'SNTP Lookup', description: 'Clock offset & round-trip delay from NTP servers', icon: Clock },
+      { id: 'sntp', name: 'SNTP Lookup', description: 'Clock offset & round-trip delay from NTP servers', icon: Clock, route: '/tools/sntp' },
       { id: 'whois', name: 'Whois', description: 'Registrar, dates & nameservers for a domain or IP', icon: FileSearch },
       { id: 'ip-geolocation', name: 'IP Geolocation', description: 'Country, ISP & coordinates for a public IP', icon: MapPin },
       { id: 'connections', name: 'Connections & Listeners', description: 'netstat-style active TCP/UDP sockets with owning process', icon: ArrowLeftRight },

@@ -84,18 +84,31 @@ export async function backendGet<T>(path: string, signal?: AbortSignal): Promise
   return (await res.json()) as T
 }
 
-/** POST a JSON body to an endpoint under `/api/v1` and parse the JSON response. */
-export async function backendPost<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+/** Send a JSON request (any method) to an endpoint under `/api/v1`. */
+export async function backendRequest<T>(
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+  path: string,
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
   const conn = await resolveConnection()
   if (!conn.available) throw new BackendUnavailableError()
   const res = await fetch(`${conn.endpoint}/api/v1${path}`, {
-    method: 'POST',
-    headers: { ...authHeaders(conn.token), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    method,
+    headers: {
+      ...authHeaders(conn.token),
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
     signal,
   })
   if (!res.ok) throw new Error(`backend ${path}: ${res.status} ${res.statusText}`)
   return (await res.json()) as T
+}
+
+/** POST a JSON body to an endpoint under `/api/v1` and parse the JSON response. */
+export function backendPost<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  return backendRequest<T>('POST', path, body, signal)
 }
 
 /**
