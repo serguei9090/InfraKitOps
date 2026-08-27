@@ -50,6 +50,11 @@ func NewRouter(opts Options) http.Handler {
 		r.Get("/interfaces", api.Interfaces)
 
 		r.Post("/sntp", api.SNTP)
+		r.Post("/whois", api.Whois)
+		r.Post("/dns-lookup", api.DNSLookup)
+		r.Post("/ip-geolocation", api.IPGeolocation)
+		r.Get("/connections", api.Connections)
+		r.Post("/wake-on-lan", api.WakeOnLAN)
 
 		r.Route("/history", func(r chi.Router) {
 			r.Get("/", hist.List)

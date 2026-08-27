@@ -18,6 +18,15 @@ var Version = "dev"
 
 var startedAt = time.Now()
 
+// hostname is this machine's name, used as the history "target" for
+// host-scoped tools (connections, interfaces).
+func hostname() string {
+	if h, err := os.Hostname(); err == nil {
+		return h
+	}
+	return "localhost"
+}
+
 // WriteJSON is the shared JSON responder used by every handler in this package.
 func WriteJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
