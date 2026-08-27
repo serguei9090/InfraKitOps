@@ -74,6 +74,8 @@ func NewRouter(opts Options) http.Handler {
 		r.Post("/pdf/inspect", api.PDFInspect)
 		r.Post("/pdf/transform", api.PDFTransform)
 		r.Post("/config/validate", api.ConfigValidate)
+		r.Post("/qr/decode", api.QRDecode)
+		r.Post("/x509/fetch", api.X509Fetch)
 
 		r.Route("/history", func(r chi.Router) {
 			r.Get("/", hist.List)

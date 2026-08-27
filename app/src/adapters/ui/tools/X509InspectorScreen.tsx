@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react'
+import { Loader2, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { useOptionalBackend } from '@/adapters/backend/useOptionalBackend'
+import { x509FetchViaBackend, type BackendX509FetchResult } from '@/adapters/backend/inspectClients'
 import {
   X509Inspector,
   distinguishedNameFormatted,
@@ -16,6 +21,27 @@ const inspector = new X509Inspector()
 
 export function X509InspectorScreen() {
   const [pemText, setPemText] = useState('')
+  const power = useOptionalBackend('x509-inspector')
+  const [host, setHost] = useState('')
+  const [fetching, setFetching] = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [fetched, setFetched] = useState<BackendX509FetchResult | null>(null)
+
+  async function fetchFromServer() {
+    if (!host.trim()) return
+    setFetching(true)
+    setFetchError(null)
+    setFetched(null)
+    try {
+      const res = await x509FetchViaBackend(host.trim())
+      setFetched(res)
+      setPemText(res.pem)
+    } catch (e) {
+      setFetchError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setFetching(false)
+    }
+  }
 
   const result = useMemo(() => {
     if (pemText.trim().length === 0) return { value: null, error: null }
@@ -30,7 +56,54 @@ export function X509InspectorScreen() {
     <ToolDetailScaffold
       title="X.509 Certificate Inspector"
       inputPanel={
-        <div className="flex max-w-xl flex-col gap-1.5">
+        <div className="flex max-w-xl flex-col gap-4">
+          {power.available ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="x509-host">Fetch from a live server</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="x509-host"
+                  className="font-mono"
+                  placeholder="example.com  or  example.com:8443"
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void fetchFromServer()
+                  }}
+                />
+                <Button type="button" disabled={fetching || !host.trim()} onClick={() => void fetchFromServer()}>
+                  {fetching ? <Loader2 className="size-4 animate-spin" /> : 'Fetch'}
+                </Button>
+              </div>
+              {fetchError ? <p className="text-xs text-destructive">{fetchError}</p> : null}
+              {fetched ? (
+                <div
+                  className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${
+                    fetched.trusted
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                      : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                  }`}
+                >
+                  {fetched.trusted ? (
+                    <ShieldCheck className="mt-0.5 size-4 shrink-0" />
+                  ) : (
+                    <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                  )}
+                  <div>
+                    <p className="font-medium">
+                      {fetched.trusted ? 'Chain verified against system roots' : 'Chain does NOT verify'}
+                    </p>
+                    <p className="opacity-80">
+                      {fetched.host} · {fetched.tlsVersion} · {fetched.cipherSuite} · {fetched.certCount} cert(s)
+                    </p>
+                    {fetched.verifyError ? <p className="mt-0.5 font-mono opacity-80">{fetched.verifyError}</p> : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-1.5">
           <Label htmlFor="x509-pem">Certificate PEM text</Label>
           <p className="text-xs text-muted-foreground">
             Paste a PEM-encoded certificate. A fullchain PEM with multiple certificates works too — one bad
@@ -44,6 +117,7 @@ export function X509InspectorScreen() {
             value={pemText}
             onChange={(e) => setPemText(e.target.value)}
           />
+          </div>
         </div>
       }
       outputPanel={

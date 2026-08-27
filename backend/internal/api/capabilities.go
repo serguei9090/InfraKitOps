@@ -65,6 +65,8 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		// The endpoint always exists; per-validator availability (nginx -t,
 		// sshd -t, …) is reported per-request in the response.
 		"config-validate": {Available: true},
+		"qr-reader":       {Available: true},
+		"x509-inspector":  {Available: true},
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
