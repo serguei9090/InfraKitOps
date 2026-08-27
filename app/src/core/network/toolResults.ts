@@ -135,6 +135,7 @@ export interface IperfDetail {
   samples: number[]
   mss?: number
   length?: number
+  command?: string[]
 }
 export interface IperfResult {
   v: number

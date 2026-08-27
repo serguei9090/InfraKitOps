@@ -20,24 +20,32 @@ export function Iperf3Screen() {
   const [port, setPort] = useState(5201)
   const [duration, setDuration] = useState(10)
   const [reverse, setReverse] = useState(false)
+  const [bidir, setBidir] = useState(false)
   const [udp, setUdp] = useState(false)
+  const [parallel, setParallel] = useState(1)
+  const [omit, setOmit] = useState(0)
   const [override, setOverride] = useState(false)
   const [mss, setMss] = useState(0)
   const [length, setLength] = useState(0)
   const [bitrate, setBitrate] = useState('')
+  const [extraArgs, setExtraArgs] = useState('')
 
   const params = useCallback(
     () => ({
       host: host.trim(),
       port,
       duration,
-      reverse,
+      reverse: bidir ? false : reverse,
+      bidir,
       udp,
+      parallel,
+      omit,
       mss: override ? mss : 0,
       length: override ? length : 0,
       bitrate: override ? bitrate : '',
+      extraArgs: extraArgs.trim(),
     }),
-    [host, port, duration, reverse, udp, override, mss, length, bitrate],
+    [host, port, duration, reverse, bidir, udp, parallel, omit, override, mss, length, bitrate, extraArgs],
   )
 
   const run = useCallback(
@@ -117,12 +125,21 @@ export function Iperf3Screen() {
               <QueryField label="Duration (s)" htmlFor="ip-dur">
                 <Input id="ip-dur" type="number" min={1} max={60} value={duration} onChange={(e) => setDuration(Math.max(1, Math.min(60, Number(e.target.value) || 10)))} className="w-20" />
               </QueryField>
-              <Button type="button" size="sm" variant={reverse ? 'secondary' : 'outline'} onClick={() => setReverse((v) => !v)}>
+              <Button type="button" size="sm" variant={reverse ? 'secondary' : 'outline'} disabled={bidir} onClick={() => setReverse((v) => !v)}>
                 Reverse {reverse ? 'on' : 'off'}
+              </Button>
+              <Button type="button" size="sm" variant={bidir ? 'secondary' : 'outline'} onClick={() => setBidir((v) => !v)}>
+                Bidirectional {bidir ? 'on' : 'off'}
               </Button>
               <Button type="button" size="sm" variant={udp ? 'secondary' : 'outline'} onClick={() => setUdp((v) => !v)}>
                 UDP {udp ? 'on' : 'off'}
               </Button>
+              <QueryField label="Parallel (-P)" htmlFor="ip-par">
+                <Input id="ip-par" type="number" min={1} max={128} value={parallel} onChange={(e) => setParallel(Math.max(1, Math.min(128, Number(e.target.value) || 1)))} className="w-20" />
+              </QueryField>
+              <QueryField label="Omit (-O)" htmlFor="ip-omit">
+                <Input id="ip-omit" type="number" min={0} max={60} value={omit} onChange={(e) => setOmit(Math.max(0, Math.min(60, Number(e.target.value) || 0)))} placeholder="0" className="w-20" />
+              </QueryField>
               <Button type="button" size="sm" variant={override ? 'secondary' : 'outline'} onClick={() => setOverride((v) => !v)}>
                 {override ? 'Custom MTU/buffers' : 'Use defaults'}
               </Button>
@@ -149,6 +166,15 @@ export function Iperf3Screen() {
                   ) : null}
                 </>
               ) : null}
+              <QueryField label="Extra iperf3 args" htmlFor="ip-extra" className="min-w-[18rem] flex-1">
+                <Input
+                  id="ip-extra"
+                  value={extraArgs}
+                  onChange={(e) => setExtraArgs(e.target.value)}
+                  placeholder="passed verbatim, e.g. --get-server-output --dscp AF11"
+                  className="font-mono"
+                />
+              </QueryField>
             </>
           }
         >
@@ -202,6 +228,12 @@ export function Iperf3Screen() {
               <div className="rounded-lg border border-border/60 bg-card p-3">
                 <p className="mb-1 text-xs text-muted-foreground">Per-second throughput (Mbit/s)</p>
                 <Sparkline values={result.samples} width={560} height={64} className="w-full" />
+              </div>
+            ) : null}
+            {d?.command?.length ? (
+              <div className="rounded-lg border border-border/60 bg-card p-3">
+                <p className="mb-1 text-xs text-muted-foreground">Command</p>
+                <code className="block overflow-x-auto whitespace-pre font-mono text-xs">{d.command.join(' ')}</code>
               </div>
             ) : null}
           </div>

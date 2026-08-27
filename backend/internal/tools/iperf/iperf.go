@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -23,14 +24,34 @@ var ErrNotInstalled = errors.New("iperf3 was not found on PATH — install it or
 type Options struct {
 	Host     string
 	Port     int
-	Duration int  // seconds
-	Reverse  bool // server sends
-	UDP      bool
+	Duration int  // seconds  (-t)
+	Reverse  bool // server sends  (-R)
+	Bidir    bool // both directions  (--bidir)
+	UDP      bool // (-u)
+	Parallel int  // parallel streams  (-P)
+	Omit     int  // omit first N seconds  (-O)
 	// Overrides — zero means "use iperf3 defaults".
 	MSS     int    // --set-mss (TCP on-wire segment size)
 	Length  int    // --length (UDP datagram / TCP buffer)
 	Window  int    // --window (socket buffer)
 	Bitrate string // --bitrate (e.g. "100M"); UDP mainly
+	// ExtraArgs is appended verbatim after the built args (a dangerous subset
+	// is rejected). Split on whitespace by the caller.
+	ExtraArgs []string
+}
+
+// blockedFlag rejects extra args that would change the run's nature or write
+// files. exec.Command already prevents shell injection; this is about intent.
+func blockedFlag(tok string) bool {
+	for _, bad := range []string{
+		"-s", "--server", "-D", "--daemon", "-c", "--client",
+		"-F", "--file", "--logfile", "--pidfile", "-J", "--json",
+	} {
+		if tok == bad || strings.HasPrefix(tok, bad+"=") {
+			return true
+		}
+	}
+	return false
 }
 
 // Stream is the sender/receiver summary.
@@ -56,9 +77,10 @@ type Result struct {
 	Stats    struct {
 		Min, Avg, P50, P95, Max float64
 	} `json:"stats"`
-	MSS    int    `json:"mss,omitempty"`
-	Length int    `json:"length,omitempty"`
-	Raw    string `json:"raw,omitempty"`
+	MSS     int      `json:"mss,omitempty"`
+	Length  int      `json:"length,omitempty"`
+	Command []string `json:"command"` // the resolved arg list (binary basename + args)
+	Raw     string   `json:"raw,omitempty"`
 }
 
 // resolveBin finds the iperf3 binary: the copy bundled next to the backend
@@ -90,13 +112,9 @@ func Available() bool {
 	return ok
 }
 
-// Run performs a client test and parses the JSON output.
-func Run(ctx context.Context, opts Options) (Result, error) {
-	bin, ok := resolveBin()
-	if !ok {
-		return Result{}, ErrNotInstalled
-	}
-
+// buildArgs turns Options into the iperf3 command line (without the binary).
+// The result is also surfaced to the UI as a command preview.
+func buildArgs(opts Options) []string {
 	args := []string{"-c", opts.Host, "--json", "--connect-timeout", "5000"}
 	if opts.Port > 0 {
 		args = append(args, "-p", strconv.Itoa(opts.Port))
@@ -106,11 +124,19 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		dur = 10
 	}
 	args = append(args, "-t", strconv.Itoa(dur))
-	if opts.Reverse {
+	if opts.Bidir {
+		args = append(args, "--bidir")
+	} else if opts.Reverse {
 		args = append(args, "-R")
 	}
 	if opts.UDP {
 		args = append(args, "-u")
+	}
+	if opts.Parallel > 1 {
+		args = append(args, "-P", strconv.Itoa(opts.Parallel))
+	}
+	if opts.Omit > 0 {
+		args = append(args, "-O", strconv.Itoa(opts.Omit))
 	}
 	if opts.MSS > 0 {
 		args = append(args, "--set-mss", strconv.Itoa(opts.MSS))
@@ -124,6 +150,22 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	if opts.Bitrate != "" {
 		args = append(args, "-b", opts.Bitrate)
 	}
+	for _, tok := range opts.ExtraArgs {
+		if tok = strings.TrimSpace(tok); tok != "" && !blockedFlag(tok) {
+			args = append(args, tok)
+		}
+	}
+	return args
+}
+
+// Run performs a client test and parses the JSON output.
+func Run(ctx context.Context, opts Options) (Result, error) {
+	bin, ok := resolveBin()
+	if !ok {
+		return Result{}, ErrNotInstalled
+	}
+
+	args := buildArgs(opts)
 
 	cmd := exec.CommandContext(ctx, bin, args...)
 	out, runErr := cmd.Output()
@@ -133,6 +175,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	res.Reverse = opts.Reverse
 	res.MSS = opts.MSS
 	res.Length = opts.Length
+	res.Command = append([]string{filepath.Base(bin)}, args...)
 	if res.Protocol == "" {
 		if opts.UDP {
 			res.Protocol = "UDP"

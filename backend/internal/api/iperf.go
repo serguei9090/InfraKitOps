@@ -12,15 +12,19 @@ import (
 )
 
 type iperfRequest struct {
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	Duration int    `json:"duration"`
-	Reverse  bool   `json:"reverse"`
-	UDP      bool   `json:"udp"`
-	MSS      int    `json:"mss"`
-	Length   int    `json:"length"`
-	Window   int    `json:"window"`
-	Bitrate  string `json:"bitrate"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
+	Duration  int    `json:"duration"`
+	Reverse   bool   `json:"reverse"`
+	Bidir     bool   `json:"bidir"`
+	UDP       bool   `json:"udp"`
+	Parallel  int    `json:"parallel"`
+	Omit      int    `json:"omit"`
+	MSS       int    `json:"mss"`
+	Length    int    `json:"length"`
+	Window    int    `json:"window"`
+	Bitrate   string `json:"bitrate"`
+	ExtraArgs string `json:"extraArgs"`
 }
 
 // Iperf3: POST /iperf3 — throughput test. resultShape "scalar_series" (per-interval Mbps).
@@ -38,8 +42,10 @@ func Iperf3(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	result, err := iperf.Run(r.Context(), iperf.Options{
 		Host: strings.TrimSpace(req.Host), Port: req.Port, Duration: req.Duration,
-		Reverse: req.Reverse, UDP: req.UDP, MSS: req.MSS, Length: req.Length,
-		Window: req.Window, Bitrate: req.Bitrate,
+		Reverse: req.Reverse, Bidir: req.Bidir, UDP: req.UDP,
+		Parallel: req.Parallel, Omit: req.Omit,
+		MSS: req.MSS, Length: req.Length, Window: req.Window, Bitrate: req.Bitrate,
+		ExtraArgs: strings.Fields(req.ExtraArgs),
 	})
 	if errors.Is(err, iperf.ErrNotInstalled) {
 		WriteJSON(w, http.StatusServiceUnavailable, map[string]any{"error": err.Error(), "notInstalled": true})
