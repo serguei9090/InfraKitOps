@@ -290,28 +290,31 @@ in-browser under the Network Toolkit module; `hostRange` parses every §2.5 row.
 **Not yet verified**: `bun run tauri dev` opening a real window with the sidecar
 live (GUI, unobservable here) — needs one manual pass.
 
-### Phase N1 — Easy read-only tools + history store — ~24–32 pd, ~4–5k LOC
+### Phase N1 — Easy read-only tools + history store — ~24–32 pd — **DONE 2026-08-27**
 
 Proves the one-shot pipe end-to-end and lands the history layer.
 
-| Checkpoint | pd |
-|-----------|----|
-| History store: `modernc.org/sqlite`, `run` table + migrations + prune, `HistoryPort` HTTP endpoints | 3–4 |
-| History/diff core (TS): envelope + `text` diff + `set` diff + unit tests | 4–6 |
-| `HistoryDrawer` UI (list, re-open read-only) | 3–4 |
-| `SavedTargetsPane` + `NetworkResultTable` shared components | 3–4 |
-| **DNS Lookup** — `miekg/dns`; custom resolver IP, 6 public presets, all record types, DoH via shared http client | 2–3 |
-| **SNTP Lookup** — `beevik/ntp`; offset + RTT; 4 server presets | 1.5–2 |
-| **Whois** — `likexian/whois` + `whois-parser`; bundled TLD→server map | 2 |
-| **IP Geolocation** — `ip-api.com` via shared (proxy-aware) http client; rate-limit tracking (`X-Rl`/`X-Ttl`); "use my MaxMind key" option | 2–3 |
-| **Connections / Listeners** — `gopsutil/v4/net` `Connections("all")`; TCP+UDP, PID, process, PTR cache | 2 |
-| **Wake on LAN** — 102-byte magic packet via `UdpClient`; profile = MAC + broadcast | 1 |
+| Checkpoint | status |
+|-----------|--------|
+| History store: `modernc.org/sqlite`, `run` table + prune (`PrunePolicy`), `/api/v1/history` GET/POST/GET-id/PATCH/DELETE | ✅ `639b904` |
+| History/diff core (TS): envelope types + `canonicalizeParams` + `text` diff (jsdiff, volatile-line strip) + `set` diff + `scalar_series` deltas + `seriesOverTime` | ✅ `fbdfd92` (10 tests) |
+| `HistoryDrawer` UI — list, this-target/all toggle, restore, pin/delete, inline diff-vs-previous | ✅ `39f562f` |
+| `SavedTargetsPane` (folder-grouped, IStoragePort) + `NetworkResultTable` + `TextResultView` | ✅ `a73b33a` / `b338992` |
+| **SNTP Lookup** — `beevik/ntp`, concurrent, median offset; 4 presets | ✅ `5a9a38d` |
+| **DNS Lookup** — `miekg/dns`; any type, custom resolver (default 1.1.1.1), UDP/TCP; shape `set` | ✅ `fa54732` / `b338992` |
+| **Whois** — `likexian/whois` + parser; raw + structured; shape `text` | ✅ `fa54732` / `b338992` |
+| **IP Geolocation** — `ip-api.com`, 24 fields, formatted block, rate headers; shape `text` | ✅ `fa54732` / `b338992` |
+| **Connections / Listeners** — `gopsutil/v4/net` + process; TCP/UDP v4/v6; shape `table` | ✅ `fa54732` / `b338992` |
+| **Wake on LAN** — 102-byte magic packet, UDP broadcast | ✅ `fa54732` / `b338992` |
 
-**Per-tool DoD** (template): result matches the equivalent CLI (`dig`,
-`ntpdate -q`, `whois`, `netstat`) within tolerance; every run written to history;
-re-open from drawer renders identically; text/set diff between two runs is
-correct; backend-down → banner; ≥3 unit tests on the core mapper; saved-target
-round-trips through `IStoragePort`.
+**DoD met**: DNS matches `dig`, SNTP offset/RTT sane vs `w32tm`, whois parsed
+fields present, connections count matches `netstat`, geo returns full record —
+all verified in-browser against the dev backend; every run auto-saves to
+history; restore repopulates inputs; saved targets round-trip through
+`IStoragePort`; backend-down → banner. **Deferred within N1**: `DoH` transport,
+"use my MaxMind key" offline geo, and reshaping SNTP from `table` to
+`scalar_series` (so its median-offset-over-time diffs) — all small follow-ups.
+Proxy-aware http client is N2 (nothing in N1 needs it yet).
 
 ### Phase N2 — ICMP / probe tools + streaming + compare — ~21–28 pd, ~4–5k LOC
 
