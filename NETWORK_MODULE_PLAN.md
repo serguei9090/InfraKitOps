@@ -349,10 +349,10 @@ dedupe (append is keyed, so idempotent for set/table tools).
 | Checkpoint | status |
 |-----------|--------|
 | **SNMP** — `gosnmp`; v1 / v2c / v3 (full USM: auth MD5/SHA/224…512, priv DES/AES/192/256, noAuth/authNoPriv/authPriv); Get + BulkWalk; shape `set` keyed by OID; 5 OID profiles | ✅ `63b2562` |
-| **Neighbor Table** (read) — per-OS parse (`arp -a` / `/proc/net/arp`), IP/MAC/iface/state/family; shape `table`. GetIpNetTable2 (IPv6/NDP, richer state) = later upgrade | ✅ `da07df7` |
+| **Neighbor Table** (read) — `Get-NetNeighbor \| ConvertTo-Json` (Windows) / `ip -j neigh` (Linux), arp fallback; real states, IPv6/NDP; shape `table` | ✅ `da07df7`, `acf3909` |
 | **Hosts File Editor** — `internal/tools/hostsfile`: line classifier + "commented = disabled" convention, formatting-preserving render, atomic Apply (backup + rename), RestoreLatest; screen with editable table (200-row cap + filter), diff-before-apply, "run as admin" banner on EACCES | ✅ `4638105` |
-| **Firewall Viewer** (read-only) — Windows `netsh advfirewall … verbose` parse (no COM yet), Linux firewalld/ufw/nft detect; wf.msc column table + direction/action facets; shape `table` | ✅ `22df096` |
-| **iperf3** — binary wrapper (`iperf3 --json`), "use defaults / custom" for `--set-mss` / `-l` / `-w` / `-b`, reverse + UDP; per-interval Mbps → `scalar_series`; 503 `notInstalled` when the binary is absent (capability probes `iperf.Available()`) | ✅ `d2281d3` |
+| **Firewall Viewer** (read-only) — Windows `netsh advfirewall … verbose` parse (COM upgrade deferred to write-CRUD), Linux firewalld / `nft -j` (native JSON) / ufw; wf.msc column table + direction/action facets; shape `table` | ✅ `22df096`, `acf3909` |
+| **iperf3** — `iperf3 --json` wrapper; `--set-mss` / `-l` / `-w` / `-b` overrides, reverse + UDP; per-interval Mbps → `scalar_series`; **bundled** static BSD-3 binary on Linux/macOS (`vendor-tools/`, SHA-256-pinned), `winget install ar51an.iPerf3` on Windows (every Win build links GPL `cygwin1.dll`); "Start local server" spawns a managed `iperf3 -s` | ✅ `d2281d3`, `c6d9053` |
 | **Elevated helper binary** — Windows `runas`+manifest / Linux polkit `pkexec`, stdin payload, allow-listed atomic write, JSON stdout protocol; makes hosts-write (and future firewall-write) work without launching the whole app elevated | ⏳ **remaining N3 item** |
 
 **DoD met so far**: SNMP v2c/v3 walk verified against demo.pysnmp.com; Neighbor
