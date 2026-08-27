@@ -119,8 +119,8 @@ func TestCapabilitiesShapesResponse(t *testing.T) {
 	if !body.Capabilities["subnet-calculator"].Available {
 		t.Fatal("subnet-calculator should always be available")
 	}
-	if body.Capabilities["snmp"].Available {
-		t.Fatal("snmp is not implemented until N3")
+	if body.Capabilities["firewall-viewer"].Available {
+		t.Fatal("firewall-viewer is not implemented yet")
 	}
 }
 

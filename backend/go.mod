@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/beevik/ntp v1.5.0
 	github.com/go-chi/chi/v5 v5.2.1
+	github.com/gosnmp/gosnmp v1.44.0
 	github.com/likexian/whois v1.15.7
 	github.com/likexian/whois-parser v1.24.21
 	github.com/miekg/dns v1.1.73

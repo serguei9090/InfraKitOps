@@ -116,6 +116,18 @@ export interface PortScanResult {
   total: number
 }
 
+// --- SNMP ---
+export interface SnmpRow {
+  oid: string
+  type: string
+  value: string
+}
+export interface SnmpResult {
+  v: number
+  mode: string
+  rows: SnmpRow[]
+}
+
 // --- Network Scanner ---
 export interface ScanHostRow {
   ip: string

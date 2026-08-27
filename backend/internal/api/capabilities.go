@@ -50,7 +50,7 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"hosts-editor":       notImpl,
 		"firewall-viewer":    notImpl,
 		"iperf3":             notImpl,
-		"snmp":               notImpl,
+		"snmp":               {Available: true},
 		"discovery-protocol": rawSocket(),
 	}
 
