@@ -335,22 +335,26 @@ set add/remove. **Deferred**: `GeoMap` (leaflet) — hop location is a column
 for now; ARP-based discovery (pcap/elevation → N4); explicit SSE reconnect
 dedupe (append is keyed, so idempotent for set/table tools).
 
-### Phase N3 — System-state + privileged tools — ~27–36 pd, ~5–6k LOC
+### Phase N3 — System-state + privileged tools — **5/6 done 2026-08-27**
 
-| Checkpoint | pd |
-|-----------|----|
-| **Elevated helper binary** — Windows `runas`+manifest, Linux polkit/`pkexec`, stdin payload, allow-listed atomic write + timestamped backup, JSON stdout protocol | 3–4 |
-| **Hosts File Editor** — `txn2/txeh` (or ~150 LOC hand-rolled) + "commented = disabled" convention; table (enabled / IP / hostnames / comment), add/edit/delete, raw-text mode, **diff-before-apply preview**, backup + "restore previous"; write via elevated helper | 5–6 |
-| **Neighbor Table** (read) — Linux `netlink NeighList` / `/proc/net/arp`, Windows `iphlpapi!GetIpNetTable2` via `x/sys/windows`; columns IP / iface / MAC / state / multicast; F5 refresh. *Write (static add / clear dynamic) deferred to N4.* | 3 |
-| **Firewall Viewer** (read-only) — Windows COM `INetFwPolicy2.Rules` via `go-ole` (decode `Profiles` bitmask, join filters) with registry read cache; Linux firewalld D-Bus + `nft -j` + `ufw status`; full `wf.msc` column table; text diff between snapshots | 6–8 |
-| **iperf3** — bundle the BSD-3 `iperf3` binary as a second sidecar; `iperf3 -c … --json` parse; "use defaults" vs "override" exposing `--set-mss` (TCP), `--length` (UDP/TCP datagram/buffer), `--window`, `--bitrate`; DF-bit + `-l` path-MTU probe helper | 3–4 |
-| **SNMP** — `gosnmp`; v1 / v2c / v3; Get / Walk (Default + WithinSubtree) / Set; full v3 USM surface (auth MD5/SHA1/224…512, priv DES/AES-128/192/256, engine-ID discovery); 13 built-in OID profiles | 4–5 |
+| Checkpoint | status |
+|-----------|--------|
+| **SNMP** — `gosnmp`; v1 / v2c / v3 (full USM: auth MD5/SHA/224…512, priv DES/AES/192/256, noAuth/authNoPriv/authPriv); Get + BulkWalk; shape `set` keyed by OID; 5 OID profiles | ✅ `63b2562` |
+| **Neighbor Table** (read) — per-OS parse (`arp -a` / `/proc/net/arp`), IP/MAC/iface/state/family; shape `table`. GetIpNetTable2 (IPv6/NDP, richer state) = later upgrade | ✅ `da07df7` |
+| **Hosts File Editor** — `internal/tools/hostsfile`: line classifier + "commented = disabled" convention, formatting-preserving render, atomic Apply (backup + rename), RestoreLatest; screen with editable table (200-row cap + filter), diff-before-apply, "run as admin" banner on EACCES | ✅ `4638105` |
+| **Firewall Viewer** (read-only) — Windows `netsh advfirewall … verbose` parse (no COM yet), Linux firewalld/ufw/nft detect; wf.msc column table + direction/action facets; shape `table` | ✅ `22df096` |
+| **iperf3** — binary wrapper (`iperf3 --json`), "use defaults / custom" for `--set-mss` / `-l` / `-w` / `-b`, reverse + UDP; per-interval Mbps → `scalar_series`; 503 `notInstalled` when the binary is absent (capability probes `iperf.Available()`) | ✅ `d2281d3` |
+| **Elevated helper binary** — Windows `runas`+manifest / Linux polkit `pkexec`, stdin payload, allow-listed atomic write, JSON stdout protocol; makes hosts-write (and future firewall-write) work without launching the whole app elevated | ⏳ **remaining N3 item** |
 
-**Privileged DoD**: hosts edit requires exactly one UAC/polkit prompt per apply,
-writes atomically, a bad edit is one click to restore; firewall viewer lists the
-same rule count as `wf.msc` / `firewall-cmd --list-all`; unelevated → read-only
-with a clear notice; iperf3 override actually changes on-wire packet size
-(capture-verified); SNMP v3 AuthPriv walk matches `snmpwalk` output.
+**DoD met so far**: SNMP v2c/v3 walk verified against demo.pysnmp.com; Neighbor
+Table read 22 host entries; Hosts Editor loads a 7335-line file (capped 200)
+and shows the pending `+ #` / `-` diff on toggle; Firewall Viewer parsed 2587
+Windows rules with the wf.msc columns; iperf3 screen wires + shows the
+not-installed state cleanly. **Simplifications vs the original plan**: Firewall
+uses `netsh` text parsing rather than `go-ole` COM (COM upgrade = when write
+CRUD lands); hosts-write is direct-with-elevation-error pending the helper;
+iperf3 uses a PATH/bundled binary, not a second sidecar. SNMP Set + "13 OID
+profiles" trimmed to Get/Walk + 5 profiles.
 
 ### Phase N4 — Deferred / optional — ~35–50 pd
 
