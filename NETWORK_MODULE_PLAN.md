@@ -373,7 +373,7 @@ two large ones stay separate efforts by design.
 | Item | status |
 |------|--------|
 | **`table`-shape diff** (scan rows, ARP tables) | ✅ `daf8d49` — `diffTable` + connections/neighbor rows |
-| **Firewall write CRUD** | ⏸ **its own release** — raises the code-signing / security-review bar, needs a `go-ole` COM adapter, pre-change export, and timed auto-revert. Deliberately out of the module's scope. |
+| **Firewall write CRUD** | 🟡 **v1 landed 2026-08-27** — Windows only (`netsh advfirewall firewall add/delete/set rule`), via the elevated helper (`firewall-exec` op). `internal/fwspec` is the pure, dep-free change model (strict `RuleSpec.Validate`, `NetshArgs`, `AssessLockout`); the helper re-derives the argv from the same code so args can't be injected. `POST /firewall/change` returns `{needsConfirmation, warnings}` for lockout-risky changes until re-sent with `confirmed:true`. Firewall Viewer gains per-row enable/disable + delete + an Add-rule dialog + a confirm dialog (gated on the `firewall-edit` capability). **Not yet done**: Linux (ufw/firewalld/nft), pre-change ruleset export + timed auto-revert, reorder. The privileged `netsh` apply itself is unverified in CI (UAC prompt), same caveat as `tauri dev`. |
 | **Discovery Protocol (LLDP/CDP)** | ⏸ optional component — `gopacket` behind a `//go:build pcap` tag, CGO + libpcap/Npcap, native-runner CI, Npcap installer prompt. Not built to keep the core CGO-free. |
 | **Web IndexedDB history adapter** (Dexie) | ⏸ only when the web build needs history (today the web build shows "backend unavailable" for network tools, by design) |
 | **Traceroute GeoMap** (leaflet) + scrub-timeline | ⏸ blocked on the offline-tiles decision (plan §8 open question); hop location shows as a table column for now |

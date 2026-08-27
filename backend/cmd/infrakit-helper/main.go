@@ -16,9 +16,9 @@ import (
 )
 
 type request struct {
-	Op      string `json:"op"`      // "hosts-write" | "hosts-restore"
-	Path    string `json:"path"`    // target file (must be the OS hosts file)
-	Content string `json:"content"` // new content for hosts-write
+	Op      string `json:"op"`      // "hosts-write" | "hosts-restore" | "firewall-exec"
+	Path    string `json:"path"`    // target file (must be the OS hosts file); unused for firewall-exec
+	Content string `json:"content"` // new hosts content, or a JSON fwspec.Change for firewall-exec
 }
 
 type response struct {
@@ -45,16 +45,21 @@ func main() {
 		return
 	}
 
-	if !isAllowedPath(req.Path) {
-		writeResp(respPath, response{Error: "path not allowed: " + req.Path})
-		return
-	}
-
 	switch req.Op {
 	case "hosts-write":
+		if !isAllowedPath(req.Path) {
+			writeResp(respPath, response{Error: "path not allowed: " + req.Path})
+			return
+		}
 		err = atomicWriteWithBackup(req.Path, []byte(req.Content))
 	case "hosts-restore":
+		if !isAllowedPath(req.Path) {
+			writeResp(respPath, response{Error: "path not allowed: " + req.Path})
+			return
+		}
 		err = restoreLatestBackup(req.Path)
+	case "firewall-exec":
+		err = firewallExec(req.Content)
 	default:
 		err = fmt.Errorf("unknown op %q", req.Op)
 	}

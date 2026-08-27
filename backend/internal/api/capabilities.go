@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"runtime"
 
 	"github.com/infrakit/backend/internal/privilege"
 	"github.com/infrakit/backend/internal/tools/iperf"
@@ -53,6 +54,7 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"neighbor-table":     {Available: true},
 		"hosts-editor":       {Available: true},
 		"firewall-viewer":    {Available: true},
+		"firewall-edit":      firewallEditCap(),
 		"iperf3":             iperfCap,
 		"snmp":               {Available: true},
 		"discovery-protocol": rawSocket(),
@@ -73,4 +75,13 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"elevated":     elevated,
 		"capabilities": caps,
 	})
+}
+
+// firewallEditCap: write CRUD is Windows-only in this release, and each apply
+// prompts for elevation via the helper.
+func firewallEditCap() Capability {
+	if runtime.GOOS != "windows" {
+		return Capability{Available: false, Reason: "firewall rule editing is Windows-only in this release"}
+	}
+	return Capability{Available: true, NeedsElevation: true}
 }

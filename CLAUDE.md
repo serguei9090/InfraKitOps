@@ -146,6 +146,13 @@ diagnostics only. Plan + roadmap: [`NETWORK_MODULE_PLAN.md`](NETWORK_MODULE_PLAN
   `cmd/infrakit-backend`, that runs as a **Tauri sidecar** on desktop and a standalone
   HTTP service for web. `chi` router under `/api/v1`, per-launch bearer-token auth,
   SSE for streaming tools. `go test ./...` from `backend/`.
+- **Firewall write CRUD (v1, Windows-only, 2026-08-27)**: `internal/fwspec` is the
+  pure dep-free change model (strict `RuleSpec.Validate` / `NetshArgs` /
+  `AssessLockout`), imported by both the `firewall` package and the elevated
+  `infrakit-helper` (`firewall-exec` op) — the helper re-derives the `netsh` argv
+  from the same code so a caller can't inject arguments. `POST /firewall/change`
+  returns `{needsConfirmation, warnings}` for lockout-risky edits. Linux firewall
+  write is still deferred.
 - **Sidecar wiring**: `app/src-tauri/src/lib.rs` spawns it on setup, reads
   `LISTENING <addr>` off stdout, exposes `{ endpoint, token, available }` via the
   `backend_endpoint` command, kills it on exit. `capabilities/sidecar.json` scopes
