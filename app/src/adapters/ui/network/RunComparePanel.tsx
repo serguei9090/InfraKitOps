@@ -194,6 +194,35 @@ function DiffBody({ diff, onlyDiff }: { diff: RunDiff; onlyDiff: boolean }) {
             ))}
         </pre>
       )
+    case 'table':
+      return (
+        <div className="space-y-3 text-sm">
+          <Group title={`Added rows (${diff.added.length})`} tone="add">
+            {diff.added.map((r) => (
+              <li key={r.key}>{r.key}</li>
+            ))}
+          </Group>
+          <Group title={`Removed rows (${diff.removed.length})`} tone="remove">
+            {diff.removed.map((r) => (
+              <li key={r.key}>{r.key}</li>
+            ))}
+          </Group>
+          <Group title={`Modified rows (${diff.modified.length})`} tone="ctx">
+            {diff.modified.map((m) => (
+              <li key={m.key}>
+                <span className="text-foreground">{m.key}</span>
+                {Object.entries(m.changed).map(([col, [before, after]]) => (
+                  <span key={col} className="ml-2 text-muted-foreground">
+                    {col}: <span className="text-destructive">{before || '∅'}</span> →{' '}
+                    <span className="text-emerald-600 dark:text-emerald-400">{after || '∅'}</span>
+                  </span>
+                ))}
+              </li>
+            ))}
+          </Group>
+          {!onlyDiff ? <p className="text-xs text-muted-foreground">{diff.unchanged} rows unchanged</p> : null}
+        </div>
+      )
     default:
       return <p className="text-sm text-muted-foreground">Comparison isn&apos;t available for this result type yet.</p>
   }

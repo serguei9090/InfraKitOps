@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { canonicalizeParams, paramsKey } from './canonicalizeParams'
-import { diffRuns, diffSets, diffText, seriesOverTime } from './diff'
+import { diffRuns, diffSets, diffTable, diffText, seriesOverTime } from './diff'
 import type { StoredRun } from './envelope'
 
 function run(partial: Partial<StoredRun>): StoredRun {
@@ -96,9 +96,44 @@ describe('diffRuns dispatch', () => {
     expect(d.kind).toBe('unsupported')
   })
 
-  it('table shape is unsupported for now', () => {
-    const t = run({ resultShape: 'table', result: { v: 1 } })
-    expect(diffRuns(t, t).kind).toBe('unsupported')
+  it('diffs table rows: added / removed / modified', () => {
+    const a = run({
+      resultShape: 'table',
+      result: {
+        v: 1,
+        rows: [
+          { key: '10.0.0.1', cells: { mac: 'aa:bb', state: 'reachable' } },
+          { key: '10.0.0.2', cells: { mac: 'cc:dd', state: 'stale' } },
+        ],
+      },
+    })
+    const b = run({
+      resultShape: 'table',
+      result: {
+        v: 1,
+        rows: [
+          { key: '10.0.0.1', cells: { mac: 'aa:bb', state: 'stale' } }, // state changed
+          { key: '10.0.0.3', cells: { mac: 'ee:ff', state: 'reachable' } }, // new
+        ],
+      },
+    })
+    const d = diffRuns(a, b)
+    expect(d.kind).toBe('table')
+    if (d.kind === 'table') {
+      expect(d.added.map((r) => r.key)).toEqual(['10.0.0.3'])
+      expect(d.removed.map((r) => r.key)).toEqual(['10.0.0.2'])
+      expect(d.modified).toHaveLength(1)
+      expect(d.modified[0].changed.state).toEqual(['reachable', 'stale'])
+    }
+  })
+})
+
+describe('diffTable', () => {
+  it('counts unchanged rows', () => {
+    const rows = [{ key: 'a', cells: { x: '1' } }]
+    const d = diffTable(rows, rows)
+    expect(d.unchanged).toBe(1)
+    expect(d.added).toHaveLength(0)
   })
 })
 

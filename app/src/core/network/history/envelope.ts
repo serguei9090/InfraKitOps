@@ -96,6 +96,18 @@ export interface TextResult {
   text: string
 }
 
+export interface TableRow {
+  /** Stable identity for diffing (e.g. "10.0.0.4", "tcp 0.0.0.0:22"). */
+  key: string
+  /** Column values, keyed by column id. */
+  cells: Record<string, string>
+}
+
+export interface TableResult {
+  v: number
+  rows: TableRow[]
+}
+
 export function isSetResult(x: unknown): x is SetResult {
   return typeof x === 'object' && x !== null && Array.isArray((x as SetResult).items)
 }
@@ -111,4 +123,13 @@ export function isScalarSeriesResult(x: unknown): x is ScalarSeriesResult {
 
 export function isTextResult(x: unknown): x is TextResult {
   return typeof x === 'object' && x !== null && typeof (x as TextResult).text === 'string'
+}
+
+export function isTableResult(x: unknown): x is TableResult {
+  return (
+    typeof x === 'object' &&
+    x !== null &&
+    Array.isArray((x as TableResult).rows) &&
+    ((x as TableResult).rows.length === 0 || typeof (x as TableResult).rows[0]?.key === 'string')
+  )
 }

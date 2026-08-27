@@ -14,10 +14,17 @@ type Entry struct {
 	Family    string `json:"family"`          // v4 | v6
 }
 
+// tableRow is the {key, cells} shape the history table-diff consumes.
+type tableRow struct {
+	Key   string            `json:"key"`
+	Cells map[string]string `json:"cells"`
+}
+
 // Result — shape "table".
 type Result struct {
-	V       int     `json:"v"`
-	Entries []Entry `json:"entries"`
+	V       int        `json:"v"`
+	Entries []Entry    `json:"entries"`
+	Rows    []tableRow `json:"rows"`
 }
 
 // List returns the current neighbor cache, sorted by IP.
@@ -27,7 +34,14 @@ func List() (Result, error) {
 		return Result{}, err
 	}
 	sort.Slice(entries, func(i, j int) bool { return ipLess(entries[i].IP, entries[j].IP) })
-	return Result{V: 1, Entries: entries}, nil
+	rows := make([]tableRow, 0, len(entries))
+	for _, e := range entries {
+		rows = append(rows, tableRow{
+			Key:   e.IP,
+			Cells: map[string]string{"mac": e.MAC, "interface": e.Interface, "state": e.State},
+		})
+	}
+	return Result{V: 1, Entries: entries, Rows: rows}, nil
 }
 
 func ipLess(a, b string) bool {

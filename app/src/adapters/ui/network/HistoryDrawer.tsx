@@ -213,6 +213,16 @@ function DiffPreview({ diff }: { diff: RunDiff | null }) {
           <span className="text-destructive">−{diff.removedCount}</span> lines changed
         </p>
       )
+    case 'table':
+      if (diff.added.length === 0 && diff.removed.length === 0 && diff.modified.length === 0)
+        return <p className="text-xs text-muted-foreground">No row changes since the previous run.</p>
+      return (
+        <p className="text-xs">
+          <span className="text-emerald-600 dark:text-emerald-400">+{diff.added.length}</span>{' '}
+          <span className="text-destructive">−{diff.removed.length}</span>{' '}
+          <span className="text-amber-600 dark:text-amber-400">~{diff.modified.length}</span> rows
+        </p>
+      )
     default:
       return <p className="text-xs text-muted-foreground">Diff not available for this result type yet.</p>
   }

@@ -7,12 +7,14 @@ import { diffLines, type Change } from 'diff'
 import {
   isScalarSeriesResult,
   isSetResult,
+  isTableResult,
   isTextResult,
   type ResultShape,
   type RunSummary,
   type ScalarSeriesResult,
   type SetItem,
   type StoredRun,
+  type TableRow,
 } from './envelope'
 
 export interface SetDiff {
@@ -49,12 +51,26 @@ export interface ScalarSeriesDiff {
   deltas: ScalarStatDelta[]
 }
 
+export interface TableRowChange {
+  key: string
+  /** Columns whose value changed: { col: [before, after] }. */
+  changed: Record<string, [string, string]>
+}
+
+export interface TableDiff {
+  kind: 'table'
+  added: TableRow[]
+  removed: TableRow[]
+  modified: TableRowChange[]
+  unchanged: number
+}
+
 export interface UnsupportedDiff {
   kind: 'unsupported'
   shape: ResultShape
 }
 
-export type RunDiff = SetDiff | TextDiff | ScalarSeriesDiff | UnsupportedDiff
+export type RunDiff = SetDiff | TextDiff | ScalarSeriesDiff | TableDiff | UnsupportedDiff
 
 /** Diff run A (older) against run B (newer). Both must be the same tool + shape. */
 export function diffRuns(a: StoredRun, b: StoredRun): RunDiff {
@@ -77,9 +93,42 @@ export function diffRuns(a: StoredRun, b: StoredRun): RunDiff {
       }
       break
     case 'table':
-      return { kind: 'unsupported', shape: 'table' }
+      if (isTableResult(a.result) && isTableResult(b.result)) {
+        return diffTable(a.result.rows, b.result.rows)
+      }
+      break
   }
   return { kind: 'unsupported', shape: b.resultShape }
+}
+
+export function diffTable(a: TableRow[], b: TableRow[]): TableDiff {
+  const aByKey = new Map(a.map((r) => [r.key, r]))
+  const bByKey = new Map(b.map((r) => [r.key, r]))
+  const added: TableRow[] = []
+  const removed: TableRow[] = []
+  const modified: TableRowChange[] = []
+  let unchanged = 0
+
+  for (const row of b) {
+    const prev = aByKey.get(row.key)
+    if (!prev) {
+      added.push(row)
+      continue
+    }
+    const changed: Record<string, [string, string]> = {}
+    const cols = new Set([...Object.keys(prev.cells), ...Object.keys(row.cells)])
+    for (const col of cols) {
+      const before = prev.cells[col] ?? ''
+      const after = row.cells[col] ?? ''
+      if (before !== after) changed[col] = [before, after]
+    }
+    if (Object.keys(changed).length > 0) modified.push({ key: row.key, changed })
+    else unchanged++
+  }
+  for (const row of a) {
+    if (!bByKey.has(row.key)) removed.push(row)
+  }
+  return { kind: 'table', added, removed, modified, unchanged }
 }
 
 export function diffSets(a: SetItem[], b: SetItem[]): SetDiff {

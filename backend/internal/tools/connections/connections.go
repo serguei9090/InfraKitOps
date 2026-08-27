@@ -22,12 +22,18 @@ type Conn struct {
 	ProcessName string `json:"processName,omitempty"`
 }
 
+type tableRow struct {
+	Key   string            `json:"key"`
+	Cells map[string]string `json:"cells"`
+}
+
 // Result — shape "table".
 type Result struct {
-	V           int    `json:"v"`
-	Connections []Conn `json:"connections"`
-	Listening   int    `json:"listening"`
-	Established int    `json:"established"`
+	V           int        `json:"v"`
+	Connections []Conn     `json:"connections"`
+	Rows        []tableRow `json:"rows"`
+	Listening   int        `json:"listening"`
+	Established int        `json:"established"`
 }
 
 // List returns all IPv4/IPv6 TCP and UDP connections. `kind` is "all", "tcp",
@@ -73,6 +79,16 @@ func List(kind string) (Result, error) {
 		return out[i].LocalPort < out[j].LocalPort
 	})
 	res.Connections = out
+	for _, c := range out {
+		res.Rows = append(res.Rows, tableRow{
+			Key: fmt.Sprintf("%s %s:%d", c.Proto, c.LocalAddr, c.LocalPort),
+			Cells: map[string]string{
+				"remote":  fmt.Sprintf("%s:%d", c.RemoteAddr, c.RemotePort),
+				"state":   c.State,
+				"process": c.ProcessName,
+			},
+		})
+	}
 	return res, nil
 }
 
