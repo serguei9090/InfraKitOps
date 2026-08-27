@@ -1,6 +1,15 @@
 # Network Module — Implementation Plan & Roadmap
 
-Status: **approved 2026-08-27**. Not started — N0 is the next phase of work.
+Status: **first release (N0–N3) shipped 2026-08-27.** 17 tools live under
+`/tools/*` in the Network Toolkit module; Go backend (`backend/`) runs as a
+Tauri sidecar or standalone HTTP service; run history + diff/compare working.
+Remaining work is the N4 list below — all deferred-by-design (firewall write
+CRUD and LLDP/CDP are separate efforts; the rest are small follow-ons).
+
+Commits: `51be1c1` (plan) → `daf8d49`. `bun run test` 1048 green, `go test
+./...` green, `bun run build` + `cargo check` clean. Manual passes still
+needed: `bun run tauri dev` opening a real window with the live sidecar, and
+the UAC/pkexec prompt for a hosts-file write.
 
 This module adds live network diagnostics to InfraKit Studio. It is the first part
 of the app that needs a **backend process** — the deferred "Phase 8 — Go backend"
@@ -356,19 +365,20 @@ CRUD lands); hosts-write is direct-with-elevation-error pending the helper;
 iperf3 uses a PATH/bundled binary, not a second sidecar. SNMP Set + "13 OID
 profiles" trimmed to Get/Walk + 5 profiles.
 
-### Phase N4 — Deferred / optional — ~35–50 pd
+### Phase N4 — Deferred / optional
 
-Not part of the first module release. Each is independently schedulable.
+Not part of the first module release. Each is independently schedulable; the
+two large ones stay separate efforts by design.
 
-| Item | pd | Note |
-|------|----|----|
-| **Firewall write CRUD** | 20–30 | **Its own release.** Raises signing / security-review bar. Needs confirm dialog + pre-change export + timed auto-revert. Windows COM `.Add`/`.Remove`; Linux firewalld rich-rule CRUD only, read-only for ufw/nft. Gate behind an "advanced" toggle. |
-| **Discovery Protocol (LLDP/CDP)** | 5–7 | `gopacket` behind a `//go:build pcap` tag; CGO + libpcap/Npcap; built on native CI runners; shipped as an optional component; bundle/prompt Npcap installer on Windows. Passive 30–60 s capture window. |
-| **Web IndexedDB history adapter** (Dexie) | 2–3 | Only when the web build needs history. |
-| **`table`-shape diff** (scan rows, ARP tables) | 2–3 | |
-| **Traceroute scrub-timeline history** (PingPlotter style) | 3–4 | |
-| **Neighbor Table write** (`New-NetNeighbor` equivalent — netlink / iphlpapi) | 1–2 | via elevated helper |
-| **MTU set** | 2–3 | Linux `netlink LinkSetMTU`, Windows `SetIpInterfaceEntry`; elevated |
+| Item | status |
+|------|--------|
+| **`table`-shape diff** (scan rows, ARP tables) | ✅ `daf8d49` — `diffTable` + connections/neighbor rows |
+| **Firewall write CRUD** | ⏸ **its own release** — raises the code-signing / security-review bar, needs a `go-ole` COM adapter, pre-change export, and timed auto-revert. Deliberately out of the module's scope. |
+| **Discovery Protocol (LLDP/CDP)** | ⏸ optional component — `gopacket` behind a `//go:build pcap` tag, CGO + libpcap/Npcap, native-runner CI, Npcap installer prompt. Not built to keep the core CGO-free. |
+| **Web IndexedDB history adapter** (Dexie) | ⏸ only when the web build needs history (today the web build shows "backend unavailable" for network tools, by design) |
+| **Traceroute GeoMap** (leaflet) + scrub-timeline | ⏸ blocked on the offline-tiles decision (plan §8 open question); hop location shows as a table column for now |
+| **ARP-based host discovery** | ⏸ needs pcap/Npcap + elevation — the scanner does ICMP + reverse-DNS + TCP probe today |
+| **Neighbor Table write / MTU set** | ⏸ elevated per-OS syscalls (`New-NetNeighbor` / `netlink`, `SetIpInterfaceEntry` / `LinkSetMTU`) — small, via the elevated helper |
 
 ---
 
