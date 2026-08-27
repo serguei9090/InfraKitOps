@@ -116,6 +116,30 @@ export interface PortScanResult {
   total: number
 }
 
+// --- Traceroute ---
+export interface TraceHop {
+  ttl: number
+  addr?: string
+  hostname?: string
+  rttsMs: number[]
+  timeouts: number
+  reached: boolean
+  country?: string
+  city?: string
+  isp?: string
+  lat?: number
+  lon?: number
+}
+
+export interface TraceResult {
+  v: number
+  host: string
+  destIp: string
+  hops: TraceHop[]
+  reached: boolean
+  hopCount: number
+}
+
 // --- Ping Monitor ---
 export interface PingSample {
   host: string

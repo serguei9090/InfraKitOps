@@ -10,6 +10,7 @@ require (
 	github.com/miekg/dns v1.1.73
 	github.com/prometheus-community/pro-bing v0.9.1
 	github.com/shirou/gopsutil/v4 v4.26.7
+	golang.org/x/net v0.57.0
 	golang.org/x/sys v0.47.0
 	modernc.org/sqlite v1.57.0
 )
@@ -28,7 +29,6 @@ require (
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	modernc.org/libc v1.74.4 // indirect

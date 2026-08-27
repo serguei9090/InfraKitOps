@@ -57,6 +57,7 @@ func NewRouter(opts Options) http.Handler {
 		r.Post("/wake-on-lan", api.WakeOnLAN)
 		r.Get("/port-scanner/stream", api.PortScanStream)
 		r.Get("/ping-monitor/stream", api.PingMonitorStream)
+		r.Get("/traceroute/stream", api.TracerouteStream)
 
 		r.Route("/history", func(r chi.Router) {
 			r.Get("/", hist.List)

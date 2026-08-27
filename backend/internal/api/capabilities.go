@@ -43,7 +43,7 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"connections":        {Available: true},
 		"wake-on-lan":        {Available: true},
 		"ping-monitor":       {Available: true}, // IcmpSendEcho / datagram — unprivileged
-		"traceroute":         rawSocket(),
+		"traceroute":         {Available: true},
 		"port-scanner":       {Available: true},
 		"network-scanner":    rawSocket(),
 		"neighbor-table":     notImpl,
