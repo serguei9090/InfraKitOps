@@ -249,7 +249,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
       { id: 'ping-monitor', name: 'Ping Monitor', description: 'Continuous multi-host latency, loss % & live chart', icon: Activity, route: '/tools/ping-monitor' },
       { id: 'traceroute', name: 'Traceroute', description: 'Per-hop RTT with geolocation and a route map', icon: Route, route: '/tools/traceroute' },
       { id: 'port-scanner', name: 'Port Scanner', description: 'Concurrent TCP port sweep with service names', icon: ScanSearch, route: '/tools/port-scanner' },
-      { id: 'network-scanner', name: 'IP / Network Scanner', description: 'Discover hosts by ICMP, ARP, reverse DNS & port probe', icon: ScanLine },
+      { id: 'network-scanner', name: 'IP / Network Scanner', description: 'Discover hosts by ICMP, ARP, reverse DNS & port probe', icon: ScanLine, route: '/tools/network-scanner' },
       { id: 'neighbor-table', name: 'Neighbor Table', description: 'ARP / NDP cache: IP ⟷ MAC ⟷ interface & state', icon: Table2 },
       { id: 'hosts-editor', name: 'Hosts File Editor', description: 'Edit /etc/hosts with enable/disable, backup & restore', icon: FileText },
       { id: 'firewall-viewer', name: 'Firewall Viewer', description: 'Read-only view of OS firewall rules (Windows / firewalld)', icon: ShieldCheck },

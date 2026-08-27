@@ -45,7 +45,7 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"ping-monitor":       {Available: true}, // IcmpSendEcho / datagram — unprivileged
 		"traceroute":         {Available: true},
 		"port-scanner":       {Available: true},
-		"network-scanner":    rawSocket(),
+		"network-scanner":    {Available: true}, // ICMP + port probe (ARP discovery needs elevation/Npcap — N4)
 		"neighbor-table":     notImpl,
 		"hosts-editor":       notImpl,
 		"firewall-viewer":    notImpl,

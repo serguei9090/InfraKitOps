@@ -24,6 +24,11 @@ func echo(ctx context.Context, host string, timeout time.Duration) (Reply, error
 	return echoImpl(ctx, host, timeout)
 }
 
+// Echo is the exported single-shot ping, reused by the network scanner.
+func Echo(ctx context.Context, host string, timeout time.Duration) (Reply, error) {
+	return echoImpl(ctx, host, timeout)
+}
+
 // Sample is one probe result in the monitor stream.
 type Sample struct {
 	Host  string  `json:"host"`

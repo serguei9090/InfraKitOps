@@ -116,6 +116,28 @@ export interface PortScanResult {
   total: number
 }
 
+// --- Network Scanner ---
+export interface ScanHostRow {
+  ip: string
+  alive: boolean
+  rttMs?: number
+  hostname?: string
+  openPorts?: number[]
+}
+
+export interface NetScanResult {
+  v: number
+  hosts: ScanHostRow[]
+  alive: number
+  total: number
+}
+
+export interface NetScanProgress {
+  scanned: number
+  total: number
+  alive: number
+}
+
 // --- Traceroute ---
 export interface TraceHop {
   ttl: number

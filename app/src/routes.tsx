@@ -66,6 +66,7 @@ import { SntpLookupScreen } from './adapters/ui/tools/SntpLookupScreen'
 import { PortScannerScreen } from './adapters/ui/tools/PortScannerScreen'
 import { PingMonitorScreen } from './adapters/ui/tools/PingMonitorScreen'
 import { TracerouteScreen } from './adapters/ui/tools/TracerouteScreen'
+import { NetworkScannerScreen } from './adapters/ui/tools/NetworkScannerScreen'
 import { WhoisScreen } from './adapters/ui/tools/WhoisScreen'
 import { DnsLookupScreen } from './adapters/ui/tools/DnsLookupScreen'
 import { IpGeolocationScreen } from './adapters/ui/tools/IpGeolocationScreen'
@@ -150,6 +151,7 @@ export const router = createBrowserRouter([
       { path: 'tools/port-scanner', element: <PortScannerScreen /> },
       { path: 'tools/ping-monitor', element: <PingMonitorScreen /> },
       { path: 'tools/traceroute', element: <TracerouteScreen /> },
+      { path: 'tools/network-scanner', element: <NetworkScannerScreen /> },
     ],
   },
 ])
