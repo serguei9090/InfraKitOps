@@ -246,7 +246,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
       { id: 'ip-geolocation', name: 'IP Geolocation', description: 'Country, ISP & coordinates for a public IP', icon: MapPin, route: '/tools/ip-geolocation' },
       { id: 'connections', name: 'Connections & Listeners', description: 'netstat-style active TCP/UDP sockets with owning process', icon: ArrowLeftRight, route: '/tools/connections' },
       { id: 'wake-on-lan', name: 'Wake on LAN', description: 'Send a magic packet to power on a host by MAC', icon: Power, route: '/tools/wake-on-lan' },
-      { id: 'ping-monitor', name: 'Ping Monitor', description: 'Continuous multi-host latency, loss % & live chart', icon: Activity },
+      { id: 'ping-monitor', name: 'Ping Monitor', description: 'Continuous multi-host latency, loss % & live chart', icon: Activity, route: '/tools/ping-monitor' },
       { id: 'traceroute', name: 'Traceroute', description: 'Per-hop RTT with geolocation and a route map', icon: Route },
       { id: 'port-scanner', name: 'Port Scanner', description: 'Concurrent TCP port sweep with service names', icon: ScanSearch, route: '/tools/port-scanner' },
       { id: 'network-scanner', name: 'IP / Network Scanner', description: 'Discover hosts by ICMP, ARP, reverse DNS & port probe', icon: ScanLine },

@@ -116,6 +116,30 @@ export interface PortScanResult {
   total: number
 }
 
+// --- Ping Monitor ---
+export interface PingSample {
+  host: string
+  seq: number
+  ok: boolean
+  rttMs: number
+  ttl?: number
+  error?: string
+}
+
+export interface PingStats {
+  host: string
+  sent: number
+  received: number
+  lossPct: number
+  minMs: number
+  avgMs: number
+  maxMs: number
+  p95Ms: number
+  jitterMs: number
+  status: 'up' | 'down' | 'pending'
+  lastRttMs: number
+}
+
 // --- Wake on LAN ---
 export interface WolResult {
   v: number

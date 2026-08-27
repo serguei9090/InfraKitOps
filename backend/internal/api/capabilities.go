@@ -42,7 +42,7 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"ip-geolocation":     {Available: true},
 		"connections":        {Available: true},
 		"wake-on-lan":        {Available: true},
-		"ping-monitor":       rawSocket(),
+		"ping-monitor":       {Available: true}, // IcmpSendEcho / datagram — unprivileged
 		"traceroute":         rawSocket(),
 		"port-scanner":       {Available: true},
 		"network-scanner":    rawSocket(),

@@ -64,6 +64,7 @@ import { WebServerConfigBuilderScreen } from './adapters/ui/tools/WebServerConfi
 // Network Toolkit (N1+)
 import { SntpLookupScreen } from './adapters/ui/tools/SntpLookupScreen'
 import { PortScannerScreen } from './adapters/ui/tools/PortScannerScreen'
+import { PingMonitorScreen } from './adapters/ui/tools/PingMonitorScreen'
 import { WhoisScreen } from './adapters/ui/tools/WhoisScreen'
 import { DnsLookupScreen } from './adapters/ui/tools/DnsLookupScreen'
 import { IpGeolocationScreen } from './adapters/ui/tools/IpGeolocationScreen'
@@ -146,6 +147,7 @@ export const router = createBrowserRouter([
       { path: 'tools/connections', element: <ConnectionsScreen /> },
       { path: 'tools/wake-on-lan', element: <WakeOnLanScreen /> },
       { path: 'tools/port-scanner', element: <PortScannerScreen /> },
+      { path: 'tools/ping-monitor', element: <PingMonitorScreen /> },
     ],
   },
 ])
