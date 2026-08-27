@@ -2110,6 +2110,262 @@ const iptablesPage: CheatsheetPage = {
   ],
 }
 
+const nginxPage: CheatsheetPage = {
+  id: 'nginx',
+  title: 'nginx',
+  description: 'Service management, server blocks, reverse proxying, SSL and logging — the directives from ngx_http_core/ssl/proxy_module used most.',
+  sections: [
+    {
+      title: 'Service Management',
+      entries: [
+        {
+          command: 'nginx -t',
+          description: 'Test the configuration syntax without reloading — always run this before reloading in production.',
+          example: 'nginx -t\nnginx -t -c /etc/nginx/nginx.conf',
+        },
+        {
+          command: 'systemctl reload nginx',
+          description: 'Re-read config and gracefully finish in-flight requests on the old workers — no dropped connections, unlike restart.',
+          example: 'systemctl reload nginx',
+        },
+        {
+          command: 'systemctl restart nginx',
+          description: 'Stop and start the master process — drops in-flight connections. Prefer reload unless the binary itself changed.',
+          example: 'systemctl restart nginx',
+        },
+        {
+          command: 'nginx -s reload',
+          description: 'Same graceful reload as systemctl reload, sent directly to the running master process.',
+          example: 'nginx -s reload',
+        },
+        {
+          command: 'journalctl -u nginx -f',
+          description: 'Follow the nginx service journal — useful when error_log points at syslog rather than a file.',
+          example: 'journalctl -u nginx -f',
+        },
+      ],
+    },
+    {
+      title: 'Server Blocks & Locations',
+      entries: [
+        {
+          command: 'listen',
+          description: 'Address/port (or unix socket) the server block accepts connections on. Default *:80.',
+          example: 'listen 80;\nlisten 443 ssl;\nlisten [::]:80;',
+        },
+        {
+          command: 'server_name',
+          description: 'Virtual host name(s) this block answers for — exact names, wildcards, or a regex.',
+          example: 'server_name example.com www.example.com;\nserver_name *.example.com;',
+        },
+        {
+          command: 'root / index',
+          description: 'Document root for static files, and the filename(s) tried when a request maps to a directory.',
+          example: 'root /var/www/html;\nindex index.html index.htm;',
+        },
+        {
+          command: 'location ^~ / = / ~ /',
+          description: 'Location match modifiers, most to least specific: "=" exact match, "^~" prefix (stop regex search), "~"/"~*" case-sensitive/insensitive regex, bare prefix.',
+          example: 'location = /favicon.ico { }\nlocation ^~ /static/ { }\nlocation ~* \\.(jpg|png)$ { }',
+        },
+        {
+          command: 'try_files',
+          description: 'Tries each path in order and serves the first that exists, falling back to a URI or status code.',
+          example: 'location / {\n    try_files $uri $uri/ =404;\n}',
+        },
+      ],
+    },
+    {
+      title: 'Reverse Proxy',
+      entries: [
+        {
+          command: 'proxy_pass',
+          description: 'Forwards the request to an upstream address. A trailing URI on proxy_pass replaces the matched location prefix; without one, the full URI is passed through.',
+          example: 'location / {\n    proxy_pass http://127.0.0.1:3000;\n}',
+        },
+        {
+          command: 'proxy_set_header',
+          description: 'Nginx does not forward Host or the client IP by default — these four headers are the standard reverse-proxy set.',
+          example: 'proxy_set_header Host $host;\nproxy_set_header X-Real-IP $remote_addr;\nproxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\nproxy_set_header X-Forwarded-Proto $scheme;',
+        },
+        {
+          command: 'proxy_http_version',
+          description: 'HTTP version nginx speaks to the upstream. Set 1.1 for keepalive connections and WebSocket upgrades.',
+          example: 'proxy_http_version 1.1;',
+        },
+        {
+          command: 'proxy_read_timeout',
+          description: 'How long nginx waits between successive reads from the upstream before giving up. Default 60s.',
+          example: 'proxy_read_timeout 60s;',
+        },
+      ],
+    },
+    {
+      title: 'SSL/TLS',
+      entries: [
+        {
+          command: 'ssl_certificate / ssl_certificate_key',
+          description: 'PEM certificate (chain) and matching private key for this server block.',
+          example: 'ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;\nssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;',
+        },
+        {
+          command: 'ssl_protocols',
+          description: 'Enabled TLS versions. Current nginx default is TLSv1.2 and TLSv1.3 — do not add SSLv3/TLSv1.0/1.1 back in.',
+          example: 'ssl_protocols TLSv1.2 TLSv1.3;',
+        },
+        {
+          command: 'ssl_session_cache / ssl_session_timeout',
+          description: 'Shared SSL session cache (across all workers) and how long clients may resume a session without a full handshake.',
+          example: 'ssl_session_cache shared:SSL:10m;\nssl_session_timeout 5m;',
+        },
+      ],
+    },
+    {
+      title: 'Redirects, Logging & Debug',
+      entries: [
+        {
+          command: 'return 301',
+          description: 'Issues a permanent redirect — the standard way to force HTTP to HTTPS.',
+          example: 'server {\n    listen 80;\n    server_name example.com;\n    return 301 https://$host$request_uri;\n}',
+        },
+        {
+          command: 'access_log / error_log',
+          description: 'Per-context log file paths (and, for error_log, a minimum severity level).',
+          example: 'access_log /var/log/nginx/access.log;\nerror_log /var/log/nginx/error.log warn;',
+        },
+        {
+          command: 'client_max_body_size',
+          description: 'Largest request body nginx accepts before returning 413. Default 1m — the first thing to raise for file uploads.',
+          example: 'client_max_body_size 50m;',
+        },
+      ],
+    },
+  ],
+}
+
+const apachePage: CheatsheetPage = {
+  id: 'apache',
+  title: 'Apache (httpd)',
+  description: 'Service management, VirtualHost basics, access control, reverse proxying and SSL — the mod_core/mod_proxy/mod_ssl directives used most.',
+  sections: [
+    {
+      title: 'Service Management',
+      entries: [
+        {
+          command: 'apachectl configtest',
+          description: 'Test the configuration syntax without restarting — always run this before reloading in production.',
+          example: 'apachectl configtest\napache2ctl configtest',
+        },
+        {
+          command: 'systemctl reload apache2',
+          description: 'Re-read config and gracefully finish in-flight requests — no dropped connections, unlike restart.',
+          example: 'systemctl reload apache2\nsystemctl reload httpd',
+        },
+        {
+          command: 'a2ensite / a2dissite',
+          description: 'Enable/disable a site config from sites-available by symlinking it into sites-enabled (Debian/Ubuntu layout).',
+          example: 'a2ensite example.com.conf\na2dissite 000-default.conf',
+        },
+        {
+          command: 'a2enmod / a2dismod',
+          description: 'Enable/disable an Apache module. ssl, rewrite and proxy/proxy_http are the ones most vhosts below actually need.',
+          example: 'a2enmod ssl rewrite proxy proxy_http\nsystemctl reload apache2',
+        },
+        {
+          command: 'apache2ctl -M',
+          description: 'List every currently loaded module — the fastest way to confirm a directive\'s module is actually enabled.',
+          example: 'apache2ctl -M | grep proxy',
+        },
+      ],
+    },
+    {
+      title: 'VirtualHost & Access Control',
+      entries: [
+        {
+          command: 'ServerName / ServerAlias',
+          description: 'Primary hostname this VirtualHost answers for, plus any additional aliases.',
+          example: '<VirtualHost *:80>\n    ServerName example.com\n    ServerAlias www.example.com\n</VirtualHost>',
+        },
+        {
+          command: 'DocumentRoot',
+          description: 'Directory Apache serves files from for this VirtualHost. Default /usr/local/apache/htdocs (distro packages usually override it).',
+          example: 'DocumentRoot /var/www/example.com/htdocs',
+        },
+        {
+          command: '<Directory> / AllowOverride',
+          description: 'Scopes directives to a filesystem path. AllowOverride controls which .htaccess directives that path honors — default is None.',
+          example: '<Directory /var/www/example.com/htdocs>\n    AllowOverride None\n    Require all granted\n</Directory>',
+        },
+        {
+          command: 'Require all granted / denied',
+          description: 'mod_authz_core access control — the modern replacement for the old Order/Allow/Deny syntax.',
+          example: 'Require all granted\nRequire ip 10.0.0.0/8',
+        },
+      ],
+    },
+    {
+      title: 'Reverse Proxy',
+      entries: [
+        {
+          command: 'ProxyPass / ProxyPassReverse',
+          description: 'Forwards matching requests to a backend and rewrites Location/Content-Location headers in responses back to the public path.',
+          example: 'ProxyPass / http://127.0.0.1:3000/\nProxyPassReverse / http://127.0.0.1:3000/',
+        },
+        {
+          command: 'ProxyPreserveHost On',
+          description: 'Forwards the original Host header to the backend instead of the backend\'s own hostname — needed by most apps that generate absolute URLs.',
+          example: 'ProxyPreserveHost On',
+        },
+        {
+          command: 'ProxyRequests Off',
+          description: 'Disables forward-proxy mode. Always set this alongside ProxyPass — without it a misconfigured vhost can become an open proxy.',
+          example: 'ProxyRequests Off',
+        },
+      ],
+    },
+    {
+      title: 'SSL/TLS & Redirects',
+      entries: [
+        {
+          command: 'SSLEngine on',
+          description: 'Enables mod_ssl for this VirtualHost. Requires the ssl module enabled (a2enmod ssl).',
+          example: 'SSLEngine on',
+        },
+        {
+          command: 'SSLCertificateFile / SSLCertificateKeyFile',
+          description: 'Certificate (chain) and matching private key for this VirtualHost.',
+          example: 'SSLCertificateFile /etc/letsencrypt/live/example.com/fullchain.pem\nSSLCertificateKeyFile /etc/letsencrypt/live/example.com/privkey.pem',
+        },
+        {
+          command: 'Redirect permanent',
+          description: 'Simple unconditional redirect — the lightest-weight way to force HTTP to HTTPS for a whole vhost.',
+          example: '<VirtualHost *:80>\n    ServerName example.com\n    Redirect permanent / https://example.com/\n</VirtualHost>',
+        },
+        {
+          command: 'RewriteEngine / RewriteRule',
+          description: 'mod_rewrite conditional URL rewriting — reach for this only when a plain Redirect can\'t express the logic.',
+          example: 'RewriteEngine On\nRewriteCond %{HTTPS} off\nRewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]',
+        },
+      ],
+    },
+    {
+      title: 'Logging',
+      entries: [
+        {
+          command: 'ErrorLog / LogLevel',
+          description: 'Per-vhost error log path, plus the minimum severity written to it.',
+          example: 'ErrorLog /var/log/apache2/example.com-error.log\nLogLevel warn',
+        },
+        {
+          command: 'CustomLog',
+          description: 'Access log path and format name (combined includes referrer + user-agent; common omits them).',
+          example: 'CustomLog /var/log/apache2/example.com-access.log combined',
+        },
+      ],
+    },
+  ],
+}
+
 export const CHEATSHEET_PAGES: CheatsheetPage[] = [
   gitPage,
   regexPage,
@@ -2126,6 +2382,8 @@ export const CHEATSHEET_PAGES: CheatsheetPage[] = [
   windowsCmdPage,
   linuxCommandsPage,
   iptablesPage,
+  nginxPage,
+  apachePage,
 ]
 
 export const EXTERNAL_RESOURCE_LINKS: ReferenceLink[] = [

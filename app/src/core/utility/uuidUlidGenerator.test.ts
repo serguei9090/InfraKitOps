@@ -69,6 +69,11 @@ describe('UuidUlidGenerator', () => {
       expect(() => generator.execute({ kind: 'uuidV3', name: 'example.com' })).toThrow()
       expect(() => generator.execute({ kind: 'uuidV3', namespace: WellKnownNamespace.dns })).toThrow()
     })
+
+    it('matches the canonical RFC 4122 test vector (Python\'s uuid.uuid3(NAMESPACE_DNS, "python.org"))', () => {
+      const result = generator.execute({ kind: 'uuidV3', namespace: WellKnownNamespace.dns, name: 'python.org' })
+      expect(result.value).toBe('6fa459ea-ee8a-3ca4-894e-db77e160355e')
+    })
   })
 
   describe('UUID v5', () => {
@@ -90,6 +95,11 @@ describe('UuidUlidGenerator', () => {
 
     it('throws when namespace or name is missing', () => {
       expect(() => generator.execute({ kind: 'uuidV5' })).toThrow()
+    })
+
+    it('matches the canonical RFC 4122 test vector (Python\'s uuid.uuid5(NAMESPACE_DNS, "python.org"))', () => {
+      const result = generator.execute({ kind: 'uuidV5', namespace: WellKnownNamespace.dns, name: 'python.org' })
+      expect(result.value).toBe('886313e1-3b8a-5372-9b90-0c9aee199e5d')
     })
   })
 

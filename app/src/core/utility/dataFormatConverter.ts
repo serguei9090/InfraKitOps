@@ -1,4 +1,4 @@
-import { XMLBuilder, XMLParser } from 'fast-xml-parser'
+import { XMLBuilder, XMLParser, XMLValidator } from 'fast-xml-parser'
 import { CORE_SCHEMA, dump as dumpYaml, load as loadYaml } from 'js-yaml'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import type { IToolUseCase } from '../ports/IToolUseCase'
@@ -126,6 +126,15 @@ const XML_PARSER_OPTIONS = {
 }
 
 function decodeXml(source: string): unknown {
+  // XMLParser.parse() is lenient by default and will silently accept
+  // structurally invalid XML (e.g. mismatched closing tags), producing a
+  // garbage tree instead of an error -- run the validator first so bad
+  // input surfaces as a clear failure rather than a wrong conversion. Same
+  // check xmlFormatter.ts runs before its own parse.
+  const validation = XMLValidator.validate(source)
+  if (validation !== true) {
+    throw new Error(validation.err.msg)
+  }
   const parser = new XMLParser(XML_PARSER_OPTIONS)
   return parser.parse(source)
 }
