@@ -162,6 +162,39 @@ diagnostics only. Plan + roadmap: [`NETWORK_MODULE_PLAN.md`](NETWORK_MODULE_PLAN
 - CI: `.github/workflows/backend.yml` (vet/test + cross-compile). `bun run tauri dev`
   opening a real window still needs a manual pass — same caveat as the rest of the app.
 
+### How to implement a network tool — three tiers, cheapest first
+
+1. **Pure-Go library** when a solid one exists (`miekg/dns`, `gosnmp`, `beevik/ntp`,
+   `prometheus-community/pro-bing`). Preferred.
+2. **An OS built-in tool in structured-output mode** — `Get-NetNeighbor | ConvertTo-Json`,
+   `ip -j neigh`, `nft -j list ruleset`, `pktmon`, `tracert`. Zero bundle, zero license
+   question, always present. **Always take the `-j` / `--json` / `ConvertTo-Json` path so
+   the parser is a typed `json.Unmarshal`, never text scraping** (`internal/cmdtool.RunJSON`
+   is the exec-and-unmarshal helper — it is *not* a framework; each tool stays its own
+   `internal/tools/<tool>/` package).
+3. **Bundle a third-party binary** only when neither of the above works and the protocol is
+   gnarly (`iperf3`). Exec + parse `--json`. See the license rule below.
+
+Hand-rolled per-OS syscalls (`IcmpSendEcho`, `GetIpNetTable2`) are the last resort — only
+where nothing else works unprivileged.
+
+### Bundled-binary license rule
+
+A third-party binary may be **bundled in the installer only if its license is MIT or
+equivalently permissive: BSD-2/3-Clause, ISC, Apache-2.0, MPL-2.0.** (Attribution +
+license-text file is then the only obligation.)
+
+- **GPL / LGPL** — never bundled. Exec-ing a separate GPL binary is legally "mere
+  aggregation" and does not infect the app, but it still forces a written source offer.
+  If a GPL tool is genuinely the best (`mtr`), ship it as **optional, PATH-detected,
+  user-installed** — not in the installer.
+- **NPSL (nmap)** — restrictive redistribution + commercial clauses. Not used. For
+  SYN-scan-class features use `naabu` (ProjectDiscovery, MIT).
+- Every bundled binary is recorded in [`vendor-tools/TOOLS.md`](vendor-tools/TOOLS.md):
+  name, version, SPDX license, SHA-256, upstream URL, and why-not-a-library.
+  `vendor-tools/fetch-tools.sh` (or `.ps1`) downloads + verifies; `build-sidecar` copies
+  the verified binaries next to the backend as `<tool>-<triple>`.
+
 ## Commands (run from `app/`)
 
 ```bash

@@ -3,29 +3,120 @@
 package firewall
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/infrakit/backend/internal/cmdtool"
 )
 
-// listImpl detects the active manager and returns a best-effort read.
-// firewalld gives rich rules; ufw/nft give a flatter view.
+// listImpl detects the active manager. firewalld gives rich rules; nftables
+// gives native JSON (`nft -j`); ufw a flat view.
 func listImpl() (Result, error) {
+	ctx := context.Background()
 	if _, err := exec.LookPath("firewall-cmd"); err == nil {
-		if out, err := exec.Command("firewall-cmd", "--list-all").Output(); err == nil {
+		if out, err := cmdtool.Run(ctx, "firewall-cmd", "--list-all"); err == nil {
 			return parseFirewalld(string(out)), nil
 		}
 	}
+	if _, err := exec.LookPath("nft"); err == nil {
+		if r, err := parseNft(ctx); err == nil {
+			return r, nil
+		}
+	}
 	if _, err := exec.LookPath("ufw"); err == nil {
-		if out, err := exec.Command("ufw", "status", "verbose").Output(); err == nil {
+		if out, err := cmdtool.Run(ctx, "ufw", "status", "verbose"); err == nil {
 			return parseUfw(string(out)), nil
 		}
 	}
-	if _, err := exec.LookPath("nft"); err == nil {
-		if out, err := exec.Command("nft", "list", "ruleset").Output(); err == nil {
-			return Result{V: 1, Backend: "nftables", Note: "raw nftables ruleset — not normalized", Rules: []Rule{{Name: "ruleset", Description: string(out), Enabled: true, Direction: "inbound", Action: "allow"}}}, nil
+	return Result{V: 1, Backend: "unknown", Note: "no supported firewall manager found (firewalld / nftables / ufw)"}, nil
+}
+
+// parseNft reads `nft -j list ruleset` — libnftables' native JSON — and maps
+// each rule to the normalized Rule shape.
+func parseNft(ctx context.Context) (Result, error) {
+	raw, err := cmdtool.Run(ctx, "nft", "-j", "list", "ruleset")
+	if err != nil {
+		return Result{}, err
+	}
+	var doc struct {
+		Nftables []map[string]json.RawMessage `json:"nftables"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return Result{}, err
+	}
+
+	res := Result{V: 1, Backend: "nftables"}
+	chainDir := map[string]string{} // "table/chain" -> hook direction
+
+	for _, obj := range doc.Nftables {
+		if c, ok := obj["chain"]; ok {
+			var ch struct {
+				Family string `json:"family"`
+				Table  string `json:"table"`
+				Name   string `json:"name"`
+				Hook   string `json:"hook"`
+			}
+			_ = json.Unmarshal(c, &ch)
+			chainDir[ch.Table+"/"+ch.Name] = hookToDir(ch.Hook)
+		}
+		if r, ok := obj["rule"]; ok {
+			var rule struct {
+				Family  string            `json:"family"`
+				Table   string            `json:"table"`
+				Chain   string            `json:"chain"`
+				Expr    []json.RawMessage `json:"expr"`
+				Comment string            `json:"comment"`
+			}
+			_ = json.Unmarshal(r, &rule)
+			res.Rules = append(res.Rules, Rule{
+				Name:        firstNonEmpty(rule.Comment, fmt.Sprintf("%s/%s", rule.Table, rule.Chain)),
+				Enabled:     true,
+				Direction:   firstNonEmpty(chainDir[rule.Table+"/"+rule.Chain], "inbound"),
+				Action:      nftVerdict(rule.Expr),
+				Grouping:    fmt.Sprintf("%s %s / %s", rule.Family, rule.Table, rule.Chain),
+				Description: rule.Comment,
+			})
 		}
 	}
-	return Result{V: 1, Backend: "unknown", Note: "no supported firewall manager found (firewalld / ufw / nftables)"}, nil
+	if len(res.Rules) == 0 {
+		res.Note = "nftables ruleset is empty"
+	}
+	return res, nil
+}
+
+func hookToDir(hook string) string {
+	switch hook {
+	case "output", "postrouting":
+		return "outbound"
+	case "input", "prerouting", "forward":
+		return "inbound"
+	}
+	return ""
+}
+
+func nftVerdict(exprs []json.RawMessage) string {
+	for _, e := range exprs {
+		s := string(e)
+		if strings.Contains(s, `"drop"`) || strings.Contains(s, `"reject"`) {
+			return "block"
+		}
+		if strings.Contains(s, `"accept"`) {
+			return "allow"
+		}
+	}
+	return "allow"
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func parseFirewalld(out string) Result {

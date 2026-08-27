@@ -9,9 +9,9 @@ import (
 )
 
 // NeighborTable: GET /neighbor-table — the OS ARP/NDP cache. resultShape "table".
-func NeighborTable(w http.ResponseWriter, _ *http.Request) {
+func NeighborTable(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	result, err := neighbor.List()
+	result, err := neighbor.List(r.Context())
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

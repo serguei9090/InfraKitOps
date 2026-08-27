@@ -3,39 +3,67 @@
 package neighbor
 
 import (
-	"bufio"
+	"context"
 	"os"
 	"strings"
+
+	"github.com/infrakit/backend/internal/cmdtool"
 )
 
-// listImpl reads /proc/net/arp (IPv4). IPv6/NDP via `ip -6 neigh` or netlink is
-// a later addition.
-func listImpl() ([]Entry, error) {
-	f, err := os.Open("/proc/net/arp")
-	if err != nil {
-		return nil, err
+// listImpl uses `ip -j neigh` (JSON, IPv4 + IPv6/NDP) and falls back to
+// parsing /proc/net/arp if the iproute2 binary is missing.
+func listImpl(ctx context.Context) ([]Entry, string, error) {
+	var rows []struct {
+		Dst    string   `json:"dst"`
+		Dev    string   `json:"dev"`
+		LLAddr string   `json:"lladdr"`
+		State  []string `json:"state"`
 	}
-	defer f.Close()
+	if err := cmdtool.RunJSON(ctx, &rows, "ip", "-j", "neigh"); err == nil {
+		out := make([]Entry, 0, len(rows))
+		for _, r := range rows {
+			if r.LLAddr == "" {
+				continue
+			}
+			state := ""
+			if len(r.State) > 0 {
+				state = normalizeState(r.State[0])
+			}
+			out = append(out, Entry{
+				IP: r.Dst, MAC: normalizeMAC(r.LLAddr), Interface: r.Dev,
+				State: state, Family: family(r.Dst),
+			})
+		}
+		return out, "ip neigh", nil
+	}
+	return procNetArp()
+}
 
+func procNetArp() ([]Entry, string, error) {
+	raw, err := os.ReadFile("/proc/net/arp")
+	if err != nil {
+		return nil, "", err
+	}
 	var entries []Entry
-	sc := bufio.NewScanner(f)
-	sc.Scan() // header
-	for sc.Scan() {
-		fields := strings.Fields(sc.Text())
-		if len(fields) < 6 {
+	lines := strings.Split(string(raw), "\n")
+	for i, line := range lines {
+		if i == 0 {
 			continue
 		}
-		ip, flags, mac, dev := fields[0], fields[2], strings.ToLower(fields[3]), fields[5]
-		if mac == "00:00:00:00:00:00" {
+		f := strings.Fields(line)
+		if len(f) < 6 || f[3] == "00:00:00:00:00:00" {
 			continue
 		}
 		state := "stale"
-		if flags == "0x2" {
+		switch f[2] {
+		case "0x2":
 			state = "reachable"
-		} else if flags == "0x6" {
+		case "0x6":
 			state = "permanent"
 		}
-		entries = append(entries, Entry{IP: ip, MAC: mac, Interface: dev, State: state, Family: "v4"})
+		entries = append(entries, Entry{
+			IP: f[0], MAC: normalizeMAC(f[3]), Interface: f[5], State: state, Family: "v4",
+		})
 	}
-	return entries, sc.Err()
+	return entries, "/proc/net/arp", nil
 }
