@@ -248,7 +248,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
       { id: 'wake-on-lan', name: 'Wake on LAN', description: 'Send a magic packet to power on a host by MAC', icon: Power, route: '/tools/wake-on-lan' },
       { id: 'ping-monitor', name: 'Ping Monitor', description: 'Continuous multi-host latency, loss % & live chart', icon: Activity },
       { id: 'traceroute', name: 'Traceroute', description: 'Per-hop RTT with geolocation and a route map', icon: Route },
-      { id: 'port-scanner', name: 'Port Scanner', description: 'Concurrent TCP port sweep with service names', icon: ScanSearch },
+      { id: 'port-scanner', name: 'Port Scanner', description: 'Concurrent TCP port sweep with service names', icon: ScanSearch, route: '/tools/port-scanner' },
       { id: 'network-scanner', name: 'IP / Network Scanner', description: 'Discover hosts by ICMP, ARP, reverse DNS & port probe', icon: ScanLine },
       { id: 'neighbor-table', name: 'Neighbor Table', description: 'ARP / NDP cache: IP ⟷ MAC ⟷ interface & state', icon: Table2 },
       { id: 'hosts-editor', name: 'Hosts File Editor', description: 'Edit /etc/hosts with enable/disable, backup & restore', icon: FileText },

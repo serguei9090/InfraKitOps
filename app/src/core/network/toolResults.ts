@@ -95,6 +95,27 @@ export interface ConnectionsResult {
   established: number
 }
 
+// --- Port Scanner ---
+export interface PortRow {
+  host: string
+  port: number
+  state: 'open' | 'closed' | 'timeout'
+  service?: string
+}
+
+export interface PortScanProgress {
+  scanned: number
+  total: number
+  openCount: number
+}
+
+export interface PortScanResult {
+  v: number
+  open: PortRow[]
+  items: { key: string; label: string; detail: string }[]
+  total: number
+}
+
 // --- Wake on LAN ---
 export interface WolResult {
   v: number

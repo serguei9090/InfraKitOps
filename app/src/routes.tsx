@@ -63,6 +63,7 @@ import { WebServerConfigBuilderScreen } from './adapters/ui/tools/WebServerConfi
 
 // Network Toolkit (N1+)
 import { SntpLookupScreen } from './adapters/ui/tools/SntpLookupScreen'
+import { PortScannerScreen } from './adapters/ui/tools/PortScannerScreen'
 import { WhoisScreen } from './adapters/ui/tools/WhoisScreen'
 import { DnsLookupScreen } from './adapters/ui/tools/DnsLookupScreen'
 import { IpGeolocationScreen } from './adapters/ui/tools/IpGeolocationScreen'
@@ -144,6 +145,7 @@ export const router = createBrowserRouter([
       { path: 'tools/ip-geolocation', element: <IpGeolocationScreen /> },
       { path: 'tools/connections', element: <ConnectionsScreen /> },
       { path: 'tools/wake-on-lan', element: <WakeOnLanScreen /> },
+      { path: 'tools/port-scanner', element: <PortScannerScreen /> },
     ],
   },
 ])
