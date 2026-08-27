@@ -44,7 +44,7 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"wake-on-lan":        {Available: true},
 		"ping-monitor":       rawSocket(),
 		"traceroute":         rawSocket(),
-		"port-scanner":       notImpl,
+		"port-scanner":       {Available: true},
 		"network-scanner":    rawSocket(),
 		"neighbor-table":     notImpl,
 		"hosts-editor":       notImpl,

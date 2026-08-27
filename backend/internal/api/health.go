@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/infrakit/backend/internal/privilege"
@@ -25,6 +26,15 @@ func hostname() string {
 		return h
 	}
 	return "localhost"
+}
+
+// atoiOr parses s as an int, returning def on any failure.
+func atoiOr(s string, def int) int {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return n
 }
 
 // WriteJSON is the shared JSON responder used by every handler in this package.

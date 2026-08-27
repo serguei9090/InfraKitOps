@@ -55,6 +55,7 @@ func NewRouter(opts Options) http.Handler {
 		r.Post("/ip-geolocation", api.IPGeolocation)
 		r.Get("/connections", api.Connections)
 		r.Post("/wake-on-lan", api.WakeOnLAN)
+		r.Get("/port-scanner/stream", api.PortScanStream)
 
 		r.Route("/history", func(r chi.Router) {
 			r.Get("/", hist.List)
