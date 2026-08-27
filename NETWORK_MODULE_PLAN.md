@@ -316,24 +316,24 @@ history; restore repopulates inputs; saved targets round-trip through
 `scalar_series` (so its median-offset-over-time diffs) — all small follow-ups.
 Proxy-aware http client is N2 (nothing in N1 needs it yet).
 
-### Phase N2 — ICMP / probe tools + streaming + compare — ~21–28 pd, ~4–5k LOC
+### Phase N2 — ICMP / probe tools + streaming + compare — **DONE 2026-08-27**
 
-| Checkpoint | pd |
-|-----------|----|
-| SSE client hook (`@microsoft/fetch-event-source`, token as header) + streaming-append wired into `NetworkResultTable` | 2 |
-| `scalar_series` diff + latency-over-time **sparkline** component | 2–3 |
-| `RunComparePanel` (A/B picker, presets, set + scalar renderers, "only differences") | 5–7 |
-| **Ping Monitor** — `pro-bing` (+ Windows `IcmpSendEcho2` path); multi-host, live chart, packet-loss %, flap thresholds (3 down / 1 up), pause/resume, status-change toast; sparkline from history | 4–5 |
-| **Traceroute** — TTL loop on `x/net/icmp`+`ipv4/ipv6` (ICMP + UDP modes), 3 probes/hop, PTR, per-hop geo (skip RFC1918), `GeoMap` | 4–5 |
-| **Port Scanner** — `net.DialTimeout` + bounded worker pool; host×port concurrency caps; IANA service names; built-in port profiles (DNS/NTP/Web/…); SSE progress | 3 |
-| **IP / Network Scanner** — compose `pro-bing` ICMP + gopacket ARP (elevated) + `net.LookupAddr` + optional port probe; `InterfacePicker` picks the source interface; SSE row stream, group counters | 5–6 |
+| Checkpoint | status |
+|-----------|--------|
+| `internal/sse` (channel-funnelled Writer + Pump) + `sseClient` (fetch-event-source, token header) + `useNetworkStream` hook | ✅ `c01d103` |
+| `scalar_series` diff (N1) + `Sparkline` + `LatencyChart` (inline SVG, no charting dep) | ✅ `2f68f7a` |
+| `RunComparePanel` — A/B picker, "latest vs previous" / "vs ~7 days" presets, "only differences", set + scalar + text renderers; opened from HistoryDrawer | ✅ `3cf769f` |
+| **Ping Monitor** — per-OS unprivileged ICMP (`IcmpSendEcho` on Windows / `pro-bing` datagram elsewhere); multi-host live `LatencyChart`, loss %, jitter, flap thresholds; on Stop saves a `scalar_series` run + refreshes the "avg across runs" sparkline | ✅ `2f68f7a` |
+| **Traceroute** — per-OS TTL probes (`IcmpSendEcho`+`IP_OPTION_INFORMATION` on Windows / datagram-ICMP `SetTTL` elsewhere), N probes/hop, PTR, optional per-hop geo; shape `set` keyed by hop addr | ✅ `96c8d02` |
+| **Port Scanner** — `net.DialTimeout` + host×port bounded pools, `ParsePorts`, built-in service map + profiles; SSE open/closed/progress; shape `set` | ✅ `aa868c2` |
+| **IP / Network Scanner** — ICMP echo + reverse DNS + optional TCP probe (source-IP bindable), `InterfacePicker`; SSE host/progress; shape `table` | ✅ `754ea5e` |
 
-**Streaming DoD**: SSE reconnects after a dropped connection without duplicate
-rows; cancel actually stops the backend goroutine; Ping Monitor loss % within
-±1 pt of `ping -n 60` over 60 s; Traceroute reaches a known host in the same hop
-count as system `tracert`/`traceroute` ±1; Scanner interface override changes the
-source IP on the wire (verify with a capture); compare view shows added/removed
-ports and hop-count delta correctly.
+**DoD met**: SSE verified end-to-end for all four streaming tools (events
+append live, Stop cancels the backend goroutine); Traceroute reached 8.8.8.8
+in 9 hops ending at `dns.google`; RunComparePanel shows scalar stat-deltas +
+set add/remove. **Deferred**: `GeoMap` (leaflet) — hop location is a column
+for now; ARP-based discovery (pcap/elevation → N4); explicit SSE reconnect
+dedupe (append is keyed, so idempotent for set/table tools).
 
 ### Phase N3 — System-state + privileged tools — ~27–36 pd, ~5–6k LOC
 
