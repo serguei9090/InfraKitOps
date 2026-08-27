@@ -64,6 +64,7 @@ func NewRouter(opts Options) http.Handler {
 		r.Get("/hosts", api.HostsGet)
 		r.Post("/hosts", api.HostsApply)
 		r.Post("/hosts/restore", api.HostsRestore)
+		r.Get("/firewall-viewer", api.FirewallView)
 
 		r.Route("/history", func(r chi.Router) {
 			r.Get("/", hist.List)

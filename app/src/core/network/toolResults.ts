@@ -116,6 +116,29 @@ export interface PortScanResult {
   total: number
 }
 
+// --- Firewall Viewer ---
+export interface FirewallRule {
+  name: string
+  enabled: boolean
+  direction: 'inbound' | 'outbound'
+  action: 'allow' | 'block'
+  protocol?: string
+  localPorts?: string
+  remotePorts?: string
+  localAddresses?: string
+  remoteAddresses?: string
+  profiles?: string
+  program?: string
+  grouping?: string
+  description?: string
+}
+export interface FirewallResult {
+  v: number
+  backend: string
+  rules: FirewallRule[]
+  note?: string
+}
+
 // --- Hosts File Editor ---
 export interface HostsLine {
   kind: 'mapping' | 'comment' | 'blank'
