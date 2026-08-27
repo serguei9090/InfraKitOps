@@ -63,6 +63,11 @@ import { WebServerConfigBuilderScreen } from './adapters/ui/tools/WebServerConfi
 
 // Network Toolkit (N1+)
 import { SntpLookupScreen } from './adapters/ui/tools/SntpLookupScreen'
+import { WhoisScreen } from './adapters/ui/tools/WhoisScreen'
+import { DnsLookupScreen } from './adapters/ui/tools/DnsLookupScreen'
+import { IpGeolocationScreen } from './adapters/ui/tools/IpGeolocationScreen'
+import { ConnectionsScreen } from './adapters/ui/tools/ConnectionsScreen'
+import { WakeOnLanScreen } from './adapters/ui/tools/WakeOnLanScreen'
 
 export const router = createBrowserRouter([
   {
@@ -134,6 +139,11 @@ export const router = createBrowserRouter([
 
       // Network Toolkit
       { path: 'tools/sntp', element: <SntpLookupScreen /> },
+      { path: 'tools/whois', element: <WhoisScreen /> },
+      { path: 'tools/dns-lookup', element: <DnsLookupScreen /> },
+      { path: 'tools/ip-geolocation', element: <IpGeolocationScreen /> },
+      { path: 'tools/connections', element: <ConnectionsScreen /> },
+      { path: 'tools/wake-on-lan', element: <WakeOnLanScreen /> },
     ],
   },
 ])

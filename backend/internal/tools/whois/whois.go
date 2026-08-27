@@ -41,7 +41,7 @@ type Result struct {
 func Query(query string, timeout time.Duration) (Result, error) {
 	query = strings.TrimSpace(query)
 	if timeout <= 0 {
-		timeout = 10 * time.Second
+		timeout = 15 * time.Second
 	}
 
 	client := whoisclient.NewClient()

@@ -23,3 +23,85 @@ export interface SntpResult {
   medianOffsetSec: number
   okCount: number
 }
+
+// --- DNS Lookup ---
+export interface DnsRecord {
+  name: string
+  type: string
+  ttl: number
+  value: string
+}
+
+export interface DnsResult {
+  v: number
+  items: { key: string; label: string; detail: string }[]
+  records: DnsRecord[]
+  resolver: string
+  protocol: string
+  errors: string[] | null
+}
+
+// --- Whois ---
+export interface WhoisParsed {
+  domainName?: string
+  registrar?: string
+  createdDate?: string
+  updatedDate?: string
+  expirationDate?: string
+  nameServers?: string[]
+  statuses?: string[]
+  dnssec?: string
+  registrantOrg?: string
+  registrantCountry?: string
+}
+
+export interface WhoisResult {
+  v: number
+  query: string
+  server?: string
+  text: string
+  parsed: WhoisParsed
+  parseError?: string
+}
+
+// --- IP Geolocation ---
+export interface IpGeoResult {
+  v: number
+  query: string
+  fields: Record<string, unknown>
+  order: string[]
+  text: string
+  rateRemaining: number
+  rateResetSec: number
+  error?: string
+}
+
+// --- Connections ---
+export interface ConnRow {
+  proto: string
+  localAddr: string
+  localPort: number
+  remoteAddr?: string
+  remotePort?: number
+  state: string
+  pid?: number
+  processName?: string
+}
+
+export interface ConnectionsResult {
+  v: number
+  connections: ConnRow[]
+  listening: number
+  established: number
+}
+
+// --- Wake on LAN ---
+export interface WolResult {
+  v: number
+  mac: string
+  broadcast: string
+  port: number
+  bytesSent: number
+  text: string
+  error?: string
+}
