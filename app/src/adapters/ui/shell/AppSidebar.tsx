@@ -1,11 +1,18 @@
-import { LayoutGrid, Settings } from 'lucide-react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { FolderOpen, LayoutGrid, Pencil, Settings, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { createSchemaRepository } from '@/adapters/storage/schemaRepository'
 import { useModuleVisibilityStore, visibleModulesInOrder } from '@/stores/moduleVisibilityStore'
 import { useSearchQueryStore } from '@/stores/searchQueryStore'
 import { ModuleSettingsDialog } from './ModuleSettingsDialog'
 import { moduleContainingRoute, type ModuleDef } from './moduleTaxonomy'
+
+const schemaRepository = createSchemaRepository()
+const FORMFLOW_BUILDER_ROUTE = '/tools/formflow-builder'
 
 /**
  * Persistent icon rail (module switcher, never hides) + an adjacent swap
@@ -112,6 +119,7 @@ function RailIcon({
 
 function ToolListPane({ module, currentPath }: { module: ModuleDef; currentPath: string }) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const query = useSearchQueryStore((s) => s.query.trim().toLowerCase())
 
   const tools = query
@@ -120,6 +128,8 @@ function ToolListPane({ module, currentPath }: { module: ModuleDef; currentPath:
       )
     : module.tools
 
+  const openTemplateName = currentPath === FORMFLOW_BUILDER_ROUTE ? searchParams.get('t') : null
+
   return (
     <div className="flex h-full w-60 flex-col overflow-hidden">
       <p className="truncate px-4 pt-4 pb-2 text-sm font-bold text-foreground">{module.title}</p>
@@ -127,7 +137,10 @@ function ToolListPane({ module, currentPath }: { module: ModuleDef; currentPath:
         {tools.map((tool) => {
           const Icon = tool.icon
           const enabled = Boolean(tool.route)
-          const selected = enabled && currentPath === tool.route
+          // The FormFlow builder route is shared by the "new design" entry and
+          // every saved template's fill/edit view (disambiguated by `?t=`) —
+          // this row owns the highlight only when no template is open.
+          const selected = enabled && currentPath === tool.route && !(tool.id === 'formflow-builder' && openTemplateName)
           return (
             <button
               key={tool.id}
@@ -147,7 +160,102 @@ function ToolListPane({ module, currentPath }: { module: ModuleDef; currentPath:
             </button>
           )
         })}
+        {module.id === 'formflow' ? (
+          <FormFlowTemplateRows openTemplateName={openTemplateName} navigate={navigate} />
+        ) : null}
       </div>
     </div>
+  )
+}
+
+/**
+ * Saved FormFlow templates, listed under the "XML/YAML Form Designer" nav
+ * item. Name → fill mode (`?t=name`, live form + Download/Preview/Copy).
+ * Pencil → design mode (`?t=name&mode=edit`, schema/field mapper, no
+ * Download/Preview/Copy). Refetches on every open/close so a save or delete
+ * elsewhere is reflected without a dedicated pub/sub channel.
+ */
+function FormFlowTemplateRows({
+  openTemplateName,
+  navigate,
+}: {
+  openTemplateName: string | null
+  navigate: ReturnType<typeof useNavigate>
+}) {
+  const [names, setNames] = useState<string[] | null>(null)
+  const [toDelete, setToDelete] = useState<string | null>(null)
+
+  function refresh() {
+    schemaRepository.listNames().then(setNames)
+  }
+
+  useEffect(refresh, [openTemplateName])
+
+  async function confirmDelete() {
+    if (!toDelete) return
+    await schemaRepository.delete(toDelete)
+    if (openTemplateName === toDelete) navigate(FORMFLOW_BUILDER_ROUTE)
+    setToDelete(null)
+    refresh()
+  }
+
+  if (!names || names.length === 0) return null
+
+  return (
+    <>
+      <div className="mt-1 flex flex-col gap-0.5 border-t border-border/60 pt-1">
+        {names.map((name) => {
+          const selected = openTemplateName === name
+          return (
+            <div
+              key={name}
+              className={cn(
+                'group flex items-center gap-1 rounded-[10px] pl-2.5 pr-1 py-1 text-sm',
+                selected ? 'bg-primary/15 text-foreground font-medium' : 'text-foreground hover:bg-accent/40',
+              )}
+            >
+              <FolderOpen className="size-[15px] shrink-0 text-muted-foreground" />
+              <button
+                type="button"
+                onClick={() => navigate(`${FORMFLOW_BUILDER_ROUTE}?t=${encodeURIComponent(name)}`)}
+                className="min-w-0 flex-1 truncate py-1 text-left"
+              >
+                {name}
+              </button>
+              <button
+                type="button"
+                aria-label={`Edit "${name}"`}
+                onClick={() => navigate(`${FORMFLOW_BUILDER_ROUTE}?t=${encodeURIComponent(name)}&mode=edit`)}
+                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+              >
+                <Pencil className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label={`Delete "${name}"`}
+                onClick={() => setToDelete(name)}
+                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-destructive"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+      <Dialog open={toDelete !== null} onOpenChange={(open) => !open && setToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete template?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">"{toDelete}" will be permanently deleted. This cannot be undone.</p>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline">Cancel</Button>} />
+            <Button variant="destructive" onClick={() => void confirmDelete()}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

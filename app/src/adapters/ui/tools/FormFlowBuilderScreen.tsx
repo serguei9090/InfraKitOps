@@ -1,7 +1,7 @@
-import { ChevronDown, ChevronRight, FolderOpen, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Save, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch, type Control } from 'react-hook-form'
-import { useLocation } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { ToolDetailScaffold, ToolScaffoldHeader, ToolScaffoldPanel } from '@/adapters/ui/shell/ToolDetailScaffold'
 import { createSchemaRepository } from '@/adapters/storage/schemaRepository'
 import { FormFlowParser } from '@/core/form_flow/formFlowParser'
 import {
@@ -55,56 +55,50 @@ function retypeField(field: SchemaField, newType: FieldType): SchemaField {
 }
 
 export function FormFlowBuilderScreen() {
-  const location = useLocation()
-  const initialTemplate = (location.state as { template?: SavedFormFlowTemplate } | null)?.template
+  const [searchParams, setSearchParams] = useSearchParams()
+  const openTemplateName = searchParams.get('t')
+  // No `?t=` → a fresh/blank design. `?t=name` alone → fill mode (the live
+  // form, Download/Preview/Copy). `?t=name&mode=edit` → design mode for that
+  // saved template's schema/field mapper — same two shapes the "XML/YAML
+  // Form Designer" sidebar entry and its saved-template rows link to.
+  const mode: 'design' | 'fill' = !openTemplateName || searchParams.get('mode') === 'edit' ? 'design' : 'fill'
 
   const [pasteText, setPasteText] = useState('')
   const [formatOverride, setFormatOverride] = useState<SourceFormat | undefined>(undefined)
-  const [schema, setSchema] = useState<FormFlowSchema | null>(initialTemplate?.schema ?? null)
+  const [schema, setSchema] = useState<FormFlowSchema | null>(null)
   const [parseError, setParseError] = useState<string | null>(null)
-  const [templateName, setTemplateName] = useState<string | null>(initialTemplate?.name ?? null)
+  const [templateName, setTemplateName] = useState<string | null>(null)
   const [saveDialogName, setSaveDialogName] = useState('')
-  const [saveStatus, setSaveStatus] = useState<string | null>(null)
-  const [templateNames, setTemplateNames] = useState<string[] | null>(null)
-  const [templatesError, setTemplatesError] = useState<string | null>(null)
-  const [toDelete, setToDelete] = useState<string | null>(null)
-  const [sourceExpanded, setSourceExpanded] = useState(initialTemplate == null)
+  const [sourceExpanded, setSourceExpanded] = useState(true)
 
   const { control, register, reset } = useForm<Record<string, unknown>>({
-    defaultValues: initialTemplate?.values ?? {},
+    defaultValues: {},
   })
 
-  function refreshTemplates() {
-    repository
-      .listNames()
-      .then(setTemplateNames)
-      .catch((e: unknown) => setTemplatesError(messageOf(e)))
-  }
-
-  useEffect(refreshTemplates, [])
-
-  async function handleEditTemplate(name: string) {
-    const raw = await repository.load(name)
-    if (raw == null) {
-      refreshTemplates()
+  useEffect(() => {
+    if (!openTemplateName) {
+      setSchema(null)
+      setTemplateName(null)
+      setParseError(null)
+      setSourceExpanded(true)
+      reset({})
       return
     }
-    const template = JSON.parse(raw) as SavedFormFlowTemplate
-    setSchema(template.schema)
-    setTemplateName(template.name)
-    setSaveStatus(null)
-    setParseError(null)
-    setSourceExpanded(false)
-    reset(template.values)
-  }
-
-  async function confirmDeleteTemplate() {
-    if (!toDelete) return
-    await repository.delete(toDelete)
-    if (templateName === toDelete) setTemplateName(null)
-    setToDelete(null)
-    refreshTemplates()
-  }
+    let cancelled = false
+    repository.load(openTemplateName).then((raw) => {
+      if (cancelled || raw == null) return
+      const template = JSON.parse(raw) as SavedFormFlowTemplate
+      setSchema(template.schema)
+      setTemplateName(template.name)
+      setParseError(null)
+      setSourceExpanded(false)
+      reset(template.values)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openTemplateName])
 
   function handleParse() {
     try {
@@ -113,7 +107,6 @@ export function FormFlowBuilderScreen() {
       setParseError(null)
       setSourceExpanded(false)
       setTemplateName(null)
-      setSaveStatus(null)
       reset(defaultValuesFromFields(parsed.fields))
     } catch (e) {
       setSchema(null)
@@ -145,169 +138,156 @@ export function FormFlowBuilderScreen() {
     const values = control._formValues
     const template: SavedFormFlowTemplate = { name, schema, values }
     await repository.save(name, JSON.stringify(template))
-    setTemplateName(name)
-    setSaveStatus(`Saved "${name}"`)
     setSaveDialogName('')
-    refreshTemplates()
+    // Route to this template's edit URL so the address bar and the sidebar's
+    // saved-templates list agree with what's on screen (and a refresh keeps
+    // working, since state is now derived from the URL, not React state).
+    setSearchParams({ t: name, mode: 'edit' })
   }
 
   const output = useOutput(schema, control)
 
-  return (
-    <>
-      <ToolDetailScaffold
-      title="FormFlow Builder"
-      copyText={templateName && output.text ? output.text : undefined}
-      preview={
-        templateName && output.text
-          ? {
-              label: 'Generated Output',
-              content: (
-                <pre className="overflow-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
-                  {output.text}
-                </pre>
-              ),
-            }
-          : undefined
-      }
-      download={
-        templateName && output.text && schema
-          ? {
-              fileName: `${templateName}.${FORMAT_EXTENSIONS[schema.format]}`,
-              content: output.text,
-              mimeType: FORMAT_MIME_TYPES[schema.format],
-            }
-          : undefined
-      }
-      inputPanel={
-        <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={() => setSourceExpanded((v) => !v)}
-            className="flex items-center gap-1.5 text-sm font-medium"
-          >
-            {sourceExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-            Upload file
-            {!sourceExpanded && schema ? (
-              <span className="font-normal text-muted-foreground">
-                — {schema.rootName} ({schema.format.toUpperCase()})
-              </span>
-            ) : null}
-          </button>
-          {sourceExpanded ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                Drop an XML, YAML or JSON file below — or paste its contents directly.
-              </p>
-              <Input type="file" accept=".xml,.yaml,.yml,.json" onChange={handleFilePicked} />
-              <Textarea
-                value={pasteText}
-                onChange={(e) => setPasteText(e.target.value)}
-                rows={10}
-                className="font-mono text-xs"
-                placeholder={'<config>\n  <server>...</server>\n</config>'}
-              />
-              <div className="flex gap-2">
-                <Select
-                  value={formatOverride ?? 'auto'}
-                  onValueChange={(v) => setFormatOverride(v === 'auto' ? undefined : ((v as SourceFormat) ?? undefined))}
-                >
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Auto-detect format" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Auto-detect format</SelectItem>
-                    {SOURCE_FORMATS.map((f) => (
-                      <SelectItem key={f} value={f}>
-                        {f.toUpperCase()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button onClick={handleParse}>Parse</Button>
-              </div>
-              {parseError ? <p className="text-sm text-destructive">Could not parse: {parseError}</p> : null}
-            </>
-          ) : null}
-
-          <div className="mt-4 flex flex-col gap-2 border-t border-border/60 pt-4">
-            <p className="text-sm font-medium">Saved Templates</p>
-            {templatesError ? (
-              <p className="text-sm text-destructive">Could not load saved templates: {templatesError}</p>
-            ) : templateNames === null ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
-            ) : templateNames.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-8 text-center">
-                <FolderOpen className="size-8 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">No saved templates yet</p>
-              </div>
+  if (mode === 'fill') {
+    return (
+      <div className="flex min-h-full flex-col">
+        <ToolScaffoldHeader
+          title="FormFlow Builder"
+          copyText={output.text ?? undefined}
+          preview={
+            output.text
+              ? {
+                  label: 'Generated Output',
+                  content: (
+                    <pre className="overflow-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
+                      {output.text}
+                    </pre>
+                  ),
+                }
+              : undefined
+          }
+          download={
+            output.text && schema && templateName
+              ? {
+                  fileName: `${templateName}.${FORMAT_EXTENSIONS[schema.format]}`,
+                  content: output.text,
+                  mimeType: FORMAT_MIME_TYPES[schema.format],
+                }
+              : undefined
+          }
+        />
+        <div className="flex flex-1 p-5">
+          <ToolScaffoldPanel label={templateName ?? ''} bordered className="bg-card">
+            {!schema ? (
+              <p className="text-sm text-muted-foreground">Loading template…</p>
             ) : (
-              <div className="flex flex-col gap-2">
-                {templateNames.map((name) => (
-                  <div key={name} className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-                    <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
-                    <Button variant="ghost" size="sm" onClick={() => void handleEditTemplate(name)} className="gap-1.5">
-                      <Pencil className="size-3.5" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Delete "${name}"`}
-                      onClick={() => setToDelete(name)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
+              <div className="flex flex-col gap-3">
+                {schema.fields.map((field) => (
+                  <LiveFormField key={field.key} field={field} path={field.key} control={control} register={register} />
                 ))}
               </div>
             )}
-          </div>
-
-          {schema ? (
-            <>
-              <div className="mt-4 flex items-center gap-2 border-t border-border/60 pt-4">
-                <p className="flex-1 text-sm font-medium">Schema designer & field mapper</p>
-                <Dialog>
-                  <DialogTrigger
-                    render={
-                      <Button variant="outline" size="sm">
-                        <Save className="size-4" />
-                        Save template
-                      </Button>
-                    }
-                  />
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Save template</DialogTitle>
-                    </DialogHeader>
-                    <Label htmlFor="template-name">Template name</Label>
-                    <Input
-                      id="template-name"
-                      autoFocus
-                      value={saveDialogName}
-                      onChange={(e) => setSaveDialogName(e.target.value)}
-                    />
-                    <DialogFooter>
-                      <DialogClose render={<Button onClick={() => void handleSaveTemplate()}>Save</Button>} />
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-              {saveStatus ? <p className="text-sm text-primary">{saveStatus}</p> : null}
-              <p className="text-sm text-muted-foreground">
-                Detected root "{schema.rootName}" ({schema.format.toUpperCase()})
-                {templateName ? ` · Saved as "${templateName}"` : ''}
-              </p>
-              <div className="flex flex-col gap-1">
-                {schema.fields.map((field, i) => (
-                  <DesignerFieldRow key={field.key} field={field} onChange={(updated) => replaceTopField(i, updated)} />
-                ))}
-              </div>
-            </>
-          ) : null}
+          </ToolScaffoldPanel>
         </div>
+      </div>
+    )
+  }
+
+  return (
+    <ToolDetailScaffold
+      title="FormFlow Builder"
+      inputPanel={
+        <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => setSourceExpanded((v) => !v)}
+              className="flex items-center gap-1.5 text-sm font-medium"
+            >
+              {sourceExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+              Upload file
+              {!sourceExpanded && schema ? (
+                <span className="font-normal text-muted-foreground">
+                  — {schema.rootName} ({schema.format.toUpperCase()})
+                </span>
+              ) : null}
+            </button>
+            {sourceExpanded ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Drop an XML, YAML or JSON file below — or paste its contents directly.
+                </p>
+                <div className="flex gap-2">
+                  <Input type="file" accept=".xml,.yaml,.yml,.json" onChange={handleFilePicked} className="flex-1" />
+                  <Select
+                    value={formatOverride ?? 'auto'}
+                    onValueChange={(v) => setFormatOverride(v === 'auto' ? undefined : ((v as SourceFormat) ?? undefined))}
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Auto-detect format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto-detect format</SelectItem>
+                      {SOURCE_FORMATS.map((f) => (
+                        <SelectItem key={f} value={f}>
+                          {f.toUpperCase()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={handleParse}>Parse</Button>
+                </div>
+                <Textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  rows={10}
+                  className="font-mono text-xs"
+                  placeholder={'<config>\n  <server>...</server>\n</config>'}
+                />
+                {parseError ? <p className="text-sm text-destructive">Could not parse: {parseError}</p> : null}
+              </>
+            ) : null}
+
+            {schema ? (
+              <>
+                <div className="mt-4 flex items-center gap-2 border-t border-border/60 pt-4">
+                  <p className="flex-1 text-sm font-medium">Schema designer & field mapper</p>
+                  <Dialog onOpenChange={(open) => open && setSaveDialogName(templateName ?? '')}>
+                    <DialogTrigger
+                      render={
+                        <Button variant="outline" size="sm">
+                          <Save className="size-4" />
+                          Save template
+                        </Button>
+                      }
+                    />
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Save template</DialogTitle>
+                      </DialogHeader>
+                      <Label htmlFor="template-name">Template name</Label>
+                      <Input
+                        id="template-name"
+                        autoFocus
+                        value={saveDialogName}
+                        onChange={(e) => setSaveDialogName(e.target.value)}
+                      />
+                      <DialogFooter>
+                        <DialogClose render={<Button onClick={() => void handleSaveTemplate()}>Save</Button>} />
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Detected root "{schema.rootName}" ({schema.format.toUpperCase()})
+                  {templateName ? ` · Saved as "${templateName}"` : ''}
+                </p>
+                <div className="flex flex-col gap-1">
+                  {schema.fields.map((field, i) => (
+                    <DesignerFieldRow key={field.key} field={field} onChange={(updated) => replaceTopField(i, updated)} />
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </div>
       }
       outputPanel={
         !schema ? (
@@ -334,21 +314,6 @@ export function FormFlowBuilderScreen() {
         )
       }
     />
-      <Dialog open={toDelete !== null} onOpenChange={(open) => !open && setToDelete(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete template?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">"{toDelete}" will be permanently deleted. This cannot be undone.</p>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline">Cancel</Button>} />
-            <Button variant="destructive" onClick={() => void confirmDeleteTemplate()}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
   )
 }
 
