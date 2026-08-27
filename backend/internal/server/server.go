@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/infrakit/backend/internal/api"
+	"github.com/infrakit/backend/internal/history"
 )
 
 // Options configures the router.
@@ -20,6 +21,13 @@ type Options struct {
 	// OnActivity, if set, is called once per request so an idle watchdog can
 	// reset its timer.
 	OnActivity func()
+	// History is the run-history store. Nil is allowed — the /history
+	// endpoints then return 503 and the tools still work.
+	History *history.Store
+	// AppVersion is stamped onto every stored run.
+	AppVersion string
+	// HistoryPolicy is the default prune policy (per-request overridable).
+	HistoryPolicy history.PrunePolicy
 }
 
 // NewRouter returns the fully wired API handler.
@@ -30,10 +38,24 @@ func NewRouter(opts Options) http.Handler {
 	r.Use(activity(opts.OnActivity))
 	r.Use(bearerAuth(opts.Token))
 
+	hist := &api.HistoryHandlers{
+		Store:         opts.History,
+		AppVersion:    opts.AppVersion,
+		DefaultPolicy: opts.HistoryPolicy,
+	}
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", api.Health)
 		r.Get("/capabilities", api.Capabilities)
 		r.Get("/interfaces", api.Interfaces)
+
+		r.Route("/history", func(r chi.Router) {
+			r.Get("/", hist.List)
+			r.Post("/", hist.Save)
+			r.Get("/{id}", hist.Get)
+			r.Patch("/{id}", hist.Patch)
+			r.Delete("/{id}", hist.Delete)
+		})
 	})
 
 	return r

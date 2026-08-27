@@ -22,10 +22,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/infrakit/backend/internal/api"
+	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/server"
 )
 
@@ -34,6 +36,9 @@ func main() {
 	token := flag.String("token", "", "bearer token required on every request (generated if empty)")
 	idleTimeout := flag.Duration("idle-timeout", 0, "exit after this long with no request (0 = never)")
 	parentPID := flag.Int("parent-pid", 0, "exit when this process id disappears (0 = disabled)")
+	dbPath := flag.String("db", "", `history database path ("" = OS config dir, "off" = no history)`)
+	retentionDays := flag.Int("history-retention-days", 90, "default history retention")
+	maxPerTarget := flag.Int("history-max-per-target", 20, "default history runs kept per (tool,target)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -49,6 +54,11 @@ func main() {
 		generated = true
 	}
 
+	store := openHistory(*dbPath)
+	if store != nil {
+		defer store.Close()
+	}
+
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
 		log.Fatalf("bind %s: %v", *addr, err)
@@ -62,7 +72,16 @@ func main() {
 	os.Stdout.Sync()
 
 	wd := server.NewWatchdog(*idleTimeout, *parentPID)
-	handler := server.NewRouter(server.Options{Token: tok, OnActivity: wd.Touch})
+	handler := server.NewRouter(server.Options{
+		Token:      tok,
+		OnActivity: wd.Touch,
+		History:    store,
+		AppVersion: api.Version,
+		HistoryPolicy: history.PrunePolicy{
+			RetentionDays: *retentionDays,
+			MaxPerTarget:  *maxPerTarget,
+		},
+	})
 
 	httpServer := &http.Server{
 		Handler:           handler,
@@ -88,6 +107,34 @@ func main() {
 	if err := httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("serve: %v", err)
 	}
+}
+
+// openHistory resolves the database path and opens the store. A failure is
+// logged but not fatal — the tools run without history rather than not at all.
+func openHistory(path string) *history.Store {
+	if path == "off" {
+		return nil
+	}
+	if path == "" {
+		dir, err := os.UserConfigDir()
+		if err != nil {
+			log.Printf("history: cannot resolve config dir: %v (history disabled)", err)
+			return nil
+		}
+		appDir := filepath.Join(dir, "InfraKitStudio")
+		if err := os.MkdirAll(appDir, 0o755); err != nil {
+			log.Printf("history: mkdir %s: %v (history disabled)", appDir, err)
+			return nil
+		}
+		path = filepath.Join(appDir, "history.db")
+	}
+	store, err := history.Open("file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	if err != nil {
+		log.Printf("history: open %s: %v (history disabled)", path, err)
+		return nil
+	}
+	log.Printf("history: %s", path)
+	return store
 }
 
 func mustToken() string {

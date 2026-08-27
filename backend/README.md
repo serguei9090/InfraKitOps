@@ -29,6 +29,9 @@ always launched with an explicit token).
 | `--token` | *(generated)* | bearer token required on every request |
 | `--idle-timeout` | `0` (off) | exit after this long with no request |
 | `--parent-pid` | `0` (off) | exit when this process id disappears |
+| `--db` | *(OS config dir)* | history DB path; `off` disables history |
+| `--history-retention-days` | `90` | default history retention |
+| `--history-max-per-target` | `20` | default runs kept per (tool, target) |
 | `--version` | | print version and exit |
 
 ## API
@@ -42,16 +45,24 @@ headers). CORS is locked to the Tauri and Vite-dev origins.
 | GET | `/health` | liveness + `{ os, elevated, version, pid, uptimeSec }` |
 | GET | `/capabilities` | per-tool `{ available, reason?, needsElevation? }` map |
 | GET | `/interfaces` | host network interfaces (name, MTU, addrs, flags) for the source-interface picker |
+| GET | `/history` | run summaries — `?tool=&target=&limit=` |
+| POST | `/history` | store a `RunEnvelope`; `?retentionDays=&maxPerTarget=` override the prune defaults |
+| GET | `/history/{id}` | one full stored run |
+| PATCH | `/history/{id}` | `{ pinned?, label? }` — pinned/labelled runs are never pruned |
+| DELETE | `/history/{id}` | remove one run |
 
-Tool endpoints are added per phase (N1+). Streaming endpoints use SSE.
+Tool endpoints are added per phase (N1+). Streaming endpoints use SSE. History is
+embedded SQLite (pure-Go `modernc.org/sqlite`); a store that fails to open makes the
+`/history` routes return 503 while every other tool keeps working.
 
 ## Layout
 
 ```
-cmd/infrakit-backend/   main: flags, listener, stdout contract, signals
+cmd/infrakit-backend/   main: flags, listener, stdout contract, signals, history DB
 internal/server/        router wiring, middleware (auth/CORS/activity), SSE helper, idle watchdog
 internal/api/           one file per endpoint concern
 internal/envelope/      the RunEnvelope shape stored by the history layer
+internal/history/       embedded-SQLite run store + prune policy
 internal/privilege/     "is this process elevated?" (per-OS)
 ```
 

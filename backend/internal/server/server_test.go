@@ -1,12 +1,16 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
+
+	"github.com/infrakit/backend/internal/history"
 )
 
 const testToken = "test-token-123"
@@ -156,6 +160,74 @@ func TestWatchdogTouchKeepsAlive(t *testing.T) {
 		case <-deadline:
 			return
 		}
+	}
+}
+
+func TestHistoryEndpointsRoundTrip(t *testing.T) {
+	store, err := history.Open("file:server_hist_test?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	srv := httptest.NewServer(NewRouter(Options{Token: testToken, History: store, AppVersion: "t"}))
+	t.Cleanup(srv.Close)
+
+	env := map[string]any{
+		"tool": "whois", "target": "example.com", "startedAt": 1000,
+		"status": "ok", "params": map[string]any{}, "resultShape": "text",
+		"result": map[string]any{"v": 1, "text": "raw whois"},
+	}
+	body, _ := json.Marshal(env)
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/history", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /history = %d", resp.StatusCode)
+	}
+	var saved struct {
+		ID int64 `json:"id"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&saved)
+	resp.Body.Close()
+	if saved.ID == 0 {
+		t.Fatal("no id returned")
+	}
+
+	listResp := get(t, srv.URL+"/api/v1/history?tool=whois&target=example.com", testToken)
+	defer listResp.Body.Close()
+	var list struct {
+		Runs []struct {
+			ID   int64  `json:"id"`
+			Tool string `json:"tool"`
+		} `json:"runs"`
+	}
+	_ = json.NewDecoder(listResp.Body).Decode(&list)
+	if len(list.Runs) != 1 || list.Runs[0].Tool != "whois" {
+		t.Fatalf("list = %+v", list.Runs)
+	}
+
+	getResp := get(t, srv.URL+"/api/v1/history/"+strconv.FormatInt(saved.ID, 10), testToken)
+	defer getResp.Body.Close()
+	var run struct {
+		Result map[string]any `json:"result"`
+	}
+	_ = json.NewDecoder(getResp.Body).Decode(&run)
+	if run.Result["text"] != "raw whois" {
+		t.Fatalf("get result = %#v", run.Result)
+	}
+}
+
+func TestHistoryUnavailableWithoutStore(t *testing.T) {
+	srv := newTestServer(t) // no History in Options
+	resp := get(t, srv.URL+"/api/v1/history", testToken)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("got %d, want 503", resp.StatusCode)
 	}
 }
 
