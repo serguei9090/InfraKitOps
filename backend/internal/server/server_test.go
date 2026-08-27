@@ -119,8 +119,8 @@ func TestCapabilitiesShapesResponse(t *testing.T) {
 	if !body.Capabilities["subnet-calculator"].Available {
 		t.Fatal("subnet-calculator should always be available")
 	}
-	if body.Capabilities["iperf3"].Available {
-		t.Fatal("iperf3 is not implemented yet")
+	if body.Capabilities["discovery-protocol"].Available {
+		t.Fatal("discovery-protocol (LLDP/CDP) is a deferred N4 item")
 	}
 }
 

@@ -116,6 +116,34 @@ export interface PortScanResult {
   total: number
 }
 
+// --- iperf3 ---
+export interface IperfStream {
+  bitsPerSecond: number
+  bytes: number
+  retransmits?: number
+  jitterMs?: number
+  lostPercent?: number
+}
+export interface IperfDetail {
+  v: number
+  ok: boolean
+  error?: string
+  protocol: string
+  reverse: boolean
+  sender: IperfStream
+  receiver: IperfStream
+  samples: number[]
+  mss?: number
+  length?: number
+}
+export interface IperfResult {
+  v: number
+  unit: string
+  samples: number[]
+  stats: { min: number; avg: number; p50: number; p95: number; max: number }
+  detail: IperfDetail
+}
+
 // --- Firewall Viewer ---
 export interface FirewallRule {
   name: string

@@ -71,6 +71,7 @@ import { SnmpScreen } from './adapters/ui/tools/SnmpScreen'
 import { NeighborTableScreen } from './adapters/ui/tools/NeighborTableScreen'
 import { HostsFileEditorScreen } from './adapters/ui/tools/HostsFileEditorScreen'
 import { FirewallViewerScreen } from './adapters/ui/tools/FirewallViewerScreen'
+import { Iperf3Screen } from './adapters/ui/tools/Iperf3Screen'
 import { WhoisScreen } from './adapters/ui/tools/WhoisScreen'
 import { DnsLookupScreen } from './adapters/ui/tools/DnsLookupScreen'
 import { IpGeolocationScreen } from './adapters/ui/tools/IpGeolocationScreen'
@@ -160,6 +161,7 @@ export const router = createBrowserRouter([
       { path: 'tools/neighbor-table', element: <NeighborTableScreen /> },
       { path: 'tools/hosts-editor', element: <HostsFileEditorScreen /> },
       { path: 'tools/firewall-viewer', element: <FirewallViewerScreen /> },
+      { path: 'tools/iperf3', element: <Iperf3Screen /> },
     ],
   },
 ])

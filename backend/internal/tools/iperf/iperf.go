@@ -1,0 +1,204 @@
+// Package iperf wraps the iperf3 binary (BSD-3, shipped as an optional
+// component or found on PATH) and parses its --json output. Covers MTU / MSS
+// control per NETWORK_MODULE_PLAN.md tool #6.
+package iperf
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os/exec"
+	"strconv"
+	"time"
+)
+
+// ErrNotInstalled means no `iperf3` binary was found.
+var ErrNotInstalled = errors.New("iperf3 was not found on PATH — install it or add the bundled binary")
+
+// Options for a client run.
+type Options struct {
+	Host     string
+	Port     int
+	Duration int  // seconds
+	Reverse  bool // server sends
+	UDP      bool
+	// Overrides — zero means "use iperf3 defaults".
+	MSS     int    // --set-mss (TCP on-wire segment size)
+	Length  int    // --length (UDP datagram / TCP buffer)
+	Window  int    // --window (socket buffer)
+	Bitrate string // --bitrate (e.g. "100M"); UDP mainly
+}
+
+// Stream is the sender/receiver summary.
+type Stream struct {
+	Bits        float64 `json:"bitsPerSecond"`
+	Bytes       float64 `json:"bytes"`
+	Retransmits int     `json:"retransmits,omitempty"`
+	JitterMs    float64 `json:"jitterMs,omitempty"`
+	LostPct     float64 `json:"lostPercent,omitempty"`
+}
+
+// Result — shape "scalar_series" (throughput over the run's intervals).
+type Result struct {
+	V        int       `json:"v"`
+	OK       bool      `json:"ok"`
+	Error    string    `json:"error,omitempty"`
+	Protocol string    `json:"protocol"`
+	Reverse  bool      `json:"reverse"`
+	Sender   Stream    `json:"sender"`
+	Receiver Stream    `json:"receiver"`
+	Unit     string    `json:"unit"`
+	Samples  []float64 `json:"samples"` // per-interval Mbps
+	Stats    struct {
+		Min, Avg, P50, P95, Max float64
+	} `json:"stats"`
+	MSS    int    `json:"mss,omitempty"`
+	Length int    `json:"length,omitempty"`
+	Raw    string `json:"raw,omitempty"`
+}
+
+// Available reports whether an iperf3 binary is on PATH.
+func Available() bool {
+	_, err := exec.LookPath("iperf3")
+	return err == nil
+}
+
+// Run performs a client test and parses the JSON output.
+func Run(ctx context.Context, opts Options) (Result, error) {
+	bin, err := exec.LookPath("iperf3")
+	if err != nil {
+		return Result{}, ErrNotInstalled
+	}
+
+	args := []string{"-c", opts.Host, "--json", "--connect-timeout", "5000"}
+	if opts.Port > 0 {
+		args = append(args, "-p", strconv.Itoa(opts.Port))
+	}
+	dur := opts.Duration
+	if dur <= 0 || dur > 60 {
+		dur = 10
+	}
+	args = append(args, "-t", strconv.Itoa(dur))
+	if opts.Reverse {
+		args = append(args, "-R")
+	}
+	if opts.UDP {
+		args = append(args, "-u")
+	}
+	if opts.MSS > 0 {
+		args = append(args, "--set-mss", strconv.Itoa(opts.MSS))
+	}
+	if opts.Length > 0 {
+		args = append(args, "-l", strconv.Itoa(opts.Length))
+	}
+	if opts.Window > 0 {
+		args = append(args, "-w", strconv.Itoa(opts.Window))
+	}
+	if opts.Bitrate != "" {
+		args = append(args, "-b", opts.Bitrate)
+	}
+
+	cmd := exec.CommandContext(ctx, bin, args...)
+	out, runErr := cmd.Output()
+	// iperf3 exits non-zero on a test error but still prints JSON with an "error" key.
+
+	res := parse(out)
+	res.Reverse = opts.Reverse
+	res.MSS = opts.MSS
+	res.Length = opts.Length
+	if res.Protocol == "" {
+		if opts.UDP {
+			res.Protocol = "UDP"
+		} else {
+			res.Protocol = "TCP"
+		}
+	}
+	if !res.OK && res.Error == "" && runErr != nil {
+		res.Error = runErr.Error()
+	}
+	return res, nil
+}
+
+func parse(out []byte) Result {
+	res := Result{V: 1, Unit: "Mbit/s"}
+	var doc struct {
+		Error string `json:"error"`
+		Start struct {
+			TestStart struct {
+				Protocol string `json:"protocol"`
+			} `json:"test_start"`
+		} `json:"start"`
+		Intervals []struct {
+			Sum struct {
+				BitsPerSecond float64 `json:"bits_per_second"`
+			} `json:"sum"`
+		} `json:"intervals"`
+		End struct {
+			SumSent struct {
+				BitsPerSecond float64 `json:"bits_per_second"`
+				Bytes         float64 `json:"bytes"`
+				Retransmits   int     `json:"retransmits"`
+			} `json:"sum_sent"`
+			SumReceived struct {
+				BitsPerSecond float64 `json:"bits_per_second"`
+				Bytes         float64 `json:"bytes"`
+			} `json:"sum_received"`
+			Sum struct {
+				JitterMs      float64 `json:"jitter_ms"`
+				LostPercent   float64 `json:"lost_percent"`
+				BitsPerSecond float64 `json:"bits_per_second"`
+			} `json:"sum"`
+		} `json:"end"`
+	}
+	if err := json.Unmarshal(out, &doc); err != nil {
+		res.Error = fmt.Sprintf("could not parse iperf3 output: %v", err)
+		return res
+	}
+	if doc.Error != "" {
+		res.Error = doc.Error
+		return res
+	}
+
+	res.OK = true
+	res.Protocol = doc.Start.TestStart.Protocol
+	for _, iv := range doc.Intervals {
+		res.Samples = append(res.Samples, iv.Sum.BitsPerSecond/1e6)
+	}
+	res.Sender = Stream{Bits: doc.End.SumSent.BitsPerSecond, Bytes: doc.End.SumSent.Bytes, Retransmits: doc.End.SumSent.Retransmits}
+	res.Receiver = Stream{Bits: doc.End.SumReceived.BitsPerSecond, Bytes: doc.End.SumReceived.Bytes}
+	if doc.End.Sum.JitterMs > 0 || doc.End.Sum.LostPercent > 0 {
+		res.Receiver.JitterMs = doc.End.Sum.JitterMs
+		res.Receiver.LostPct = doc.End.Sum.LostPercent
+		if len(res.Samples) == 0 {
+			res.Samples = append(res.Samples, doc.End.Sum.BitsPerSecond/1e6)
+		}
+	}
+	computeStats(&res)
+	return res
+}
+
+func computeStats(res *Result) {
+	if len(res.Samples) == 0 {
+		return
+	}
+	s := append([]float64(nil), res.Samples...)
+	for i := range s {
+		for j := i + 1; j < len(s); j++ {
+			if s[j] < s[i] {
+				s[i], s[j] = s[j], s[i]
+			}
+		}
+	}
+	res.Stats.Min = s[0]
+	res.Stats.Max = s[len(s)-1]
+	res.Stats.P50 = s[len(s)/2]
+	res.Stats.P95 = s[int(float64(len(s))*0.95)%len(s)]
+	var sum float64
+	for _, v := range res.Samples {
+		sum += v
+	}
+	res.Stats.Avg = sum / float64(len(res.Samples))
+}
+
+var _ = time.Second

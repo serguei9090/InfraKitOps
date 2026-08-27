@@ -1,0 +1,76 @@
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/infrakit/backend/internal/envelope"
+	"github.com/infrakit/backend/internal/tools/iperf"
+)
+
+type iperfRequest struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Duration int    `json:"duration"`
+	Reverse  bool   `json:"reverse"`
+	UDP      bool   `json:"udp"`
+	MSS      int    `json:"mss"`
+	Length   int    `json:"length"`
+	Window   int    `json:"window"`
+	Bitrate  string `json:"bitrate"`
+}
+
+// Iperf3: POST /iperf3 — throughput test. resultShape "scalar_series" (per-interval Mbps).
+func Iperf3(w http.ResponseWriter, r *http.Request) {
+	var req iperfRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.Host) == "" {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "a server host is required"})
+		return
+	}
+
+	started := time.Now()
+	result, err := iperf.Run(r.Context(), iperf.Options{
+		Host: strings.TrimSpace(req.Host), Port: req.Port, Duration: req.Duration,
+		Reverse: req.Reverse, UDP: req.UDP, MSS: req.MSS, Length: req.Length,
+		Window: req.Window, Bitrate: req.Bitrate,
+	})
+	if errors.Is(err, iperf.ErrNotInstalled) {
+		WriteJSON(w, http.StatusServiceUnavailable, map[string]any{"error": err.Error(), "notInstalled": true})
+		return
+	}
+
+	status := envelope.StatusOK
+	if !result.OK {
+		status = envelope.StatusError
+	}
+	avgMbps := result.Stats.Avg
+	env := envelope.Envelope{
+		Tool:       "iperf3",
+		Target:     strings.TrimSpace(req.Host),
+		StartedAt:  started.UnixMilli(),
+		FinishedAt: time.Now().UnixMilli(),
+		Status:     status,
+		Params: map[string]any{
+			"host": req.Host, "reverse": req.Reverse, "udp": req.UDP,
+			"mss": req.MSS, "length": req.Length,
+		},
+		ResultShape: envelope.ShapeScalarSeries,
+		Result: map[string]any{
+			"v": 1, "unit": "Mbit/s", "samples": result.Samples,
+			"stats": map[string]any{
+				"min": result.Stats.Min, "avg": result.Stats.Avg, "p50": result.Stats.P50,
+				"p95": result.Stats.P95, "max": result.Stats.Max,
+			},
+			"detail": result,
+		},
+		Summary: map[string]any{"avgMbps": avgMbps, "protocol": result.Protocol, "reverse": result.Reverse},
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"envelope": env})
+}

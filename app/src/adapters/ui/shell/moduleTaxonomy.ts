@@ -253,7 +253,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
       { id: 'neighbor-table', name: 'Neighbor Table', description: 'ARP / NDP cache: IP ⟷ MAC ⟷ interface & state', icon: Table2, route: '/tools/neighbor-table' },
       { id: 'hosts-editor', name: 'Hosts File Editor', description: 'Edit /etc/hosts with enable/disable, backup & restore', icon: FileText, route: '/tools/hosts-editor' },
       { id: 'firewall-viewer', name: 'Firewall Viewer', description: 'Read-only view of OS firewall rules (Windows / firewalld)', icon: ShieldCheck, route: '/tools/firewall-viewer' },
-      { id: 'iperf3', name: 'iperf3 Throughput', description: 'Bandwidth test with optional MTU / MSS override', icon: Gauge },
+      { id: 'iperf3', name: 'iperf3 Throughput', description: 'Bandwidth test with optional MTU / MSS override', icon: Gauge, route: '/tools/iperf3' },
       { id: 'snmp', name: 'SNMP', description: 'v1 / v2c / v3 Walk, Get & Set against an OID', icon: ServerCog, route: '/tools/snmp' },
       { id: 'discovery-protocol', name: 'Discovery Protocol', description: 'Capture LLDP / CDP neighbor advertisements', icon: RadioTower },
     ],

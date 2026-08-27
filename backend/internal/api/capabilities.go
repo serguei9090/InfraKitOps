@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/infrakit/backend/internal/privilege"
+	"github.com/infrakit/backend/internal/tools/iperf"
 )
 
 // Capability describes whether one tool can run in the current environment.
@@ -23,7 +24,10 @@ type Capability struct {
 func Capabilities(w http.ResponseWriter, _ *http.Request) {
 	elevated := privilege.IsElevated()
 
-	notImpl := Capability{Available: false, Reason: "not implemented yet"}
+	iperfCap := Capability{Available: true}
+	if !iperf.Available() {
+		iperfCap = Capability{Available: false, Reason: "iperf3 binary not found on PATH"}
+	}
 	// Tools that additionally need raw sockets — surfaced now so the UI copy
 	// is correct from the start.
 	rawSocket := func() Capability {
@@ -49,7 +53,7 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"neighbor-table":     {Available: true},
 		"hosts-editor":       {Available: true},
 		"firewall-viewer":    {Available: true},
-		"iperf3":             notImpl,
+		"iperf3":             iperfCap,
 		"snmp":               {Available: true},
 		"discovery-protocol": rawSocket(),
 	}
