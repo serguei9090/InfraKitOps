@@ -136,6 +136,32 @@ App in `app/`:
   scaffold; `bun.lock` is the lockfile, `package-lock.json` removed). Use `bun`/`bunx`,
   not `npm`/`npx`, for everything in `app/` from here on.
 
+## Network module + Go backend (started 2026-08-27, N0 done)
+
+The **Network Toolkit** module (`moduleTaxonomy.ts` id `network`) is the first part of
+the app with a **backend process** — it starts the deferred Phase 8, scoped to network
+diagnostics only. Plan + roadmap: [`NETWORK_MODULE_PLAN.md`](NETWORK_MODULE_PLAN.md).
+
+- **`backend/`** — a Go module (`github.com/infrakit/backend`). One binary,
+  `cmd/infrakit-backend`, that runs as a **Tauri sidecar** on desktop and a standalone
+  HTTP service for web. `chi` router under `/api/v1`, per-launch bearer-token auth,
+  SSE for streaming tools. `go test ./...` from `backend/`.
+- **Sidecar wiring**: `app/src-tauri/src/lib.rs` spawns it on setup, reads
+  `LISTENING <addr>` off stdout, exposes `{ endpoint, token, available }` via the
+  `backend_endpoint` command, kills it on exit. `capabilities/sidecar.json` scopes
+  `shell:allow-spawn` to the one binary with validated args.
+- **Build the sidecar binary before `tauri dev`/`tauri build`**:
+  `backend/build-sidecar.sh` (or `.ps1`) cross-compiles into
+  `app/src-tauri/binaries/infrakit-backend-<triple>` (git-ignored).
+- **Frontend**: `adapters/backend/backendClient.ts` + `stores/backendStore.ts`
+  (`backendAvailable` status + per-tool capability map). Network tool screens use the
+  **T4 `NetworkToolScaffold`** (`adapters/ui/network/`), not `ToolDetailScaffold`, and
+  fall back to a "backend unavailable" state. The 44 client-only tools are untouched.
+- **Still framework-free**: `src/core/network/**` (subnet calc moved here, plus
+  `hostRange.ts`) has zero React imports, same as the rest of `src/core`.
+- CI: `.github/workflows/backend.yml` (vet/test + cross-compile). `bun run tauri dev`
+  opening a real window still needs a manual pass — same caveat as the rest of the app.
+
 ## Commands (run from `app/`)
 
 ```bash
@@ -146,6 +172,14 @@ bun run build              # static web build (tsc -b && vite build)
 bun run tauri build        # desktop installer (MSI/NSIS via Tauri bundler)
 bun run test                # Vitest, core logic unit tests
 bunx shadcn@latest add <x>  # add a shadcn/ui component
+```
+
+Backend (run from `backend/`):
+
+```bash
+go test ./...                       # backend unit tests
+go run ./cmd/infrakit-backend       # run the service (prints LISTENING + TOKEN)
+./build-sidecar.sh                   # cross-compile into app/src-tauri/binaries/
 ```
 
 ## Working conventions

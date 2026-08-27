@@ -269,24 +269,26 @@ Like `ModuleSettingsDialog` but scoped to this module. Persisted via
 Solo-developer person-day (pd) estimates. LOC = new Go + TS + tests, rough.
 Commit after every checkpoint bullet.
 
-### Phase N0 — Foundations (no user-visible tools) — ~13–18 pd, ~2.0–2.5k LOC
+### Phase N0 — Foundations (no user-visible tools) — ~13–18 pd, ~2.0–2.5k LOC — **DONE 2026-08-27**
 
-| Checkpoint (= one commit) | pd |
-|---------------------------|----|
-| `backend/` Go module: `chi` server, `:0` bind + stdout announce, bearer-token middleware, `/health`, `/capabilities`, `/interfaces`, SSE helper, `RunEnvelope` types, graceful-shutdown watchdog | 3–4 |
-| Tauri sidecar wiring: `externalBin`, `shell:allow-spawn` capability + arg validators, spawn/parse-port/kill in `src-tauri/src/lib.rs`, `get_backend_endpoint` command | 2–3 |
-| CI: cross-compile matrix (`CGO_ENABLED=0`, win-msvc + linux-gnu), triple-suffixed artifact names into `src-tauri/binaries/`, Authenticode sign step (stub) | 1–2 |
-| Frontend: `backendClient` + `backendAvailableStore`, `network` module entry in `moduleTaxonomy.ts` + rail icon, `routes.tsx` group | 1–2 |
-| `NetworkToolScaffold` (T4) + `QueryBar` + `StatusStrip` + `BackendUnavailable` skeletons | 3–4 |
-| `networkSettingsStore` + module settings dialog | 2 |
-| `src/core/network/hostRange.ts` + full unit tests (no backend needed) | 2 |
-| **Move Subnet Calculator** into the module (re-register taxonomy + route, no logic change) | 0.5 |
+| Checkpoint (= one commit) | pd | status |
+|---------------------------|----|--------|
+| `backend/` Go module: `chi` server, `:0` bind + stdout announce, bearer-token middleware, `/health`, `/capabilities`, `/interfaces`, SSE helper, `RunEnvelope` types, graceful-shutdown watchdog | 3–4 | ✅ `083024f` |
+| Tauri sidecar wiring: `externalBin`, `shell:allow-spawn` capability + arg validators, spawn/parse-port/kill in `src-tauri/src/lib.rs`, `backend_endpoint` command | 2–3 | ✅ `93f0a3c` |
+| CI: cross-compile matrix (`CGO_ENABLED=0`, win-msvc + linux-gnu), triple-suffixed artifacts; `build-sidecar.sh`/`.ps1` for local. (Authenticode sign — deferred to N-packaging) | 1–2 | ✅ `d7829f2` |
+| Frontend: `backendClient` + `backendStore`, `network` module entry in `moduleTaxonomy.ts` + rail icon, routes group | 1–2 | ✅ `9443e3d` |
+| `NetworkToolScaffold` (T4) + `QueryBar` + `StatusStrip` + `BackendUnavailable` | 3–4 | ✅ `9978fa4` |
+| `networkSettingsStore` + module settings dialog | 2 | ✅ `b82cc50` |
+| `src/core/network/hostRange.ts` + full unit tests (no backend needed) | 2 | ✅ `9f704db` (24 tests) |
+| **Move Subnet Calculator** into the module (`src/core/network/`, re-register taxonomy) | 0.5 | ✅ `9443e3d` |
 
-**Phase DoD**: `bun run build` + `cargo check` clean; `bun run test` green;
-sidecar spawns on `tauri dev`, `/health` returns 200 with token, is killed on
-window close; web build shows "backend unavailable" gracefully; Subnet
-Calculator works under `/tools/subnet-calculator` inside the new module;
-`hostRange` parses every row in the §2.5 table.
+**Phase DoD**: ✅ `bun run build` + `cargo check` + `go build/vet/test` clean;
+`bun run test` green (1013 + 24 new); backend binary smoke-tested (401 without
+token, 200 with, `/interfaces` + `/capabilities` shaped right, idle self-exit);
+web build shows "backend unavailable" gracefully; Subnet Calculator verified
+in-browser under the Network Toolkit module; `hostRange` parses every §2.5 row.
+**Not yet verified**: `bun run tauri dev` opening a real window with the sidecar
+live (GUI, unobservable here) — needs one manual pass.
 
 ### Phase N1 — Easy read-only tools + history store — ~24–32 pd, ~4–5k LOC
 
