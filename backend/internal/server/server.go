@@ -61,6 +61,9 @@ func NewRouter(opts Options) http.Handler {
 		r.Get("/network-scanner/stream", api.NetScanStream)
 		r.Post("/snmp", api.SNMP)
 		r.Get("/neighbor-table", api.NeighborTable)
+		r.Get("/hosts", api.HostsGet)
+		r.Post("/hosts", api.HostsApply)
+		r.Post("/hosts/restore", api.HostsRestore)
 
 		r.Route("/history", func(r chi.Router) {
 			r.Get("/", hist.List)

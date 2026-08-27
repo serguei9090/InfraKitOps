@@ -116,6 +116,21 @@ export interface PortScanResult {
   total: number
 }
 
+// --- Hosts File Editor ---
+export interface HostsLine {
+  kind: 'mapping' | 'comment' | 'blank'
+  enabled: boolean
+  ip?: string
+  hostnames?: string[]
+  comment?: string
+  raw: string
+}
+export interface HostsFile {
+  v: number
+  path: string
+  lines: HostsLine[]
+}
+
 // --- Neighbor Table ---
 export interface NeighborEntry {
   ip: string

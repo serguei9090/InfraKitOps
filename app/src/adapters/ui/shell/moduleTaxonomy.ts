@@ -251,7 +251,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
       { id: 'port-scanner', name: 'Port Scanner', description: 'Concurrent TCP port sweep with service names', icon: ScanSearch, route: '/tools/port-scanner' },
       { id: 'network-scanner', name: 'IP / Network Scanner', description: 'Discover hosts by ICMP, ARP, reverse DNS & port probe', icon: ScanLine, route: '/tools/network-scanner' },
       { id: 'neighbor-table', name: 'Neighbor Table', description: 'ARP / NDP cache: IP ⟷ MAC ⟷ interface & state', icon: Table2, route: '/tools/neighbor-table' },
-      { id: 'hosts-editor', name: 'Hosts File Editor', description: 'Edit /etc/hosts with enable/disable, backup & restore', icon: FileText },
+      { id: 'hosts-editor', name: 'Hosts File Editor', description: 'Edit /etc/hosts with enable/disable, backup & restore', icon: FileText, route: '/tools/hosts-editor' },
       { id: 'firewall-viewer', name: 'Firewall Viewer', description: 'Read-only view of OS firewall rules (Windows / firewalld)', icon: ShieldCheck },
       { id: 'iperf3', name: 'iperf3 Throughput', description: 'Bandwidth test with optional MTU / MSS override', icon: Gauge },
       { id: 'snmp', name: 'SNMP', description: 'v1 / v2c / v3 Walk, Get & Set against an OID', icon: ServerCog, route: '/tools/snmp' },

@@ -47,7 +47,7 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"port-scanner":       {Available: true},
 		"network-scanner":    {Available: true}, // ICMP + port probe (ARP discovery needs elevation/Npcap — N4)
 		"neighbor-table":     {Available: true},
-		"hosts-editor":       notImpl,
+		"hosts-editor":       {Available: true},
 		"firewall-viewer":    notImpl,
 		"iperf3":             notImpl,
 		"snmp":               {Available: true},
