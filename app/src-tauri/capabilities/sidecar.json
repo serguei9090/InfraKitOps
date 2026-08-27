@@ -1,0 +1,27 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sidecar",
+  "description": "Spawn and supervise the infrakit-backend network sidecar with a fixed, validated argument set.",
+  "windows": ["main"],
+  "permissions": [
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/infrakit-backend",
+          "sidecar": true,
+          "args": [
+            "--addr",
+            "127.0.0.1:0",
+            "--token",
+            { "validator": "^[0-9a-f]{64}$" },
+            "--parent-pid",
+            { "validator": "^[0-9]{1,10}$" },
+            "--idle-timeout",
+            "45s"
+          ]
+        }
+      ]
+    }
+  ]
+}
