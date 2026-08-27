@@ -56,6 +56,10 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"iperf3":             iperfCap,
 		"snmp":               {Available: true},
 		"discovery-protocol": rawSocket(),
+
+		// Utility-tool power-mode endpoints — pure Go stdlib, always available
+		// when the backend itself is.
+		"ssh-keygen": {Available: true},
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{

@@ -69,6 +69,9 @@ func NewRouter(opts Options) http.Handler {
 		r.Get("/iperf3/server", api.Iperf3Server)
 		r.Post("/iperf3/server", api.Iperf3Server)
 
+		// Utility-tool "power mode" endpoints (not history-tracked).
+		r.Post("/ssh-keygen", api.SSHKeygen)
+
 		r.Route("/history", func(r chi.Router) {
 			r.Get("/", hist.List)
 			r.Post("/", hist.Save)
