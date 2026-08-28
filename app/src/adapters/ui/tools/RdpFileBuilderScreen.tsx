@@ -1,17 +1,20 @@
 import { useMemo, useState } from 'react'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
 import {
+  DirectiveCatalogEditor,
+  type CatalogGroup,
+  type CatalogItem,
+  type CatalogPreset,
+} from '@/adapters/ui/config/DirectiveCatalogEditor'
+import {
+  RDP_GROUP_ORDER,
+  RDP_OPTION_CATALOG,
   RdpFileBuilder,
   rdpHardenedBaseline,
   rdpLanBaseline,
-  rdpOptionsInGroup,
   type RdpFileBuilderInput,
   type RdpOption,
 } from '@/core/config/rdpFileBuilder'
@@ -20,17 +23,38 @@ type Values = Record<string, string>
 
 const builder = new RdpFileBuilder()
 
-/** Groups shown open at the top — the fields most people set. */
-const PRIMARY_GROUPS = ['Connection', 'Authentication & Gateway'] as const
-/** Everything else — collapsed until opened. */
-const SECONDARY_GROUPS = [
-  'Display',
-  'Local resources & devices',
-  'Audio',
-  'Experience & performance',
-  'RemoteApp',
-  'Session behavior',
-] as const
+const GROUPS: CatalogGroup[] = RDP_GROUP_ORDER.map((g) => ({ id: g, label: g }))
+
+function seedFor(o: RdpOption): string {
+  if (o.hardenedValue != null) return o.hardenedValue
+  if (o.lanValue != null) return o.lanValue
+  if (o.defaultValue != null) return o.defaultValue
+  if (o.kind === 'boolean') return '0'
+  if (o.kind === 'choice') return o.choices?.[0]?.value ?? ''
+  return ''
+}
+
+const ITEMS: CatalogItem[] = RDP_OPTION_CATALOG.map((o) => ({
+  key: o.key,
+  group: o.group,
+  description: o.description,
+  seedValue: seedFor(o),
+  badge: o.hardenedValue != null ? 'hardened' : undefined,
+  meta: [`:${o.field}:`, o.defaultValue != null ? `mstsc default ${o.defaultValue}` : null, o.note]
+    .filter(Boolean)
+    .join('  ·  '),
+  control:
+    o.kind === 'boolean'
+      ? { kind: 'toggle' }
+      : o.kind === 'choice'
+        ? { kind: 'select', choices: o.choices ?? [] }
+        : { kind: 'text', numeric: o.kind === 'integer', placeholder: o.hint, min: o.min, max: o.max },
+}))
+
+const PRESETS: CatalogPreset[] = [
+  { id: 'hardened', label: 'Hardened / locked-down', description: 'NLA on, strict host auth, all redirection off.', values: rdpHardenedBaseline() },
+  { id: 'lan', label: 'LAN / full experience', description: 'Multi-monitor, dynamic resolution, compression, rich visuals.', values: rdpLanBaseline() },
+]
 
 export function RdpFileBuilderScreen() {
   const [address, setAddress] = useState('jump.example.com')
@@ -47,8 +71,6 @@ export function RdpFileBuilderScreen() {
     }
   }, [address, values, lockGuidance, fileName])
 
-  const selectedCount = Object.keys(values).length
-
   return (
     <ToolDetailScaffold
       title="Windows RDP File Builder"
@@ -63,88 +85,50 @@ export function RdpFileBuilderScreen() {
           : undefined
       }
       inputPanel={
-        <div className="flex flex-col gap-5">
-          <div>
-            <label className="text-sm font-semibold" htmlFor="rdp-address">
-              Host address
-            </label>
-            <p className="mt-1 text-xs text-muted-foreground">
-              <span className="font-mono">host</span>, <span className="font-mono">host:port</span> or an IP. Emitted as{' '}
-              <span className="font-mono">full address:s:</span> and always first.
-            </p>
-            <Input
-              id="rdp-address"
-              className="mt-2 font-mono text-sm"
-              value={address}
-              placeholder="jump.example.com"
-              onChange={(e) => setAddress(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold" htmlFor="rdp-filename">
-              Save-as name
-            </label>
-            <Input
-              id="rdp-filename"
-              className="mt-2 max-w-xs font-mono text-sm"
-              value={fileName}
-              placeholder="connection"
-              onChange={(e) => setFileName(e.target.value)}
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              <span className="font-mono">.rdp</span> is appended automatically.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-border/60 bg-muted/30 p-3.5">
-            <p className="text-sm font-semibold">Presets</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              A starting point, not a finished file. Every value stays editable below.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button type="button" size="sm" onClick={() => setValues(rdpHardenedBaseline())}>
-                Hardened / locked-down
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => setValues(rdpLanBaseline())}>
-                LAN / full experience
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => setValues({})}>
-                Clear all
-              </Button>
+        <DirectiveCatalogEditor
+          groups={GROUPS}
+          items={ITEMS}
+          values={values}
+          onChange={setValues}
+          presets={PRESETS}
+          searchPlaceholder={`Search ${ITEMS.length} .rdp properties…`}
+          defaultOpenGroups={['Connection', 'Authentication & Gateway']}
+          toolbar={
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="text-sm font-semibold" htmlFor="rdp-address">
+                  Host address
+                </label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  <span className="font-mono">host</span>, <span className="font-mono">host:port</span> or an IP —
+                  emitted as <span className="font-mono">full address:s:</span> and always first.
+                </p>
+                <Input
+                  id="rdp-address"
+                  className="mt-2 font-mono text-sm"
+                  value={address}
+                  placeholder="jump.example.com"
+                  onChange={(e) => setAddress(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold" htmlFor="rdp-filename">
+                  Save-as name
+                </label>
+                <Input
+                  id="rdp-filename"
+                  className="mt-2 max-w-xs font-mono text-sm"
+                  value={fileName}
+                  placeholder="connection"
+                  onChange={(e) => setFileName(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  <span className="font-mono">.rdp</span> is appended automatically.
+                </p>
+              </div>
             </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Hardened: NLA on, strict host auth, all redirection (clipboard, drives, printers, audio, mic) off. LAN:
-              multi-monitor, dynamic resolution, compression and the rich visual experience on.
-            </p>
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold">Connection &amp; authentication</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Port, credentials, Network Level Authentication, host-identity checking, and RD Gateway.
-            </p>
-            <div className="mt-2 flex flex-col gap-1.5">
-              {PRIMARY_GROUPS.map((group) => (
-                <GroupDetails key={group} group={group} values={values} onChange={setValues} defaultOpen />
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold">
-              More properties{' '}
-              <span className="ml-1 text-xs font-normal text-muted-foreground">
-                {selectedCount > 0 ? `${selectedCount} total selected` : 'display, devices, audio, experience, RemoteApp'}
-              </span>
-            </p>
-            <div className="mt-2 flex flex-col gap-1.5">
-              {SECONDARY_GROUPS.map((group) => (
-                <GroupDetails key={group} group={group} values={values} onChange={setValues} />
-              ))}
-            </div>
-          </div>
-        </div>
+          }
+        />
       }
       outputPanel={
         <div className="flex flex-col gap-3">
@@ -163,8 +147,8 @@ export function RdpFileBuilderScreen() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   A <span className="font-mono">.rdp</span> file has no in-file lock. Adds a header block with{' '}
                   <span className="font-mono">attrib +R</span> (read-only on disk) and{' '}
-                  <span className="font-mono">rdpsign.exe /sha256</span> (a signature any later edit invalidates), plus the
-                  trusted-publisher GPO.
+                  <span className="font-mono">rdpsign.exe /sha256</span> (a signature any later edit invalidates), plus
+                  the trusted-publisher GPO.
                 </p>
               </div>
             </div>
@@ -195,120 +179,5 @@ export function RdpFileBuilderScreen() {
         </div>
       }
     />
-  )
-}
-
-function GroupDetails({
-  group,
-  values,
-  onChange,
-  defaultOpen = false,
-}: {
-  group: string
-  values: Values
-  onChange: (v: Values) => void
-  defaultOpen?: boolean
-}) {
-  const options = rdpOptionsInGroup(group)
-  const groupSelected = options.filter((o) => o.key in values).length
-  return (
-    <details open={defaultOpen || groupSelected > 0} className="rounded-lg border border-border/60 px-3 py-1.5">
-      <summary className="cursor-pointer select-none py-1 text-sm font-semibold">
-        {group}{' '}
-        <span className="ml-1 text-xs font-normal text-muted-foreground">
-          {groupSelected > 0 ? `${groupSelected} of ${options.length} selected` : `${options.length} available`}
-        </span>
-      </summary>
-      <div className="flex flex-col divide-y divide-border/40 pb-1">
-        {options.map((option) => (
-          <OptionRow key={option.key} option={option} values={values} onChange={onChange} />
-        ))}
-      </div>
-    </details>
-  )
-}
-
-function OptionRow({ option, values, onChange }: { option: RdpOption; values: Values; onChange: (v: Values) => void }) {
-  const selected = option.key in values
-  const current = values[option.key] ?? ''
-  const choices = option.choices ?? []
-
-  function toggle(checked: boolean | 'indeterminate') {
-    if (checked === true) {
-      let seed = option.hardenedValue ?? option.lanValue ?? option.defaultValue
-      if (seed == null) {
-        if (option.kind === 'boolean') seed = '0'
-        else if (option.kind === 'choice') seed = choices[0]?.value ?? ''
-        else seed = ''
-      }
-      onChange({ ...values, [option.key]: seed })
-    } else {
-      const next = { ...values }
-      delete next[option.key]
-      onChange(next)
-    }
-  }
-
-  function setValue(value: string) {
-    onChange({ ...values, [option.key]: value })
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5 py-2">
-      <div className="flex items-start gap-2">
-        <Checkbox checked={selected} onCheckedChange={toggle} className="mt-0.5" />
-        <div className="flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-xs font-semibold">{option.key}</span>
-            <span className="font-mono text-[11px] text-muted-foreground">:{option.field}:</span>
-            {option.hardenedValue != null ? <Badge variant="secondary">hardened</Badge> : null}
-          </div>
-          <p className="text-xs text-muted-foreground">{option.description}</p>
-          {option.defaultValue != null || option.note != null ? (
-            <p className="text-[11px] text-muted-foreground/80">
-              {[option.defaultValue != null ? `mstsc default: ${option.defaultValue}` : null, option.note]
-                .filter(Boolean)
-                .join('  ·  ')}
-            </p>
-          ) : null}
-        </div>
-      </div>
-      {selected ? (
-        <div className="ml-6">
-          {option.kind === 'boolean' ? (
-            <div className="flex items-center gap-2">
-              <Switch checked={current === '1'} onCheckedChange={(c) => setValue(c ? '1' : '0')} />
-              <span className="font-mono text-xs">{current === '1' ? 'i:1' : 'i:0'}</span>
-            </div>
-          ) : option.kind === 'choice' ? (
-            <Select
-              value={choices.some((c) => c.value === current) ? current : choices[0]?.value}
-              onValueChange={(v) => setValue(String(v))}
-            >
-              <SelectTrigger className="w-full max-w-md" size="sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {choices.map((choice) => (
-                  <SelectItem key={choice.value} value={choice.value}>
-                    {choice.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <Input
-              className="max-w-md font-mono text-xs"
-              type={option.kind === 'integer' ? 'number' : 'text'}
-              value={current}
-              placeholder={option.hint}
-              min={option.min}
-              max={option.max}
-              onChange={(e) => setValue(e.target.value)}
-            />
-          )}
-        </div>
-      ) : null}
-    </div>
   )
 }
