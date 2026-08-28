@@ -1,7 +1,17 @@
 # Config-builder UI: the "Generator" archetype (T5)
 
-Status: **proposed, not started** (2026-08-28). Follows the
-`DirectiveCatalogEditor` extraction (branch `config-catalog-editor`).
+Status: **done (2026-08-28)** — phases A–F on branch `config-catalog-editor`.
+Follows the `DirectiveCatalogEditor` extraction on the same branch.
+
+**Result:** T5 `GeneratorScaffold` + `HeaderValidate`; 9 file generators
+migrated (RDP, SSH, Sysctl, Zabbix, Web Server, Database, Fail2ban, Firewall
+Rule; Crontab → T1 instead). `ConfigValidateButton` deleted. `bun run build`
+clean, 1079 tests pass, hex boundary intact.
+
+**Reclassified during the work:** **Firewall Command Builder** stays on T2 —
+its output is a set of per-rule Add/Remove one-liners with inline warnings,
+not a single saved file, and that structured breakdown is worth seeing while
+you build. Not a "generator" in the T5 sense.
 
 ## Problem
 
@@ -97,14 +107,14 @@ Recommend 1 — it's genuinely a two-view tool, unlike the pure file generators.
 
 ## Phases
 
-| phase | scope |
-|---|---|
-| **A** | `ToolScaffoldHeader` gains `validate`; `GeneratorScaffold.tsx` (T5); `design.md` archetype table + `CLAUDE.md` note |
-| **B** | RDP + SSH + Sysctl + Zabbix: T1 → T5 (SSH/Sysctl also get the header Validate button) |
-| **C** | Database + Web Server + Fail2ban + Firewall Command: T2 → T5 |
-| **D** | Firewall Rule Builder: T3 → T5, drop the stepper |
-| **E** | Crontab Builder: T2 → T1 |
-| **F** | Retire `ConfigValidateButton` (its logic now lives in the header control); remove the now-unused output-panel validate blocks |
+| phase | scope | commit |
+|---|---|---|
+| **A** | `ToolScaffoldHeader` gains `headerActions`; `GeneratorScaffold.tsx` (T5); `HeaderValidate.tsx` | `6ec4556` |
+| **B** | RDP + SSH + Sysctl + Zabbix: T1 → T5 (SSH/Sysctl get the header Validate action) | `6ec4556`, `5ef7e86` |
+| **C** | Database + Web Server + Fail2ban: T2 → T5 (Firewall Command reclassified — stays T2) | `96324b0` |
+| **D** | Firewall Rule Builder: T3 → T5, stepper dropped | `9087795` |
+| **E** | Crontab Builder: T2 → T1 (it's genuinely a two-view tool, not a generator) | `9087795` |
+| **F** | `ConfigValidateButton` deleted (its logic now lives in `HeaderValidate`) | — |
 
 Every phase: `bun run build` + `bun run test` green, `grep -rl "from 'react'
 app/src/core` empty, each migrated screen verified in-browser (form fills,

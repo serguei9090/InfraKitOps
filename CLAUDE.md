@@ -76,16 +76,33 @@ with zero file conflicts):
 
 1. Core logic: `src/core/<domain>/<tool>.ts`, implementing `IToolUseCase<TIn, TOut>`.
    Unit test alongside it.
-2. Screen: `src/adapters/ui/tools/<Tool>Screen.tsx`, built on the shared
-   `ToolDetailScaffold` layout component. **Config builders that pick from a
-   flat catalog of independent key/value directives** (SSH, sysctl, Zabbix,
-   RDP) render the catalog through `adapters/ui/config/DirectiveCatalogEditor`
-   — map the tool's `Xxx[]` catalog to `CatalogItem[]` and pass `groups` /
+2. Screen: `src/adapters/ui/tools/<Tool>Screen.tsx`. Pick the layout archetype
+   (all built on the shared `ToolScaffoldHeader`/`ToolScaffoldPanel`):
+   - **`ToolDetailScaffold` (T1)** — input | live-output split. Default; use
+     when the output is edited against live (Chmod, Docker Run→Compose,
+     Crontab, most utilities).
+   - **`GeneratorScaffold` (T5)** — single-column form, output reached from
+     the header (`Validate` · `Download` · `Preview` · `Copy`), file shown in
+     a modal. Use for the **config-file builders** (SSH, sysctl, Zabbix, RDP,
+     Web Server, Database, Fail2ban, Firewall Rule) — output is a result you
+     grab when done, not a second pane. Pass `validate={{ kind, text }}` to
+     get the header Validate action (`nginx -t` / `sshd -t` / `nft -c` / … —
+     hidden until the backend service is connected).
+   - **`BalancedFlowScaffold` (T2)** — wide config band + results/preview
+     split. Sizers/calculators with genuine computed results (DB RAM Sizer,
+     Zabbix Sizer, Ceph PG, Firewall Command).
+   - **`StepperWorkspaceScaffold` (T3)** — row-by-row workflows (PDF Split &
+     Merge). **`NetworkToolScaffold` (T4)** — network tools (see below).
+
+   **Catalog config builders** (SSH, sysctl, Zabbix, RDP) render their
+   directive catalog through `adapters/ui/config/DirectiveCatalogEditor` —
+   map the tool's `Xxx[]` catalog to `CatalogItem[]` and pass `groups` /
    `values` / `onChange` / `presets`; the editor owns the grouped list,
-   search, "selected only" filter, per-kind control and preset buttons, the
-   screen keeps its `execute()` serializer. (Builders with nested/
+   search, "selected only" filter, per-kind control and preset buttons, and
+   the screen keeps its `execute()` serializer. (Builders with nested/
    interdependent output — Web Server, Database — or a multi-field-per-row
-   catalog — Fail2ban jails — stay bespoke.)
+   catalog — Fail2ban jails — pass bespoke form fields to `GeneratorScaffold`
+   instead.)
 3. Register: one entry in `src/adapters/ui/shell/moduleTaxonomy.ts` + one route in
    `src/routes.tsx`.
 
