@@ -36,7 +36,15 @@ export type CatalogControl =
       falseValue?: string
     }
   | { kind: 'select'; choices: readonly { value: string; label: string }[] }
-  | { kind: 'text'; placeholder?: string; numeric?: boolean; min?: number; max?: number }
+  | {
+      kind: 'text'
+      placeholder?: string
+      numeric?: boolean
+      min?: number
+      max?: number
+      /** Optional live check on the current value; a returned string is shown in red under the field. */
+      validate?: (value: string) => string | null
+    }
 
 export interface CatalogItem {
   /** The literal directive key. Also the key into the `values` record. */
@@ -316,15 +324,20 @@ function ItemRow({
               </SelectContent>
             </Select>
           ) : (
-            <Input
-              className="max-w-md font-mono text-xs"
-              type={control.numeric ? 'number' : 'text'}
-              value={value}
-              placeholder={control.placeholder}
-              min={control.min}
-              max={control.max}
-              onChange={(e) => onChange(e.target.value)}
-            />
+            <>
+              <Input
+                className="max-w-md font-mono text-xs"
+                type={control.numeric ? 'number' : 'text'}
+                value={value}
+                placeholder={control.placeholder}
+                min={control.min}
+                max={control.max}
+                onChange={(e) => onChange(e.target.value)}
+              />
+              {control.validate?.(value) ? (
+                <p className="mt-1 text-xs text-destructive">{control.validate(value)}</p>
+              ) : null}
+            </>
           )}
         </div>
       ) : null}
