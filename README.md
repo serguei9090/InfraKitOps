@@ -79,3 +79,29 @@ grep -rl "from 'react" app/src/core   # must print nothing
    `app/src/routes.tsx`.
 
 See `CLAUDE.md` for the full walkthrough and conventions.
+
+## Roadmap / deferred
+
+Tracked in more detail in `MIGRATION_PLAN.md`, `NETWORK_MODULE_PLAN.md`, and
+`CLAUDE.md`; the shortlist:
+
+- **Tauri packaging (Phase 7)** — MSI/NSIS installer via the Tauri bundler.
+  `bun run tauri dev` opening a real native window still needs a manual pass.
+- **Go backend (Phase 8)** — beyond the network-diagnostics scope already
+  started: ansible / ssh command execution, local model serving.
+- **Route-based code-splitting** — the production bundle is ~2.8 MB
+  (~900 KB gzipped); `React.lazy` per route, worth doing before Phase 7.
+- **RDP File Builder — "make it read-only" automation.** The tool emits
+  *instructions* for `attrib +R` (read-only on disk) and `rdpsign.exe
+  /sha256` (tamper-proof signature); both are run by the user after saving.
+  To reduce that to one step:
+  - a "Download lock script" button emitting `lock-connection.ps1`
+    (`attrib +R`, plus the `rdpsign` line when a thumbprint is supplied);
+  - an optional cert-thumbprint field that fills the real value into the
+    header and the script;
+  - a "header-off" output toggle so the signed copy has no `#` comment lines.
+
+  `attrib +R` can only be applied automatically in the Tauri desktop build
+  (Rust `set_permissions`), not the web build — a browser download always
+  lands writable. Signing stays the user's job (their cert, their private
+  key, Windows-only `rdpsign.exe`).
