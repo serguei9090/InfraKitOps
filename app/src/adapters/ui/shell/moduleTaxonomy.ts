@@ -48,6 +48,7 @@ import {
   Lock,
   LockKeyhole,
   MapPin,
+  MonitorCog,
   Network,
   Palette,
   Paperclip,
@@ -416,6 +417,14 @@ export const kModuleTaxonomy: ModuleDef[] = [
         description: 'Octal ⟷ symbolic ⟷ checkbox grid, with special bits',
         icon: Lock,
         route: '/tools/chmod-calculator',
+        group: 'System',
+      },
+      {
+        id: 'rdp-file-builder',
+        name: 'Windows RDP File Builder',
+        description: 'Build an .rdp connection file from a catalog of mstsc properties, with a hardened preset',
+        icon: MonitorCog,
+        route: '/tools/rdp-file-builder',
         group: 'System',
       },
 

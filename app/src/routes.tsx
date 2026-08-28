@@ -15,6 +15,7 @@ import { FirewallRuleBuilderScreen } from './adapters/ui/tools/FirewallRuleBuild
 import { DockerRunConverterScreen } from './adapters/ui/tools/DockerRunConverterScreen'
 import { CrontabBuilderScreen } from './adapters/ui/tools/CrontabBuilderScreen'
 import { ChmodCalculatorScreen } from './adapters/ui/tools/ChmodCalculatorScreen'
+import { RdpFileBuilderScreen } from './adapters/ui/tools/RdpFileBuilderScreen'
 import { DatabaseConfigBuilderScreen } from './adapters/ui/tools/DatabaseConfigBuilderScreen'
 
 // Wave 2 — Utilities + Knowledge Hub
@@ -110,6 +111,7 @@ export const router = createBrowserRouter([
       { path: 'tools/docker-run-converter', element: <DockerRunConverterScreen /> },
       { path: 'tools/crontab-builder', element: <CrontabBuilderScreen /> },
       { path: 'tools/chmod-calculator', element: <ChmodCalculatorScreen /> },
+      { path: 'tools/rdp-file-builder', element: <RdpFileBuilderScreen /> },
       { path: 'tools/database-config-builder', element: <DatabaseConfigBuilderScreen /> },
 
       // Wave 2 — Utilities + Knowledge Hub
