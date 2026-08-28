@@ -50,9 +50,39 @@ export interface CheatsheetPage {
  * practice/exercise repo" (exercise), and "a structured learning path"
  * (roadmap) serve very different purposes even though they're all just a
  * name + URL on the surface.
+ *
+ * The `ai*` / `mcpServer` / `automation` / `catalog` / `devService` values
+ * back the Knowledge Hub's "AI & Automation" group (see
+ * KNOWLEDGE_HUB_AI_EXPANSION_PLAN.md):
+ * - catalog     — a directory/aggregator of many tools (AI tool indexes, model rankings)
+ * - mcpServer   — MCP servers, gateways, registries
+ * - aiFramework — agent / AI-dev frameworks & SDKs
+ * - aiApp       — end-user AI software / agents / products
+ * - aiSkill     — agent-skill ecosystems, SKILL.md, skill marketplaces
+ * - automation  — automation platforms & workflow engines
+ * - aiModel     — a foundation model plus its official tooling / harness
+ * - devService  — hosted infra products: tunnels, static hosts, PaaS, deploy platforms
  */
-export type ResourceType = 'documentation' | 'curatedList' | 'exercise' | 'roadmap'
+export type ResourceType =
+  | 'documentation'
+  | 'curatedList'
+  | 'exercise'
+  | 'roadmap'
+  | 'catalog'
+  | 'mcpServer'
+  | 'aiFramework'
+  | 'aiApp'
+  | 'aiSkill'
+  | 'automation'
+  | 'aiModel'
+  | 'devService'
 
+/**
+ * Display order for `groupByType` rendering. Only lists types that currently
+ * have at least one entry in `EXTERNAL_RESOURCE_LINKS` — new AI/automation
+ * types are appended here as their seed content lands (plan phases D1–D5), so
+ * the "every listed type has content" test stays honest.
+ */
 export const RESOURCE_TYPES: ResourceType[] = ['documentation', 'curatedList', 'exercise', 'roadmap']
 
 /**
@@ -64,8 +94,8 @@ export interface ReferenceLink {
   url: string
   description: string
   /**
-   * Distinguishes official documentation from curated link lists, practice
-   * exercises, and roadmaps — the four kinds this section groups by.
+   * The primary kind this link is — drives which Knowledge Hub screen shows
+   * it. See `ResourceType`.
    */
   type: ResourceType
   /**
@@ -73,6 +103,14 @@ export interface ReferenceLink {
    * filter chips and to match against the search box in the UI.
    */
   tags: string[]
+  /**
+   * True when the link is itself an index / directory / aggregator rather
+   * than a single project (an "awesome-*" repo, an MCP registry, a "there's
+   * an AI for that" site). The `/tools/ai-catalogs` screen collects every
+   * `isDirectory` entry across types; individual screens may surface their
+   * own directories in a separate band. Absent = a single tool/project.
+   */
+  isDirectory?: boolean
 }
 
 // ---------------------------------------------------------------------------

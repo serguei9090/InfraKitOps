@@ -132,10 +132,45 @@ describe('EXTERNAL_RESOURCE_LINKS structural integrity', () => {
     }
   })
 
-  it('at least one entry exists for every ResourceType', () => {
+  it('at least one entry exists for every ResourceType listed in RESOURCE_TYPES', () => {
     const typesPresent = new Set(EXTERNAL_RESOURCE_LINKS.map((r) => r.type))
     for (const type of RESOURCE_TYPES) {
       expect(typesPresent.has(type)).toBe(true)
+    }
+  })
+
+  it('every type used in the data is listed in RESOURCE_TYPES (groupByType ordering stays complete)', () => {
+    const listed = new Set(RESOURCE_TYPES)
+    for (const link of EXTERNAL_RESOURCE_LINKS) {
+      expect(listed.has(link.type)).toBe(true)
+    }
+  })
+
+  it('normalized URLs are unique (no dupes across trailing slash / case / tracking params)', () => {
+    const normalize = (raw: string): string => {
+      const u = new URL(raw)
+      u.hash = ''
+      for (const p of ['utm_source', 'utm_medium', 'utm_campaign', 'gclid', 'fbclid', 'via', 'ref']) {
+        u.searchParams.delete(p)
+      }
+      let host = u.hostname.replace(/^www\./, '').toLowerCase()
+      let path = u.pathname.replace(/\/+$/, '')
+      if (host === 'github.com' || host === 'gitlab.com') path = path.toLowerCase()
+      return `${host}${path}${u.search}`
+    }
+    const seen = new Map<string, string>()
+    for (const link of EXTERNAL_RESOURCE_LINKS) {
+      const key = normalize(link.url)
+      expect(seen.has(key), `duplicate URL: ${link.url} vs ${seen.get(key)}`).toBe(false)
+      seen.set(key, link.url)
+    }
+  })
+
+  it('isDirectory, when set, is exactly true', () => {
+    for (const link of EXTERNAL_RESOURCE_LINKS) {
+      if ('isDirectory' in link && link.isDirectory !== undefined) {
+        expect(link.isDirectory).toBe(true)
+      }
     }
   })
 })

@@ -9,6 +9,14 @@ const TYPE_LABELS: Record<ResourceType, string> = {
   curatedList: 'Curated Resource Lists',
   exercise: 'Exercises & Practice',
   roadmap: 'Roadmaps',
+  catalog: 'Catalogs & Directories',
+  mcpServer: 'MCP Servers',
+  aiFramework: 'AI Frameworks & SDKs',
+  aiApp: 'AI Software',
+  aiSkill: 'AI Skills',
+  automation: 'Automation',
+  aiModel: 'AI Models & Harnesses',
+  devService: 'Dev Services & Hosting',
 }
 
 interface ResourceLinkListViewProps {
