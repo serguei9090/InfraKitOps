@@ -1,9 +1,17 @@
 # Knowledge Hub — AI & Automation expansion plan
 
-Status: **approved, not started** (2026-08-28). Adds AI/automation resource
-categories to the Knowledge Hub module, a link-health check script, and a
-one-off importer for GitHub stars. Client-only — no backend, same constraint
-as the rest of the Knowledge Hub.
+Status: **done (2026-08-28)** — phases A–F complete on branch
+`knowledge-hub-ai-expansion`. Adds AI/automation resource categories to the
+Knowledge Hub module, a link-health check script, and a one-off importer for
+GitHub stars. Client-only — no backend, same constraint as the rest of the
+Knowledge Hub.
+
+**Result:** 8 new screens in a `Knowledge Hub → AI & Automation` group,
+205 curated links (all liveness-checked, 0 dupes), `bun run check:links` +
+weekly CI, `bun run import:stars`. `bun run build` clean, 1052 Vitest tests
+pass, `src/core` hex boundary intact. Not yet done: pushing the branch /
+opening a PR (awaiting user), and reviewing the remaining ~640 star
+candidates in `app/scripts/out/github-stars-candidates.json`.
 
 ### Decisions (2026-08-28)
 
@@ -369,21 +377,23 @@ Never auto-append to the data file.
 
 ## 9. Phasing
 
-| Phase | Scope | Output |
-|---|---|---|
-| **A** | Data-model change: new `ResourceType`s + `isDirectory`, `RESOURCE_TYPES`, `TYPE_LABELS`, test updates | 1 PR, no new content yet |
-| **B** | Link-check script + `check:links` npm script + Vitest additions + CI workflow | 1 PR |
-| **C** | 7 screens + routes + taxonomy group `'AI & Automation'` + group the existing 4 tools | 1 PR, screens empty-ish |
-| **D1** | Seed `catalog` + `mcpServer` (~30 links) | 1 PR |
-| **D2** | Seed `aiFramework` + `aiApp` (~40 links) | 1 PR |
-| **D3** | Seed `aiSkill` + `automation` (~25 links) | 1 PR |
-| **D4** | Seed `aiModel` + harnesses (~25 links) | 1 PR |
-| **D5** | Seed `devService` (~20 links) | 1 PR |
-| **E** | Run stars importer, review, fold approved candidates | 1 PR |
-| **F** | Route leftover infra/learning/security URLs into existing types | 1 PR |
-| **G** *(opt)* | `ResourceLinkListView` "Catalogs / Projects" band | 1 PR |
+| Phase | Scope | Commit | State |
+|---|---|---|---|
+| **A** | Data-model: new `ResourceType`s + `isDirectory`, `RESOURCE_TYPES`, `TYPE_LABELS`, tests | `57b2bc5` | done |
+| **B** | `check-resource-links.ts` + `check:links` + Vitest additions + `links.yml` CI | `7a1bf83` | done |
+| **C** | 8 screens + routes + `'AI & Automation'` group + `'Reference'` group | `a5e86d4` | done |
+| **D1** | Seed `catalog` (15) + `mcpServer` (10) | `230eaae` | done |
+| **D2** | Seed `aiFramework` (23) + `aiApp` (30) + 1 catalog | `b655c60` | done |
+| **D3** | Seed `aiSkill` (6) + `automation` (10) | `fe7e5c9` | done |
+| **D4** | Seed `aiModel` families (11) + harnesses (10) | `b70a673` | done |
+| **D5** | Seed `devService` (18) | `338153d` | done |
+| **E** | `import-github-stars.ts` + run + fold 23 unambiguous repos | `5fd5d5d` | done |
+| **F** | Route 14 leftover non-AI URLs into existing screens | `1fc409b` | done |
+| **G** *(opt)* | `ResourceLinkListView` "Catalogs / Projects" band | — | not done (optional) |
 
-Every phase: `bun run build` + `bun run test` green, `grep -rl "from 'react" app/src/core` empty.
+Every phase verified: `bun run build` + `bun run test` green,
+`grep -rl "from 'react" app/src/core` empty, `bun run check:links` 0 dead /
+0 dupes, new screens rendered in-browser.
 
 ---
 

@@ -118,8 +118,15 @@ App in `app/`:
 - **All 44 tools are live** at `/tools/*`, built on `ToolDetailScaffold.tsx`
   (`app/src/adapters/ui/tools/*.tsx`) — full parity with the Flutter reference app
   reached. Two screens (Data Converter, Formatters) combine 4 core files each behind
-  `Tabs`; Knowledge Hub's 3 list-style tools share one `ResourceLinkListView.tsx`
-  component; FormFlow's designer/live-form is driven by `react-hook-form`'s
+  `Tabs`; Knowledge Hub's list-style tools (Documentation, Reference Lists,
+  Study & Practice, plus the "AI & Automation" group — MCP Servers, AI
+  Frameworks, AI Software, AI Skills, Automation, AI Models, Dev Services, AI
+  Catalogs — added 2026-08-28, see `KNOWLEDGE_HUB_AI_EXPANSION_PLAN.md`) all
+  share one `ResourceLinkListView.tsx` component over the single
+  `EXTERNAL_RESOURCE_LINKS` list in `cheatsheetContent.ts`
+  (`ResourceType`-tagged, `isDirectory` flag for aggregators;
+  `bun run check:links` link-health + dedupe script + `.github/workflows/links.yml`);
+  FormFlow's designer/live-form is driven by `react-hook-form`'s
   `useFieldArray` (the reason that library was picked back in the stack-decision
   phase). Verified end-to-end in-browser throughout (not just typechecked): full
   build clean, all 954 core tests passing, hex boundary intact, a real QR
