@@ -68,11 +68,14 @@ export function ToolScaffoldHeader({
   copyText,
   preview,
   download,
+  headerActions,
 }: {
   title: string
   copyText?: string
   preview?: ToolScaffoldPreview
   download?: ToolScaffoldDownload
+  /** Extra controls rendered left of Download (e.g. a Validate action). */
+  headerActions?: ReactNode
 }) {
   const [copied, setCopied] = useState(false)
 
@@ -87,6 +90,7 @@ export function ToolScaffoldHeader({
     <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-5">
       <h1 className="text-[17px] font-semibold tracking-tight">{title}</h1>
       <div className="flex-1" />
+      {headerActions}
       {download ? (
         <Button
           variant="ghost"

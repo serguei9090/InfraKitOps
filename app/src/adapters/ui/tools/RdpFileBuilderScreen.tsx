@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { GeneratorScaffold } from '@/adapters/ui/shell/GeneratorScaffold'
 import {
   DirectiveCatalogEditor,
   type CatalogGroup,
@@ -52,8 +52,18 @@ const ITEMS: CatalogItem[] = RDP_OPTION_CATALOG.map((o) => ({
 }))
 
 const PRESETS: CatalogPreset[] = [
-  { id: 'hardened', label: 'Hardened / locked-down', description: 'NLA on, strict host auth, all redirection off.', values: rdpHardenedBaseline() },
-  { id: 'lan', label: 'LAN / full experience', description: 'Multi-monitor, dynamic resolution, compression, rich visuals.', values: rdpLanBaseline() },
+  {
+    id: 'hardened',
+    label: 'Hardened / locked-down',
+    description: 'NLA on, strict host auth, all redirection off.',
+    values: rdpHardenedBaseline(),
+  },
+  {
+    id: 'lan',
+    label: 'LAN / full experience',
+    description: 'Multi-monitor, dynamic resolution, compression, rich visuals.',
+    values: rdpLanBaseline(),
+  },
 ]
 
 export function RdpFileBuilderScreen() {
@@ -72,19 +82,28 @@ export function RdpFileBuilderScreen() {
   }, [address, values, lockGuidance, fileName])
 
   return (
-    <ToolDetailScaffold
+    <GeneratorScaffold
       title="Windows RDP File Builder"
-      copyText={result.value?.fileText}
-      download={
+      output={
         result.value
           ? {
+              text: result.value.fileText,
               fileName: result.value.suggestedFileName,
-              content: result.value.fileText,
               mimeType: 'application/x-rdp;charset=utf-8',
+              notice:
+                result.value.warnings.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {result.value.warnings.map((w, i) => (
+                      <Alert key={i} variant="destructive">
+                        <AlertDescription>{w}</AlertDescription>
+                      </Alert>
+                    ))}
+                  </div>
+                ) : undefined,
             }
           : undefined
       }
-      inputPanel={
+      formPanel={
         <DirectiveCatalogEditor
           groups={GROUPS}
           items={ITEMS}
@@ -110,7 +129,9 @@ export function RdpFileBuilderScreen() {
                   placeholder="jump.example.com"
                   onChange={(e) => setAddress(e.target.value)}
                 />
+                {result.error ? <p className="mt-1 text-xs text-destructive">{result.error}</p> : null}
               </div>
+
               <div>
                 <label className="text-sm font-semibold" htmlFor="rdp-filename">
                   Save-as name
@@ -126,57 +147,30 @@ export function RdpFileBuilderScreen() {
                   <span className="font-mono">.rdp</span> is appended automatically.
                 </p>
               </div>
+
+              <div className="rounded-lg border border-border/60 p-3">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="rdp-lock"
+                    checked={lockGuidance}
+                    onCheckedChange={(c) => setLockGuidance(c === true)}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <label htmlFor="rdp-lock" className="text-sm font-semibold">
+                      Add "make it read-only" guidance
+                    </label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      A <span className="font-mono">.rdp</span> file has no in-file lock. Adds a header block with{' '}
+                      <span className="font-mono">attrib +R</span> and <span className="font-mono">rdpsign.exe /sha256</span>{' '}
+                      plus the trusted-publisher GPO.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           }
         />
-      }
-      outputPanel={
-        <div className="flex flex-col gap-3">
-          <div className="rounded-lg border border-border/60 p-3">
-            <div className="flex items-start gap-2">
-              <Checkbox
-                id="rdp-lock"
-                checked={lockGuidance}
-                onCheckedChange={(c) => setLockGuidance(c === true)}
-                className="mt-0.5"
-              />
-              <div>
-                <label htmlFor="rdp-lock" className="text-sm font-semibold">
-                  Add "make it read-only" guidance
-                </label>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  A <span className="font-mono">.rdp</span> file has no in-file lock. Adds a header block with{' '}
-                  <span className="font-mono">attrib +R</span> (read-only on disk) and{' '}
-                  <span className="font-mono">rdpsign.exe /sha256</span> (a signature any later edit invalidates), plus
-                  the trusted-publisher GPO.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {result.error ? (
-            <p className="text-sm text-destructive">{result.error}</p>
-          ) : result.value ? (
-            <>
-              {result.value.warnings.length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  {result.value.warnings.map((warning, i) => (
-                    <Alert key={i} variant="destructive">
-                      <AlertDescription>{warning}</AlertDescription>
-                    </Alert>
-                  ))}
-                </div>
-              ) : null}
-              <p className="text-xs text-muted-foreground">
-                Save as <span className="font-mono">{result.value.suggestedFileName}</span> (Download, top right), then
-                open with <span className="font-mono">mstsc.exe {result.value.suggestedFileName}</span>.
-              </p>
-              <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
-                {result.value.fileText}
-              </pre>
-            </>
-          ) : null}
-        </div>
       }
     />
   )
