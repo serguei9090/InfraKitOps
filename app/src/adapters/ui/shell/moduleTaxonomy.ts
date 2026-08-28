@@ -118,7 +118,7 @@ export function moduleContainingRoute(route: string): ModuleDef | null {
 export const kModuleTaxonomy: ModuleDef[] = [
   {
     id: 'tuning',
-    title: '1. Tuning & Performance',
+    title: 'Tuning & Performance',
     icon: Gauge,
     tools: [
       { id: 'db-memory-sizer', name: 'Database RAM Sizer', description: 'PostgreSQL / MariaDB buffer sizing', icon: Server, route: '/tools/db-memory-sizer', group: 'Sizing' },
@@ -138,7 +138,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
   },
   {
     id: 'utilities',
-    title: '2. Daily Developer & Utilities',
+    title: 'Daily Developer & Utilities',
     icon: Code,
     // Grouped: Encode & format → Text → Structured data → Hashing & secrets →
     // Keys & certs → Net addressing.
@@ -270,7 +270,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
   },
   {
     id: 'network',
-    title: '3. Network Toolkit',
+    title: 'Network Toolkit',
     icon: Network,
     // Grouped (see ToolEntry.group): Lookups → Reachability → Discovery →
     // Local host → System → Devices & throughput. Tools in a group stay
@@ -309,7 +309,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
   },
   {
     id: 'office',
-    title: '4. Office & Media',
+    title: 'Office & Media',
     icon: FolderOpen,
     tools: [
       { id: 'pdf-split-merge', name: 'PDF Split & Merge', description: 'Combine or extract page ranges', icon: Files, route: '/tools/pdf-split-merge', group: 'Documents' },
@@ -333,7 +333,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
   },
   {
     id: 'formflow',
-    title: '5. FormFlow Dynamic Builder',
+    title: 'FormFlow Dynamic Builder',
     icon: Workflow,
     tools: [
       { id: 'formflow-builder', name: 'XML/YAML Form Designer', description: 'Auto-detect schema & loops', icon: Workflow, route: '/tools/formflow-builder' },
@@ -341,7 +341,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
   },
   {
     id: 'config',
-    title: '6. Configuration Builders',
+    title: 'Configuration Builders',
     icon: FileCog,
     // Grouped: Services → System → Containers.
     tools: [
@@ -424,7 +424,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
   },
   {
     id: 'knowledge',
-    title: '7. Knowledge Hub',
+    title: 'Knowledge Hub',
     icon: GraduationCap,
     tools: [
       { id: 'cheatsheets', name: 'Cheatsheets', description: 'Git, Regex, Sysctl, Crontab & Chmod quick reference', icon: BookOpen, route: '/tools/cheatsheets' },

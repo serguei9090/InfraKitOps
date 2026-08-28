@@ -7,8 +7,11 @@ import { storagePortAsZustandStorage } from '@/adapters/storage/zustandStorage'
 interface ModuleVisibilityStore {
   order: string[]
   hiddenIds: string[]
+  /** Whether the module rail shows names next to icons (vs icon-only). */
+  railExpanded: boolean
   reorder: (oldIndex: number, newIndex: number) => void
   toggleHidden: (moduleId: string) => void
+  toggleRailExpanded: () => void
 }
 
 /**
@@ -22,6 +25,8 @@ export const useModuleVisibilityStore = create<ModuleVisibilityStore>()(
     (set) => ({
       order: kModuleTaxonomy.map((m) => m.id),
       hiddenIds: [],
+      railExpanded: false,
+      toggleRailExpanded: () => set((s) => ({ railExpanded: !s.railExpanded })),
       reorder: (oldIndex, newIndex) =>
         set((s) => {
           const updated = [...s.order]
@@ -52,6 +57,7 @@ export const useModuleVisibilityStore = create<ModuleVisibilityStore>()(
           ...current,
           order: [...savedOrder, ...missing],
           hiddenIds: saved?.hiddenIds?.filter((id) => knownIds.includes(id)) ?? current.hiddenIds,
+          railExpanded: saved?.railExpanded ?? current.railExpanded,
         }
       },
     },

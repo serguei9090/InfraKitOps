@@ -1,4 +1,4 @@
-import { FolderOpen, LayoutGrid, Pencil, Settings, Trash2 } from 'lucide-react'
+import { FolderOpen, LayoutGrid, PanelLeft, PanelLeftClose, Pencil, Settings, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -59,17 +59,38 @@ function activeModuleIdFor(pathname: string): string | null {
 function ModuleRail({ modules, activeModuleId }: { modules: ModuleDef[]; activeModuleId: string | null }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const expanded = useModuleVisibilityStore((s) => s.railExpanded)
+  const toggle = useModuleVisibilityStore((s) => s.toggleRailExpanded)
 
   return (
-    <nav aria-label="Modules" className="flex w-16 shrink-0 flex-col items-center gap-1 py-2">
-      <RailIcon icon={LayoutGrid} label="All Tools" selected={pathname === '/'} onClick={() => navigate('/')} />
-      <div className="my-2 h-px w-8 bg-border" />
-      <div className="flex flex-1 flex-col items-center gap-1 overflow-y-auto">
+    <nav
+      aria-label="Modules"
+      className={cn(
+        'flex shrink-0 flex-col gap-1 py-2 transition-[width] duration-150 ease-out',
+        expanded ? 'w-52 items-stretch px-2' : 'w-16 items-center',
+      )}
+    >
+      <RailIcon
+        icon={expanded ? PanelLeftClose : PanelLeft}
+        label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
+        expanded={expanded}
+        onClick={toggle}
+      />
+      <RailIcon
+        icon={LayoutGrid}
+        label="All Tools"
+        expanded={expanded}
+        selected={pathname === '/'}
+        onClick={() => navigate('/')}
+      />
+      <div className={cn('my-2 h-px bg-border', expanded ? 'mx-2' : 'w-8')} />
+      <div className={cn('flex flex-1 flex-col gap-1 overflow-y-auto', !expanded && 'items-center')}>
         {modules.map((module) => (
           <RailIcon
             key={module.id}
             icon={module.icon}
             label={module.title}
+            expanded={expanded}
             selected={module.id === activeModuleId}
             onClick={() => navigate(`/modules/${module.id}`)}
           />
@@ -80,9 +101,13 @@ function ModuleRail({ modules, activeModuleId }: { modules: ModuleDef[]; activeM
           <button
             type="button"
             aria-label="Rearrange modules"
-            className="flex size-9 items-center justify-center rounded-[10px] text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+            className={cn(
+              'flex items-center gap-2.5 rounded-[10px] text-muted-foreground hover:bg-accent/40 hover:text-foreground',
+              expanded ? 'w-full px-2.5 py-2 text-sm' : 'size-9 justify-center',
+            )}
           >
-            <Settings className="size-[18px]" />
+            <Settings className="size-[18px] shrink-0" />
+            {expanded ? <span className="truncate">Rearrange modules</span> : null}
           </button>
         }
       />
@@ -93,25 +118,42 @@ function ModuleRail({ modules, activeModuleId }: { modules: ModuleDef[]; activeM
 function RailIcon({
   icon: Icon,
   label,
-  selected,
+  selected = false,
+  expanded,
   onClick,
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
-  selected: boolean
+  selected?: boolean
+  expanded: boolean
   onClick: () => void
 }) {
+  const base = cn(
+    'flex items-center rounded-[10px] transition-colors',
+    expanded ? 'w-full gap-2.5 px-2.5 py-2 text-sm' : 'size-11 justify-center',
+    selected
+      ? 'bg-primary/15 text-primary font-medium'
+      : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
+  )
+
+  const content = (
+    <>
+      <Icon className={expanded ? 'size-[18px] shrink-0' : 'size-[22px]'} />
+      {expanded ? <span className="flex-1 truncate">{label}</span> : null}
+    </>
+  )
+
+  if (expanded) {
+    return (
+      <button type="button" aria-label={label} onClick={onClick} className={base}>
+        {content}
+      </button>
+    )
+  }
   return (
     <Tooltip>
-      <TooltipTrigger
-        aria-label={label}
-        onClick={onClick}
-        className={cn(
-          'flex size-11 items-center justify-center rounded-[10px] transition-colors',
-          selected ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
-        )}
-      >
-        <Icon className="size-[22px]" />
+      <TooltipTrigger aria-label={label} onClick={onClick} className={base}>
+        {content}
       </TooltipTrigger>
       <TooltipContent side="right">{label}</TooltipContent>
     </Tooltip>
