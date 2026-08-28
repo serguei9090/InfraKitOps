@@ -4,8 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { BalancedFlowScaffold } from '@/adapters/ui/shell/BalancedFlowScaffold'
-import { ConfigValidateButton } from '@/adapters/ui/config/ConfigValidateButton'
+import { GeneratorScaffold } from '@/adapters/ui/shell/GeneratorScaffold'
 import {
   ApacheConfigBuilder,
   NginxConfigBuilder,
@@ -57,14 +56,36 @@ export function WebServerConfigBuilderScreen() {
     }
   }, [engine, nginxInput, apacheInput])
 
+  const warningsBlock =
+    result.warnings.length > 0 ? (
+      <div className="flex flex-col gap-2">
+        {result.warnings.map((w, i) => (
+          <div
+            key={i}
+            className={`rounded-lg border px-3 py-2 text-sm ${w.severity === 'critical' ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-border/60 bg-card text-muted-foreground'}`}
+          >
+            {w.message}
+          </div>
+        ))}
+      </div>
+    ) : null
+
   return (
-    <BalancedFlowScaffold
+    <GeneratorScaffold
       title="Web Server Config Builder"
-      copyText={result.config ?? undefined}
-      configLabel="INPUT"
-      resultsLabel="ADVISORIES"
-      previewLabel={engine === 'nginx' ? 'nginx server block' : 'Apache VirtualHost'}
-      configPanel={
+      output={
+        result.config
+          ? {
+              text: result.config,
+              fileName: engine === 'nginx' ? 'nginx-server.conf' : 'apache-vhost.conf',
+              mimeType: 'text/plain;charset=utf-8',
+              label: engine === 'nginx' ? 'nginx server block' : 'Apache VirtualHost',
+              notice: warningsBlock,
+            }
+          : undefined
+      }
+      validate={engine === 'nginx' && result.config ? { kind: 'nginx', text: result.config } : undefined}
+      formPanel={
         <div className="flex flex-col gap-4">
           <div>
             <p className="mb-2 text-sm font-medium">Web server</p>
@@ -77,38 +98,17 @@ export function WebServerConfigBuilderScreen() {
               </Button>
             </div>
           </div>
+          {result.error ? <p className="text-sm text-destructive">{result.error}</p> : null}
           {engine === 'nginx' ? <NginxForm state={nginxInput} onChange={updateNginx} /> : <ApacheForm state={apacheInput} onChange={updateApache} />}
+          {warningsBlock ? (
+            <div>
+              <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground">
+                ADVISORIES · {webServerEngineLabel(engine)}
+              </p>
+              {warningsBlock}
+            </div>
+          ) : null}
         </div>
-      }
-      resultsPanel={
-        result.error ? (
-          <p className="text-sm text-muted-foreground">Fix the input error on the left to see advisories.</p>
-        ) : result.warnings.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No advisories — {webServerEngineLabel(engine)} config looks consistent.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {result.warnings.map((w, i) => (
-              <div
-                key={i}
-                className={`rounded-lg border px-3 py-2 text-sm ${w.severity === 'critical' ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-border/60 bg-card text-muted-foreground'}`}
-              >
-                {w.message}
-              </div>
-            ))}
-          </div>
-        )
-      }
-      previewPanel={
-        result.error ? (
-          <p className="text-sm text-destructive">{result.error}</p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
-              {result.config}
-            </pre>
-            {engine === 'nginx' ? <ConfigValidateButton kind="nginx" text={result.config} /> : null}
-          </div>
-        )
       }
     />
   )

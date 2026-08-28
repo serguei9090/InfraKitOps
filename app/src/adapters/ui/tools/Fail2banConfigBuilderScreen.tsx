@@ -5,8 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { BalancedFlowScaffold } from '@/adapters/ui/shell/BalancedFlowScaffold'
-import { ConfigValidateButton } from '@/adapters/ui/config/ConfigValidateButton'
+import { GeneratorScaffold } from '@/adapters/ui/shell/GeneratorScaffold'
 import {
   Fail2banJailConfigBuilder,
   fail2banActionPresetDescription,
@@ -73,14 +72,20 @@ export function Fail2banConfigBuilderScreen() {
   const enabledCount = Object.values(jails).filter((j) => j.enabled).length
 
   return (
-    <BalancedFlowScaffold
+    <GeneratorScaffold
       title="Fail2ban Jail Config Builder"
-      copyText={result.value ?? undefined}
-      configLabel="[DEFAULT] SECTION"
-      resultsLabel="JAIL CATALOG"
-      previewLabel="jail.local"
-      configPanel={
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      output={
+        result.value
+          ? { text: result.value, fileName: 'jail.local', mimeType: 'text/plain;charset=utf-8' }
+          : undefined
+      }
+      validate={result.value ? { kind: 'fail2ban', text: result.value } : undefined}
+      formPanel={
+        <div className="flex flex-col gap-6">
+          {result.error ? <p className="text-sm text-destructive">{result.error}</p> : null}
+          <div>
+            <p className="mb-2 text-sm font-semibold">[DEFAULT] section</p>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="f2b-bantime">Ban time</Label>
             <Input id="f2b-bantime" value={defaults.bantime ?? ''} onChange={(e) => updateDefault('bantime', e.target.value)} placeholder="10m" />
@@ -159,14 +164,14 @@ export function Fail2banConfigBuilderScreen() {
                 <Label htmlFor="f2b-mta">MTA</Label>
                 <Input id="f2b-mta" value={defaults.mta ?? ''} onChange={(e) => updateDefault('mta', e.target.value)} placeholder="sendmail" />
               </div>
-            </>
-          ) : null}
-        </div>
-      }
-      resultsPanel={
-        <div className="flex flex-col gap-2">
+              </>
+            ) : null}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">{enabledCount} jail{enabledCount === 1 ? '' : 's'} enabled</p>
+            <p className="text-sm font-semibold">Jail catalog <span className="ml-1 text-xs font-normal text-muted-foreground">{enabledCount} enabled</span></p>
             <Input placeholder="Search jails…" className="max-w-[200px]" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
 
@@ -206,19 +211,8 @@ export function Fail2banConfigBuilderScreen() {
               )
             })}
           </div>
-        </div>
-      }
-      previewPanel={
-        result.error ? (
-          <p className="text-sm text-destructive">{result.error}</p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
-              {result.value}
-            </pre>
-            <ConfigValidateButton kind="fail2ban" text={result.value} />
           </div>
-        )
+        </div>
       }
     />
   )

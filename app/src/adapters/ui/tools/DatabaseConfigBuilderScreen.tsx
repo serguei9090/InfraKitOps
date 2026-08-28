@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { BalancedFlowScaffold } from '@/adapters/ui/shell/BalancedFlowScaffold'
+import { GeneratorScaffold } from '@/adapters/ui/shell/GeneratorScaffold'
 import {
   DatabaseConfigBuilder,
   dbPolicyOptionsForEngine,
@@ -170,13 +170,18 @@ export function DatabaseConfigBuilderScreen() {
   }, [engine, pg, ma, pgPolicyValues, maPolicyValues])
 
   return (
-    <BalancedFlowScaffold
+    <GeneratorScaffold
       title="Database Config Builder"
-      copyText={result.text ?? undefined}
-      configLabel="MACHINE & WORKLOAD"
-      resultsLabel="POLICY OPTIONS"
-      previewLabel={databaseEngineSuggestedFileName(engine).toUpperCase() + ' (PREVIEW)'}
-      configPanel={
+      output={
+        result.text
+          ? {
+              text: result.text,
+              fileName: databaseEngineSuggestedFileName(engine),
+              mimeType: 'text/plain;charset=utf-8',
+            }
+          : undefined
+      }
+      formPanel={
         <div className="flex flex-col gap-6">
           <div>
             <p className="text-sm font-medium">Engine</p>
@@ -200,6 +205,12 @@ export function DatabaseConfigBuilderScreen() {
             </div>
           </div>
 
+          {result.error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{result.error}</AlertDescription>
+            </Alert>
+          ) : null}
+
           <div className="max-w-2xl">
             {engine === 'postgresql' ? (
               <PostgresMetricsForm state={pg} onChange={(patch) => setPg((s) => ({ ...s, ...patch }))} />
@@ -207,13 +218,12 @@ export function DatabaseConfigBuilderScreen() {
               <MariaDbMetricsForm state={ma} onChange={(patch) => setMa((s) => ({ ...s, ...patch }))} />
             )}
           </div>
-        </div>
-      }
-      resultsPanel={
-        <div>
-          <p className="text-xs text-muted-foreground">Only the options you select appear in the generated file.</p>
-          <div className="mt-3 flex flex-col gap-4">
-            {sectionsInOrder(activeCatalog).map((section) => {
+
+          <div>
+            <p className="text-sm font-semibold">Policy options</p>
+            <p className="mt-1 text-xs text-muted-foreground">Only the options you select appear in the generated file.</p>
+            <div className="mt-3 flex flex-col gap-4">
+              {sectionsInOrder(activeCatalog).map((section) => {
               const options = activeCatalog.filter((o) => o.section === section && dependencyMet(activeValues, o))
               if (options.length === 0) return null
               return (
@@ -233,20 +243,10 @@ export function DatabaseConfigBuilderScreen() {
                   </div>
                 </div>
               )
-            })}
+              })}
+            </div>
           </div>
         </div>
-      }
-      previewPanel={
-        result.error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{result.error}</AlertDescription>
-          </Alert>
-        ) : (
-          <pre className="overflow-x-auto rounded-md border border-border/60 bg-muted/40 p-3 font-mono text-sm">
-            {result.text}
-          </pre>
-        )
       }
     />
   )
