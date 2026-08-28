@@ -5,13 +5,10 @@ import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Download } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
-import { downloadBlob } from '@/lib/downloadFile'
+import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
 import {
   RdpFileBuilder,
-  RDP_GROUP_ORDER,
   rdpHardenedBaseline,
   rdpLanBaseline,
   rdpOptionsInGroup,
@@ -22,6 +19,18 @@ import {
 type Values = Record<string, string>
 
 const builder = new RdpFileBuilder()
+
+/** Groups shown open at the top — the fields most people set. */
+const PRIMARY_GROUPS = ['Connection', 'Authentication & Gateway'] as const
+/** Everything else — collapsed until opened. */
+const SECONDARY_GROUPS = [
+  'Display',
+  'Local resources & devices',
+  'Audio',
+  'Experience & performance',
+  'RemoteApp',
+  'Session behavior',
+] as const
 
 export function RdpFileBuilderScreen() {
   const [address, setAddress] = useState('jump.example.com')
@@ -39,25 +48,21 @@ export function RdpFileBuilderScreen() {
   }, [address, values, lockGuidance, fileName])
 
   const selectedCount = Object.keys(values).length
-  // Properties are optional — a file with just `full address` is already
-  // valid and usable, so as soon as the host resolves cleanly the output
-  // (step 3) is ready.
-  const activeStep = address.trim().length === 0 ? 0 : result.error ? 1 : 2
-
-  function downloadFile() {
-    if (!result.value) return
-    downloadBlob(result.value.fileText, result.value.suggestedFileName, 'application/x-rdp;charset=utf-8')
-  }
 
   return (
-    <StepperWorkspaceScaffold
+    <ToolDetailScaffold
       title="Windows RDP File Builder"
       copyText={result.value?.fileText}
-      steps={[{ label: 'Host' }, { label: 'Properties (optional)' }, { label: 'Review & download' }]}
-      activeStep={activeStep}
-      builderLabel="HOST & PROPERTIES"
-      outputLabel="GENERATED .RDP"
-      builderPanel={
+      download={
+        result.value
+          ? {
+              fileName: result.value.suggestedFileName,
+              content: result.value.fileText,
+              mimeType: 'application/x-rdp;charset=utf-8',
+            }
+          : undefined
+      }
+      inputPanel={
         <div className="flex flex-col gap-5">
           <div>
             <label className="text-sm font-semibold" htmlFor="rdp-address">
@@ -69,7 +74,7 @@ export function RdpFileBuilderScreen() {
             </p>
             <Input
               id="rdp-address"
-              className="mt-2 max-w-md font-mono text-sm"
+              className="mt-2 font-mono text-sm"
               value={address}
               placeholder="jump.example.com"
               onChange={(e) => setAddress(e.target.value)}
@@ -95,7 +100,7 @@ export function RdpFileBuilderScreen() {
           <div className="rounded-lg border border-border/60 bg-muted/30 p-3.5">
             <p className="text-sm font-semibold">Presets</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              A starting point, not a finished file. Every value is still editable below.
+              A starting point, not a finished file. Every value stays editable below.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button type="button" size="sm" onClick={() => setValues(rdpHardenedBaseline())}>
@@ -109,12 +114,41 @@ export function RdpFileBuilderScreen() {
               </Button>
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Hardened: NLA on, strict host auth, all redirection (clipboard, drives, printers, audio, mic) off.
-              LAN: multi-monitor, dynamic resolution, compression and the rich visual experience on.
+              Hardened: NLA on, strict host auth, all redirection (clipboard, drives, printers, audio, mic) off. LAN:
+              multi-monitor, dynamic resolution, compression and the rich visual experience on.
             </p>
           </div>
 
-          <div className="rounded-lg border border-border/60 p-3.5">
+          <div>
+            <p className="text-sm font-semibold">Connection &amp; authentication</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Port, credentials, Network Level Authentication, host-identity checking, and RD Gateway.
+            </p>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {PRIMARY_GROUPS.map((group) => (
+                <GroupDetails key={group} group={group} values={values} onChange={setValues} defaultOpen />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold">
+              More properties{' '}
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                {selectedCount > 0 ? `${selectedCount} total selected` : 'display, devices, audio, experience, RemoteApp'}
+              </span>
+            </p>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {SECONDARY_GROUPS.map((group) => (
+                <GroupDetails key={group} group={group} values={values} onChange={setValues} />
+              ))}
+            </div>
+          </div>
+        </div>
+      }
+      outputPanel={
+        <div className="flex flex-col gap-3">
+          <div className="rounded-lg border border-border/60 p-3">
             <div className="flex items-start gap-2">
               <Checkbox
                 id="rdp-lock"
@@ -129,46 +163,13 @@ export function RdpFileBuilderScreen() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   A <span className="font-mono">.rdp</span> file has no in-file lock. Adds a header block with{' '}
                   <span className="font-mono">attrib +R</span> (read-only on disk) and{' '}
-                  <span className="font-mono">rdpsign.exe /sha256</span> (a signature that any later edit invalidates) plus
-                  the matching GPO.
+                  <span className="font-mono">rdpsign.exe /sha256</span> (a signature any later edit invalidates), plus the
+                  trusted-publisher GPO.
                 </p>
               </div>
             </div>
           </div>
 
-          <div>
-            <p className="text-sm font-semibold">
-              Properties{' '}
-              <span className="ml-1 text-xs font-normal text-muted-foreground">
-                {selectedCount > 0 ? `${selectedCount} selected` : 'none selected'}
-              </span>
-            </p>
-            <div className="mt-2 flex flex-col gap-1.5">
-              {RDP_GROUP_ORDER.map((group) => {
-                const options = rdpOptionsInGroup(group)
-                const groupSelected = options.filter((o) => o.key in values).length
-                return (
-                  <details key={group} open={groupSelected > 0} className="rounded-lg border border-border/60 px-3 py-1.5">
-                    <summary className="cursor-pointer select-none py-1 text-sm font-semibold">
-                      {group}{' '}
-                      <span className="ml-1 text-xs font-normal text-muted-foreground">
-                        {groupSelected > 0 ? `${groupSelected} of ${options.length} selected` : `${options.length} available`}
-                      </span>
-                    </summary>
-                    <div className="flex flex-col divide-y divide-border/40 pb-1">
-                      {options.map((option) => (
-                        <OptionRow key={option.key} option={option} values={values} onChange={setValues} />
-                      ))}
-                    </div>
-                  </details>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      }
-      outputPanel={
-        <div className="flex flex-col gap-3">
           {result.error ? (
             <p className="text-sm text-destructive">{result.error}</p>
           ) : result.value ? (
@@ -182,15 +183,10 @@ export function RdpFileBuilderScreen() {
                   ))}
                 </div>
               ) : null}
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" size="sm" className="gap-1.5" onClick={downloadFile}>
-                  <Download className="size-4" />
-                  Download {result.value.suggestedFileName}
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  then open with <span className="font-mono">mstsc.exe {result.value.suggestedFileName}</span>
-                </p>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Save as <span className="font-mono">{result.value.suggestedFileName}</span> (Download, top right), then
+                open with <span className="font-mono">mstsc.exe {result.value.suggestedFileName}</span>.
+              </p>
               <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
                 {result.value.fileText}
               </pre>
@@ -199,6 +195,36 @@ export function RdpFileBuilderScreen() {
         </div>
       }
     />
+  )
+}
+
+function GroupDetails({
+  group,
+  values,
+  onChange,
+  defaultOpen = false,
+}: {
+  group: string
+  values: Values
+  onChange: (v: Values) => void
+  defaultOpen?: boolean
+}) {
+  const options = rdpOptionsInGroup(group)
+  const groupSelected = options.filter((o) => o.key in values).length
+  return (
+    <details open={defaultOpen || groupSelected > 0} className="rounded-lg border border-border/60 px-3 py-1.5">
+      <summary className="cursor-pointer select-none py-1 text-sm font-semibold">
+        {group}{' '}
+        <span className="ml-1 text-xs font-normal text-muted-foreground">
+          {groupSelected > 0 ? `${groupSelected} of ${options.length} selected` : `${options.length} available`}
+        </span>
+      </summary>
+      <div className="flex flex-col divide-y divide-border/40 pb-1">
+        {options.map((option) => (
+          <OptionRow key={option.key} option={option} values={values} onChange={onChange} />
+        ))}
+      </div>
+    </details>
   )
 }
 
@@ -255,7 +281,10 @@ function OptionRow({ option, values, onChange }: { option: RdpOption; values: Va
               <span className="font-mono text-xs">{current === '1' ? 'i:1' : 'i:0'}</span>
             </div>
           ) : option.kind === 'choice' ? (
-            <Select value={choices.some((c) => c.value === current) ? current : choices[0]?.value} onValueChange={(v) => setValue(String(v))}>
+            <Select
+              value={choices.some((c) => c.value === current) ? current : choices[0]?.value}
+              onValueChange={(v) => setValue(String(v))}
+            >
               <SelectTrigger className="w-full max-w-md" size="sm">
                 <SelectValue />
               </SelectTrigger>
