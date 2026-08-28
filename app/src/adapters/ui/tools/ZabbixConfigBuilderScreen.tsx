@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { GeneratorScaffold } from '@/adapters/ui/shell/GeneratorScaffold'
 import {
   DirectiveCatalogEditor,
   type CatalogGroup,
@@ -44,23 +44,20 @@ export function ZabbixConfigBuilderScreen() {
     [mode],
   )
   const items: CatalogItem[] = useMemo(() => zabbixCatalogFor(mode).map(itemFor), [mode])
-
   const output = useMemo(() => builder.execute({ mode, selectedValues: values }), [mode, values])
 
   function switchMode(next: ZabbixMode) {
     if (next === mode) return
     setMode(next)
-    // Server and agent have separate directive namespaces — carrying a
-    // selection across would keep keys the new mode's builder just ignores.
+    // Server and agent have separate directive namespaces.
     setValues({})
   }
 
   return (
-    <ToolDetailScaffold
+    <GeneratorScaffold
       title="Zabbix Config Builder"
-      copyText={output}
-      download={{ fileName: zabbixConfigFileName(mode), content: output, mimeType: 'text/plain;charset=utf-8' }}
-      inputPanel={
+      output={{ text: output, fileName: zabbixConfigFileName(mode), mimeType: 'text/plain;charset=utf-8' }}
+      formPanel={
         <DirectiveCatalogEditor
           groups={groups}
           items={items}
@@ -96,16 +93,6 @@ export function ZabbixConfigBuilderScreen() {
             </div>
           }
         />
-      }
-      outputPanel={
-        <div className="flex flex-col gap-2">
-          <p className="text-xs text-muted-foreground">
-            <span className="font-mono">{zabbixConfigFileName(mode)}</span>
-          </p>
-          <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
-            {output}
-          </pre>
-        </div>
       }
     />
   )

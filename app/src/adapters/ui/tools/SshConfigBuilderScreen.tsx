@@ -3,8 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
-import { ConfigValidateButton } from '@/adapters/ui/config/ConfigValidateButton'
+import { GeneratorScaffold } from '@/adapters/ui/shell/GeneratorScaffold'
 import {
   DirectiveCatalogEditor,
   type CatalogGroup,
@@ -162,15 +161,31 @@ export function SshConfigBuilderScreen() {
   )
 
   return (
-    <ToolDetailScaffold
+    <GeneratorScaffold
       title="OpenSSH Config Builder"
-      copyText={result.value?.configText}
-      download={
+      output={
         result.value
-          ? { fileName: result.value.suggestedFileName, content: result.value.configText, mimeType: 'text/plain;charset=utf-8' }
+          ? {
+              text: result.value.configText,
+              fileName: result.value.suggestedFileName,
+              mimeType: 'text/plain;charset=utf-8',
+              notice:
+                result.value.warnings.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {result.value.warnings.map((warning, i) => (
+                      <Alert key={i} variant="destructive">
+                        <AlertDescription>{warning}</AlertDescription>
+                      </Alert>
+                    ))}
+                  </div>
+                ) : undefined,
+            }
           : undefined
       }
-      inputPanel={
+      validate={
+        result.value ? { kind: mode === 'server' ? 'sshd' : 'ssh', text: result.value.configText } : undefined
+      }
+      formPanel={
         mode === 'server' ? (
           <DirectiveCatalogEditor
             groups={serverGroups}
@@ -185,6 +200,7 @@ export function SshConfigBuilderScreen() {
         ) : (
           <div className="flex flex-col gap-5">
             {modeToolbar}
+            {result.error ? <p className="text-xs text-destructive">{result.error}</p> : null}
 
             <div>
               <p className="text-sm font-semibold">Host blocks</p>
@@ -249,29 +265,6 @@ export function SshConfigBuilderScreen() {
             </div>
           </div>
         )
-      }
-      outputPanel={
-        <div className="flex flex-col gap-3">
-          {result.error ? (
-            <p className="text-sm text-destructive">{result.error}</p>
-          ) : result.value ? (
-            <>
-              {result.value.warnings.length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  {result.value.warnings.map((warning, i) => (
-                    <Alert key={i} variant="destructive">
-                      <AlertDescription>{warning}</AlertDescription>
-                    </Alert>
-                  ))}
-                </div>
-              ) : null}
-              <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
-                {result.value.configText}
-              </pre>
-              <ConfigValidateButton kind={mode === 'server' ? 'sshd' : 'ssh'} text={result.value.configText} />
-            </>
-          ) : null}
-        </div>
       }
     />
   )

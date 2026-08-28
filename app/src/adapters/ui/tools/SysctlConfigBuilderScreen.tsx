@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
-import { ConfigValidateButton } from '@/adapters/ui/config/ConfigValidateButton'
+import { GeneratorScaffold } from '@/adapters/ui/shell/GeneratorScaffold'
 import {
   DirectiveCatalogEditor,
   type CatalogGroup,
@@ -66,11 +65,14 @@ export function SysctlConfigBuilderScreen() {
     }
   }, [values, mode])
 
+  const fileName = mode === 'permanent' ? '99-tuning.conf' : 'apply-sysctl.sh'
+
   return (
-    <ToolDetailScaffold
+    <GeneratorScaffold
       title="Kernel Parameter Config Builder"
-      copyText={result.value ?? undefined}
-      inputPanel={
+      output={result.value ? { text: result.value, fileName, mimeType: 'text/plain;charset=utf-8' } : undefined}
+      validate={mode === 'permanent' && result.value ? { kind: 'sysctl', text: result.value } : undefined}
+      formPanel={
         <DirectiveCatalogEditor
           groups={GROUPS}
           items={ITEMS}
@@ -106,23 +108,12 @@ export function SysctlConfigBuilderScreen() {
                   writes a <span className="font-mono">sysctl.d</span> snippet applied with{' '}
                   <span className="font-mono">sysctl --system</span>.
                 </p>
+                {result.error ? <p className="mt-1 text-xs text-destructive">{result.error}</p> : null}
               </div>
               <p className="text-xs text-muted-foreground">{kSysctlPresetCaveat}</p>
             </div>
           }
         />
-      }
-      outputPanel={
-        result.error ? (
-          <p className="text-sm text-destructive">{result.error}</p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
-              {result.value}
-            </pre>
-            {mode === 'permanent' && result.value ? <ConfigValidateButton kind="sysctl" text={result.value} /> : null}
-          </div>
-        )
       }
     />
   )
