@@ -5,8 +5,10 @@ import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Download } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
+import { downloadBlob } from '@/lib/downloadFile'
 import {
   RdpFileBuilder,
   RDP_GROUP_ORDER,
@@ -37,13 +39,21 @@ export function RdpFileBuilderScreen() {
   }, [address, values, lockGuidance, fileName])
 
   const selectedCount = Object.keys(values).length
-  const activeStep = address.trim().length === 0 ? 0 : selectedCount === 0 ? 1 : 2
+  // Properties are optional — a file with just `full address` is already
+  // valid and usable, so as soon as the host resolves cleanly the output
+  // (step 3) is ready.
+  const activeStep = address.trim().length === 0 ? 0 : result.error ? 1 : 2
+
+  function downloadFile() {
+    if (!result.value) return
+    downloadBlob(result.value.fileText, result.value.suggestedFileName, 'application/x-rdp;charset=utf-8')
+  }
 
   return (
     <StepperWorkspaceScaffold
       title="Windows RDP File Builder"
       copyText={result.value?.fileText}
-      steps={[{ label: 'Host' }, { label: 'Configure Properties' }, { label: 'Review .rdp' }]}
+      steps={[{ label: 'Host' }, { label: 'Properties (optional)' }, { label: 'Review & download' }]}
       activeStep={activeStep}
       builderLabel="HOST & PROPERTIES"
       outputLabel="GENERATED .RDP"
@@ -172,10 +182,15 @@ export function RdpFileBuilderScreen() {
                   ))}
                 </div>
               ) : null}
-              <p className="text-xs text-muted-foreground">
-                Save as <span className="font-mono">{result.value.suggestedFileName}</span>, then open with{' '}
-                <span className="font-mono">mstsc.exe {result.value.suggestedFileName}</span>.
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" size="sm" className="gap-1.5" onClick={downloadFile}>
+                  <Download className="size-4" />
+                  Download {result.value.suggestedFileName}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  then open with <span className="font-mono">mstsc.exe {result.value.suggestedFileName}</span>
+                </p>
+              </div>
               <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
                 {result.value.fileText}
               </pre>
