@@ -83,7 +83,14 @@ export type ResourceType =
  * types are appended here as their seed content lands (plan phases D1–D5), so
  * the "every listed type has content" test stays honest.
  */
-export const RESOURCE_TYPES: ResourceType[] = ['documentation', 'curatedList', 'exercise', 'roadmap']
+export const RESOURCE_TYPES: ResourceType[] = [
+  'documentation',
+  'curatedList',
+  'exercise',
+  'roadmap',
+  'catalog',
+  'mcpServer',
+]
 
 /**
  * A curated external resource link (spec 5.2: External Resources). The UI
@@ -2760,5 +2767,216 @@ export const EXTERNAL_RESOURCE_LINKS: ReferenceLink[] = [
       'infrastructure',
       'devops',
     ],
+  },
+
+  // -------------------------------------------------------------------------
+  // Knowledge Hub — "AI & Automation" group (KNOWLEDGE_HUB_AI_EXPANSION_PLAN.md)
+  //
+  // Phase D1: catalog (cross-cutting AI directories) + mcpServer. `isDirectory`
+  // marks index/registry entries — the /tools/ai-catalogs screen collects
+  // every one across types.
+  // -------------------------------------------------------------------------
+
+  // --- catalog -------------------------------------------------------------
+  {
+    name: "There's An AI For That",
+    url: 'https://theresanaiforthat.com',
+    description: 'Large searchable directory of AI tools indexed by the task they do.',
+    type: 'catalog',
+    tags: ['ai', 'directory'],
+    isDirectory: true,
+  },
+  {
+    name: 'Aixploria',
+    url: 'https://www.aixploria.com/en/',
+    description: 'AI tools directory with categories, "best of" lists, and a simple search.',
+    type: 'catalog',
+    tags: ['ai', 'directory'],
+    isDirectory: true,
+  },
+  {
+    name: 'AI Tools Directory',
+    url: 'https://aitoolsdirectory.com',
+    description: 'Curated catalog of AI tools with category and pricing filters.',
+    type: 'catalog',
+    tags: ['ai', 'directory'],
+    isDirectory: true,
+  },
+  {
+    name: 'TopAI.tools',
+    url: 'https://topai.tools',
+    description: 'AI tool search engine, ~1k+ tools with category pages (incl. automation).',
+    type: 'catalog',
+    tags: ['ai', 'directory'],
+    isDirectory: true,
+  },
+  {
+    name: 'Product Hunt',
+    url: 'https://www.producthunt.com',
+    description: 'Daily new-product launches — a primary discovery feed for AI apps and dev tools.',
+    type: 'catalog',
+    tags: ['launches', 'directory'],
+    isDirectory: true,
+  },
+  {
+    name: 'Trendshift — GitHub Trending',
+    url: 'https://trendshift.io/github-trending-repositories',
+    description: 'Tracks trending GitHub repositories over time, filterable by language and topic.',
+    type: 'catalog',
+    tags: ['github', 'trending'],
+    isDirectory: true,
+  },
+  {
+    name: 'Hugging Face',
+    url: 'https://huggingface.co',
+    description: 'The hub for open models, datasets, and Spaces — the index of the open-weights world.',
+    type: 'catalog',
+    tags: ['ai', 'models', 'datasets'],
+    isDirectory: true,
+  },
+  {
+    name: 'OpenRouter Models',
+    url: 'https://openrouter.ai/models',
+    description: 'One API across hundreds of models with side-by-side price, context, and throughput.',
+    type: 'catalog',
+    tags: ['ai', 'models', 'llm'],
+    isDirectory: true,
+  },
+  {
+    name: 'LMArena',
+    url: 'https://lmarena.ai',
+    description: 'Crowd-voted head-to-head LLM leaderboard (formerly LMSYS Chatbot Arena).',
+    type: 'catalog',
+    tags: ['ai', 'llm', 'leaderboard'],
+    isDirectory: true,
+  },
+  {
+    name: 'Artificial Analysis',
+    url: 'https://artificialanalysis.ai',
+    description: 'Independent benchmarks of model quality, speed, and price across providers.',
+    type: 'catalog',
+    tags: ['ai', 'llm', 'benchmarks'],
+    isDirectory: true,
+  },
+  {
+    name: 'LLM Stats',
+    url: 'https://llm-stats.com',
+    description: 'Comparison tables of LLM benchmarks, context windows, and pricing.',
+    type: 'catalog',
+    tags: ['ai', 'llm', 'benchmarks'],
+    isDirectory: true,
+  },
+  {
+    name: 'Awesome LLM Apps',
+    url: 'https://github.com/Shubhamsaboo/awesome-llm-apps',
+    description: 'Curated collection of LLM app examples with RAG, agents, and multi-agent teams.',
+    type: 'catalog',
+    tags: ['ai', 'llm', 'agents'],
+    isDirectory: true,
+  },
+  {
+    name: '500 AI Agents Projects',
+    url: 'https://github.com/ashishpatel26/500-AI-Agents-Projects',
+    description: 'Large indexed list of AI-agent project ideas and reference implementations.',
+    type: 'catalog',
+    tags: ['ai', 'agents'],
+    isDirectory: true,
+  },
+  {
+    name: 'Free AI Agents Resources',
+    url: 'https://github.com/avinash201199/free-ai-agents-resources',
+    description: 'Curated free resources for learning and building AI agents.',
+    type: 'catalog',
+    tags: ['ai', 'agents', 'learning'],
+    isDirectory: true,
+  },
+  {
+    name: 'Awesome AI Agents',
+    url: 'https://github.com/e2b-dev/awesome-ai-agents',
+    description: 'Maintained list of autonomous-agent projects, frameworks, and tools.',
+    type: 'catalog',
+    tags: ['ai', 'agents'],
+    isDirectory: true,
+  },
+
+  // --- mcpServer ----------------------------------------------------------
+  {
+    name: 'Awesome MCP Servers (punkpeye)',
+    url: 'https://github.com/punkpeye/awesome-mcp-servers',
+    description: 'The most-referenced community list of Model Context Protocol servers.',
+    type: 'mcpServer',
+    tags: ['mcp', 'agents'],
+    isDirectory: true,
+  },
+  {
+    name: 'Awesome MCP Servers (wong2)',
+    url: 'https://github.com/wong2/awesome-mcp-servers',
+    description: 'A second curated MCP server list, paired with the mcp.so directory.',
+    type: 'mcpServer',
+    tags: ['mcp', 'agents'],
+    isDirectory: true,
+  },
+  {
+    name: 'MCP Registry',
+    url: 'https://registry.modelcontextprotocol.io',
+    description: 'The official Model Context Protocol server registry.',
+    type: 'mcpServer',
+    tags: ['mcp', 'registry'],
+    isDirectory: true,
+  },
+  {
+    name: 'MCP Reference Servers',
+    url: 'https://github.com/modelcontextprotocol/servers',
+    description: 'Anthropic-maintained reference MCP server implementations (filesystem, git, fetch, …).',
+    type: 'mcpServer',
+    tags: ['mcp', 'reference'],
+    isDirectory: true,
+  },
+  {
+    name: 'MCP.so',
+    url: 'https://mcp.so',
+    description: 'Searchable directory of MCP servers and clients with usage examples.',
+    type: 'mcpServer',
+    tags: ['mcp', 'directory'],
+    isDirectory: true,
+  },
+  {
+    name: 'Glama MCP Directory',
+    url: 'https://glama.ai/mcp/servers',
+    description: 'Indexed MCP server directory with health checks and hosted connections.',
+    type: 'mcpServer',
+    tags: ['mcp', 'directory'],
+    isDirectory: true,
+  },
+  {
+    name: 'Smithery',
+    url: 'https://smithery.ai',
+    description: 'MCP server registry with one-command install and hosted deployment.',
+    type: 'mcpServer',
+    tags: ['mcp', 'registry', 'hosting'],
+    isDirectory: true,
+  },
+  {
+    name: 'MCPMarket',
+    url: 'https://mcpmarket.com',
+    description: 'Browsable marketplace of MCP servers and tools, filterable by category.',
+    type: 'mcpServer',
+    tags: ['mcp', 'directory'],
+    isDirectory: true,
+  },
+  {
+    name: 'PulseMCP',
+    url: 'https://www.pulsemcp.com',
+    description: 'MCP server and client directory with news and weekly activity tracking.',
+    type: 'mcpServer',
+    tags: ['mcp', 'directory'],
+    isDirectory: true,
+  },
+  {
+    name: 'Agent Gateway',
+    url: 'https://github.com/agentgateway/agentgateway',
+    description: 'Open-source data-plane / gateway for MCP and agent-to-agent (A2A) traffic.',
+    type: 'mcpServer',
+    tags: ['mcp', 'gateway', 'a2a'],
   },
 ]
