@@ -1,0 +1,54 @@
+name: links
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/src/core/cheatsheets/cheatsheetContent.ts'
+      - 'app/scripts/check-resource-links.ts'
+      - '.github/workflows/links.yml'
+  pull_request:
+    paths:
+      - 'app/src/core/cheatsheets/cheatsheetContent.ts'
+      - 'app/scripts/check-resource-links.ts'
+      - '.github/workflows/links.yml'
+  schedule:
+    # Mondays 06:00 UTC — catch links that rot between edits.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: app
+
+jobs:
+  dedupe:
+    name: dedupe + normalize (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun scripts/check-resource-links.ts --no-net
+
+  liveness:
+    name: link liveness
+    runs-on: ubuntu-latest
+    # External sites flap — never block a PR merge on a transient 5xx. The
+    # scheduled run is the one that must stay green; it files an issue.
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - id: check
+        run: bun scripts/check-resource-links.ts --json | tee link-report.json
+      - name: open issue on scheduled failure
+        if: failure() && github.event_name == 'schedule'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Dead resource links detected ($(date -u +%Y-%m-%d))" \
+            --label "chore" \
+            --body "The weekly link check found dead links in \`EXTERNAL_RESOURCE_LINKS\`. See the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})." \
+          || echo "issue may already exist"

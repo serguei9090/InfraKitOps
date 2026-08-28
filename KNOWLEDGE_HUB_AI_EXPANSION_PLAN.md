@@ -306,8 +306,9 @@ Each model entry: `type: 'aiModel'`, tags `[<vendor>, 'llm', <'open-weights'|'pr
 
 ## 7. Link-health + dedupe script
 
-**`app/scripts/check-resource-links.mjs`** — plain Node ESM (no Python dep;
-repo toolchain is bun/node). Run: `bun run check:links` (add to `package.json`).
+**`app/scripts/check-resource-links.ts`** — bun runs TS directly and imports
+the data file as-is, no deps, no Python. Run: `bun run check:links`.
+**Done (phase B).**
 
 Does:
 
