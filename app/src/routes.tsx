@@ -44,6 +44,16 @@ import { DocumentationScreen } from './adapters/ui/tools/DocumentationScreen'
 import { ReferenceListsScreen } from './adapters/ui/tools/ReferenceListsScreen'
 import { StudyPracticeScreen } from './adapters/ui/tools/StudyPracticeScreen'
 
+// Knowledge Hub — AI & Automation group
+import { AiCatalogsScreen } from './adapters/ui/tools/AiCatalogsScreen'
+import { McpServersScreen } from './adapters/ui/tools/McpServersScreen'
+import { AiFrameworksScreen } from './adapters/ui/tools/AiFrameworksScreen'
+import { AiSoftwareScreen } from './adapters/ui/tools/AiSoftwareScreen'
+import { AiSkillsScreen } from './adapters/ui/tools/AiSkillsScreen'
+import { AutomationScreen } from './adapters/ui/tools/AutomationScreen'
+import { AiModelsScreen } from './adapters/ui/tools/AiModelsScreen'
+import { DevServicesScreen } from './adapters/ui/tools/DevServicesScreen'
+
 // Phase 4 — Office & Media
 import { ColorToolsScreen } from './adapters/ui/tools/ColorToolsScreen'
 import { PdfSplitMergeScreen } from './adapters/ui/tools/PdfSplitMergeScreen'
@@ -128,6 +138,14 @@ export const router = createBrowserRouter([
       { path: 'tools/documentation', element: <DocumentationScreen /> },
       { path: 'tools/reference-lists', element: <ReferenceListsScreen /> },
       { path: 'tools/study-practice', element: <StudyPracticeScreen /> },
+      { path: 'tools/ai-catalogs', element: <AiCatalogsScreen /> },
+      { path: 'tools/mcp-servers', element: <McpServersScreen /> },
+      { path: 'tools/ai-frameworks', element: <AiFrameworksScreen /> },
+      { path: 'tools/ai-software', element: <AiSoftwareScreen /> },
+      { path: 'tools/ai-skills', element: <AiSkillsScreen /> },
+      { path: 'tools/automation', element: <AutomationScreen /> },
+      { path: 'tools/ai-models', element: <AiModelsScreen /> },
+      { path: 'tools/dev-services', element: <DevServicesScreen /> },
 
       // Phase 4 — Office & Media
       { path: 'tools/color-tools', element: <ColorToolsScreen /> },
