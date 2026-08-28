@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import {
   NetworkResultTable,
   NetworkToolScaffold,
@@ -11,7 +11,11 @@ import {
 } from '@/adapters/ui/network'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import type { GeoPoint } from '@/adapters/ui/network/GeoMap'
 import type { TraceHop } from '@/core/network/toolResults'
+
+// The world outline (~55 KB) + map code load only when a geolocated trace runs.
+const GeoMap = lazy(() => import('@/adapters/ui/network/GeoMap'))
 
 export function TracerouteScreen() {
   const [host, setHost] = useState('')
@@ -21,9 +25,22 @@ export function TracerouteScreen() {
   const [hops, setHops] = useState<TraceHop[]>([])
   const [reached, setReached] = useState<boolean | null>(null)
 
+  const geoPoints = useMemo<GeoPoint[]>(() => {
+    const withCoords = hops.filter((h) => h.lat != null && h.lon != null && (h.lat !== 0 || h.lon !== 0))
+    return withCoords.map((h, i) => ({
+      id: h.ttl,
+      lat: h.lat as number,
+      lon: h.lon as number,
+      label: `Hop ${h.ttl} · ${[h.city, h.country].filter(Boolean).join(', ') || 'unknown'}`,
+      lines: [h.hostname || h.addr || '', h.isp || '', h.rttsMs.length ? `${Math.min(...h.rttsMs).toFixed(1)} ms` : ''].filter(Boolean),
+      connect: i > 0,
+    }))
+  }, [hops])
+
   const onEvent = useCallback((name: string, data: unknown) => {
     if (name === 'hop') {
-      const hop = data as TraceHop
+      const raw = data as TraceHop
+      const hop: TraceHop = { ...raw, rttsMs: raw.rttsMs ?? [] }
       setHops((cur) => {
         const next = cur.filter((h) => h.ttl !== hop.ttl)
         next.push(hop)
@@ -99,7 +116,7 @@ export function TracerouteScreen() {
       onRestoreRun={(stored) => {
         if (typeof stored.params.host === 'string') setHost(stored.params.host)
         const r = stored.result as { hops?: TraceHop[]; reached?: boolean }
-        setHops(r.hops ?? [])
+        setHops((r.hops ?? []).map((h) => ({ ...h, rttsMs: h.rttsMs ?? [] })))
         setReached(r.reached ?? null)
       }}
       savedTargets={
@@ -169,13 +186,22 @@ export function TracerouteScreen() {
         ) : hops.length === 0 && !streaming ? (
           <p className="text-sm text-muted-foreground">Enter a destination and press Trace.</p>
         ) : (
-          <NetworkResultTable
-            columns={columns}
-            rows={hops}
-            rowKey={(h) => h.ttl}
-            caption={streaming ? `Tracing… ${hops.length} hops` : undefined}
-            empty={streaming ? 'Tracing…' : 'No hops.'}
-          />
+          <div className="space-y-4">
+            {geo && geoPoints.length > 0 ? (
+              <Suspense fallback={<p className="text-sm text-muted-foreground">Loading map…</p>}>
+                <div className="overflow-hidden rounded-lg border border-border/60 bg-card">
+                  <GeoMap points={geoPoints} height={320} className="p-2" />
+                </div>
+              </Suspense>
+            ) : null}
+            <NetworkResultTable
+              columns={columns}
+              rows={hops}
+              rowKey={(h) => h.ttl}
+              caption={streaming ? `Tracing… ${hops.length} hops` : undefined}
+              empty={streaming ? 'Tracing…' : 'No hops.'}
+            />
+          </div>
         )
       }
     />

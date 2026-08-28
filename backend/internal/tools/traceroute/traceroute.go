@@ -105,6 +105,9 @@ func Run(ctx context.Context, opts Options, emit Emit) (Result, error) {
 				hop.Reached = true
 			}
 		}
+		if hop.RTTsMs == nil {
+			hop.RTTsMs = []float64{} // never marshal as JSON null
+		}
 		if hop.Addr != "" && opts.ResolveNames {
 			if names, err := net.LookupAddr(hop.Addr); err == nil && len(names) > 0 {
 				hop.Hostname = trimDot(names[0])
