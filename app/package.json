@@ -11,7 +11,8 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:links": "bun scripts/check-resource-links.ts"
+    "check:links": "bun scripts/check-resource-links.ts",
+    "import:stars": "bun scripts/import-github-stars.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
