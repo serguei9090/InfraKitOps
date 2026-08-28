@@ -123,10 +123,12 @@ describe('EXTERNAL_RESOURCE_LINKS structural integrity', () => {
     expect(EXTERNAL_RESOURCE_LINKS.length).toBeGreaterThanOrEqual(34)
   })
 
-  it('the AI & Automation group has content (catalog + mcpServer seeded in phase D1)', () => {
+  it('the AI & Automation group has content (seeded in phases D1-D2)', () => {
     const byType = (t: string) => EXTERNAL_RESOURCE_LINKS.filter((l) => l.type === t)
     expect(byType('catalog').length).toBeGreaterThanOrEqual(10)
     expect(byType('mcpServer').length).toBeGreaterThanOrEqual(5)
+    expect(byType('aiFramework').length).toBeGreaterThanOrEqual(15)
+    expect(byType('aiApp').length).toBeGreaterThanOrEqual(20)
     expect(EXTERNAL_RESOURCE_LINKS.some((l) => l.isDirectory === true)).toBe(true)
   })
 
