@@ -3957,4 +3957,115 @@ export const EXTERNAL_RESOURCE_LINKS: ReferenceLink[] = [
     type: 'exercise',
     tags: ['ai', 'agents', 'learning'],
   },
+
+  // -------------------------------------------------------------------------
+  // Phase F: leftover URLs from the user's list that aren't AI/automation —
+  // routed into the existing Reference / Study & Practice / Documentation
+  // screens. (Credential- or profile-bearing URLs from the list —
+  // certdirectory profile, certmetrics portal, freerdp CI, bare GitHub
+  // profiles — were reviewed and excluded, see KNOWLEDGE_HUB_AI_EXPANSION_PLAN.md §5.2.)
+  // -------------------------------------------------------------------------
+  {
+    name: 'ProjectLearn',
+    url: 'https://projectlearn.io',
+    description: 'Curated project-based learning paths across web, mobile, ML, game dev, and more.',
+    type: 'roadmap',
+    tags: ['learning', 'projects'],
+    isDirectory: true,
+  },
+  {
+    name: 'LPI Certifications',
+    url: 'https://www.lpi.org/our-certifications/',
+    description: 'Linux Professional Institute certification tracks (LPIC-1/2/3) and objectives.',
+    type: 'roadmap',
+    tags: ['linux', 'certification'],
+  },
+  {
+    name: 'Kubernetes The Hard Way',
+    url: 'https://github.com/kelseyhightower/kubernetes-the-hard-way',
+    description: 'Kelsey Hightower\'s bootstrap-a-cluster-by-hand tutorial — no scripts, every step manual.',
+    type: 'exercise',
+    tags: ['kubernetes', 'hands-on'],
+  },
+  {
+    name: 'Secure Code Game',
+    url: 'https://github.com/skills/secure-code-game',
+    description: 'GitHub Skills in-repo game: find and fix vulnerabilities across increasing difficulty.',
+    type: 'exercise',
+    tags: ['security', 'hands-on'],
+  },
+  {
+    name: 'AWS AI Practitioner',
+    url: 'https://github.com/AdarshanaB/AWS-AI-Practitioner',
+    description: 'Study notes and resources for the AWS Certified AI Practitioner exam.',
+    type: 'exercise',
+    tags: ['aws', 'ai', 'certification'],
+  },
+  {
+    name: 'Google Developer Codelabs',
+    url: 'https://codelabs.developers.google.com',
+    description: 'Guided, hands-on coding tutorials across Google Cloud, Android, web, and AI.',
+    type: 'exercise',
+    tags: ['google', 'hands-on'],
+    isDirectory: true,
+  },
+  {
+    name: 'MLU-Explain',
+    url: 'https://mlu-explain.github.io',
+    description: 'Amazon\'s visual, interactive essays explaining core machine-learning concepts.',
+    type: 'exercise',
+    tags: ['ml', 'visual', 'learning'],
+    isDirectory: true,
+  },
+  {
+    name: 'Polo Club of Data Science',
+    url: 'https://poloclub.github.io/',
+    description: 'Georgia Tech group\'s interactive explainers (CNN Explainer, Transformer Explainer, …).',
+    type: 'exercise',
+    tags: ['ml', 'visual', 'learning'],
+    isDirectory: true,
+  },
+  {
+    name: 'Wazuh',
+    url: 'https://wazuh.com',
+    description: 'Open-source security platform — XDR and SIEM: threat detection, FIM, and compliance.',
+    type: 'documentation',
+    tags: ['security', 'siem', 'monitoring'],
+  },
+  {
+    name: 'OWASP ZAP',
+    url: 'https://www.zaproxy.org',
+    description: 'The OWASP Zed Attack Proxy — open-source web application security scanner.',
+    type: 'documentation',
+    tags: ['security', 'appsec', 'scanner'],
+  },
+  {
+    name: 'Qubes OS',
+    url: 'https://www.qubes-os.org',
+    description: 'Security-focused desktop OS that isolates workloads in separate Xen VMs.',
+    type: 'documentation',
+    tags: ['security', 'os', 'isolation'],
+  },
+  {
+    name: 'CNCF Landscape',
+    url: 'https://landscape.cncf.io',
+    description: 'Interactive map of the cloud-native ecosystem — every project and product by category.',
+    type: 'curatedList',
+    tags: ['cloud-native', 'kubernetes'],
+    isDirectory: true,
+  },
+  {
+    name: 'llms.txt',
+    url: 'https://llmstxt.org',
+    description: 'Proposed /llms.txt standard for sites to expose LLM-friendly content — spec and adopters.',
+    type: 'documentation',
+    tags: ['ai', 'llm', 'standard'],
+  },
+  {
+    name: 'Leonardo.AI',
+    url: 'https://leonardo.ai',
+    description: 'AI image and asset generation platform aimed at game and product design workflows.',
+    type: 'aiApp',
+    tags: ['images', 'design'],
+  },
 ]
