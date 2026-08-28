@@ -77,7 +77,15 @@ with zero file conflicts):
 1. Core logic: `src/core/<domain>/<tool>.ts`, implementing `IToolUseCase<TIn, TOut>`.
    Unit test alongside it.
 2. Screen: `src/adapters/ui/tools/<Tool>Screen.tsx`, built on the shared
-   `ToolDetailScaffold` layout component.
+   `ToolDetailScaffold` layout component. **Config builders that pick from a
+   flat catalog of independent key/value directives** (SSH, sysctl, Zabbix,
+   RDP) render the catalog through `adapters/ui/config/DirectiveCatalogEditor`
+   — map the tool's `Xxx[]` catalog to `CatalogItem[]` and pass `groups` /
+   `values` / `onChange` / `presets`; the editor owns the grouped list,
+   search, "selected only" filter, per-kind control and preset buttons, the
+   screen keeps its `execute()` serializer. (Builders with nested/
+   interdependent output — Web Server, Database — or a multi-field-per-row
+   catalog — Fail2ban jails — stay bespoke.)
 3. Register: one entry in `src/adapters/ui/shell/moduleTaxonomy.ts` + one route in
    `src/routes.tsx`.
 
