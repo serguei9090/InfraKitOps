@@ -116,9 +116,9 @@ export function WebServerConfigBuilderScreen() {
 
 function ToggleRow({ label, description, checked, onChange }: { label: string; description?: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <div>
-        <Label className="font-normal">{label}</Label>
+    <div className="flex max-w-md items-center justify-between gap-6 rounded-lg border border-border/60 px-3 py-2">
+      <div className="min-w-0">
+        <p className="text-sm font-medium">{label}</p>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       </div>
       <Switch checked={checked} onCheckedChange={onChange} />

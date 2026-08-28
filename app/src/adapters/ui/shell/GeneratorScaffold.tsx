@@ -76,9 +76,11 @@ export function GeneratorScaffold({
             : undefined
         }
       />
-      <div className="flex flex-1 flex-col overflow-y-auto p-5 lg:min-h-0">
+      <div className="flex flex-1 flex-col overflow-y-auto p-5 lg:min-h-0 lg:overflow-hidden">
         <ToolScaffoldPanel label={formLabel} bordered scrollable className="bg-background">
-          {formPanel}
+          {/* Forms read best at a fixed measure; capping here also keeps
+              right-aligned controls (switches) near their labels. */}
+          <div className="max-w-4xl">{formPanel}</div>
         </ToolScaffoldPanel>
       </div>
     </div>

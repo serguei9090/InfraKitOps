@@ -241,10 +241,10 @@ function PolicySelect({ label, value, onChange }: { label: string; value: Firewa
 
 function ToggleRow({ label, checked, onCheckedChange }: { label: string; checked: boolean; onCheckedChange: (v: boolean) => void }) {
   return (
-    <label className="flex items-center justify-between gap-3 text-sm">
-      <span>{label}</span>
+    <div className="flex max-w-md items-center justify-between gap-6 rounded-lg border border-border/60 px-3 py-2 text-sm">
+      <span className="min-w-0">{label}</span>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
-    </label>
+    </div>
   )
 }
 

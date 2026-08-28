@@ -204,7 +204,7 @@ export function CrontabBuilderScreen() {
           </div>
 
           {mode === 'build' ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {columns.map((meta) => (
                 <ColumnPicker
                   key={meta.key}
@@ -293,24 +293,22 @@ function ColumnPicker({
   onChange: (patch: Partial<ColumnState>) => void
 }) {
   return (
-    <div className="rounded-md border border-border/60 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium">
-          {meta.label} ({meta.min}-{meta.max})
-        </p>
-        <Select value={state.kind} onValueChange={(value) => onChange({ kind: value as CronFieldSpecKind })}>
-          <SelectTrigger size="sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="every">every</SelectItem>
-            <SelectItem value="list">list</SelectItem>
-            <SelectItem value="range">range</SelectItem>
-            <SelectItem value="step">step</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="mt-2.5">
+    <div className="flex flex-col gap-2 rounded-md border border-border/60 p-3">
+      <p className="text-sm font-medium">
+        {meta.label} <span className="font-normal text-muted-foreground">({meta.min}–{meta.max})</span>
+      </p>
+      <Select value={state.kind} onValueChange={(value) => onChange({ kind: value as CronFieldSpecKind })}>
+        <SelectTrigger size="sm" className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="every">every</SelectItem>
+          <SelectItem value="list">list</SelectItem>
+          <SelectItem value="range">range</SelectItem>
+          <SelectItem value="step">step</SelectItem>
+        </SelectContent>
+      </Select>
+      <div>
         {state.kind === 'every' ? (
           <p className="text-xs text-muted-foreground">Matches every {meta.label.toLowerCase()} value.</p>
         ) : state.kind === 'list' ? (
