@@ -131,6 +131,7 @@ describe('EXTERNAL_RESOURCE_LINKS structural integrity', () => {
     expect(byType('aiApp').length).toBeGreaterThanOrEqual(20)
     expect(byType('aiSkill').length).toBeGreaterThanOrEqual(5)
     expect(byType('automation').length).toBeGreaterThanOrEqual(8)
+    expect(byType('aiModel').length).toBeGreaterThanOrEqual(15)
     expect(EXTERNAL_RESOURCE_LINKS.some((l) => l.isDirectory === true)).toBe(true)
   })
 

@@ -94,6 +94,7 @@ export const RESOURCE_TYPES: ResourceType[] = [
   'aiApp',
   'aiSkill',
   'automation',
+  'aiModel',
 ]
 
 /**
@@ -3495,5 +3496,163 @@ export const EXTERNAL_RESOURCE_LINKS: ReferenceLink[] = [
     description: 'Visual automation platform with a large app catalog and branching scenarios.',
     type: 'automation',
     tags: ['workflow', 'no-code', 'saas'],
+  },
+
+  // -------------------------------------------------------------------------
+  // Phase D4: aiModel — major foundation model families + serving harnesses.
+  // Links point at each family's hub/docs, NOT a pinned version — the line-up
+  // moves faster than this file. Verify current versions at lmarena.ai /
+  // artificialanalysis.ai (both linked in the catalog screen).
+  // -------------------------------------------------------------------------
+
+  // --- model families ------------------------------------------------
+  {
+    name: 'OpenAI GPT',
+    url: 'https://platform.openai.com/docs',
+    description: 'GPT model family and the OpenAI API — Responses API, tools, Realtime, Agents SDK.',
+    type: 'aiModel',
+    tags: ['openai', 'llm', 'proprietary'],
+  },
+  {
+    name: 'Anthropic Claude',
+    url: 'https://www.anthropic.com/claude',
+    description: 'Claude model family (Opus / Sonnet / Haiku) — strong coding and agentic tool use, MCP.',
+    type: 'aiModel',
+    tags: ['anthropic', 'llm', 'proprietary'],
+  },
+  {
+    name: 'Google Gemini',
+    url: 'https://deepmind.google/models/gemini/',
+    description: 'Gemini multimodal model family — long context, native tool use, Google AI Studio + Vertex.',
+    type: 'aiModel',
+    tags: ['google', 'llm', 'multimodal', 'proprietary'],
+  },
+  {
+    name: 'Meta Llama',
+    url: 'https://github.com/meta-llama/llama-models',
+    description: 'Meta\'s open-weights Llama family — model cards, licenses, and the reference stack.',
+    type: 'aiModel',
+    tags: ['meta', 'llm', 'open-weights'],
+  },
+  {
+    name: 'Alibaba Qwen',
+    url: 'https://github.com/QwenLM/Qwen3',
+    description: 'Qwen open-weights family — dense and MoE, strong multilingual and coding variants.',
+    type: 'aiModel',
+    tags: ['alibaba', 'llm', 'open-weights'],
+  },
+  {
+    name: 'DeepSeek',
+    url: 'https://github.com/deepseek-ai/DeepSeek-V3',
+    description: 'DeepSeek open-weights MoE models (V3 chat, R1 reasoning) — low inference cost.',
+    type: 'aiModel',
+    tags: ['deepseek', 'llm', 'open-weights', 'reasoning'],
+  },
+  {
+    name: 'Mistral AI',
+    url: 'https://docs.mistral.ai',
+    description: 'Mistral model family — open-weights (Mistral / Mixtral / Devstral) plus hosted Large.',
+    type: 'aiModel',
+    tags: ['mistral', 'llm', 'open-weights'],
+  },
+  {
+    name: 'xAI Grok',
+    url: 'https://docs.x.ai',
+    description: 'Grok model family and the xAI API — large context, live search integration.',
+    type: 'aiModel',
+    tags: ['xai', 'llm', 'proprietary'],
+  },
+  {
+    name: 'Moonshot Kimi',
+    url: 'https://github.com/MoonshotAI/Kimi-K2',
+    description: 'Moonshot AI\'s Kimi models — K2 is a large open-weights MoE tuned for agentic use.',
+    type: 'aiModel',
+    tags: ['moonshot', 'llm', 'open-weights'],
+  },
+  {
+    name: 'Zhipu GLM',
+    url: 'https://github.com/zai-org/GLM-4.5',
+    description: 'Z.ai (Zhipu) GLM open-weights family — bilingual, agent- and coding-oriented.',
+    type: 'aiModel',
+    tags: ['zhipu', 'llm', 'open-weights'],
+  },
+  {
+    name: 'Cohere Command',
+    url: 'https://docs.cohere.com',
+    description: 'Cohere Command models plus Embed and Rerank — enterprise RAG and search focus.',
+    type: 'aiModel',
+    tags: ['cohere', 'llm', 'rag', 'proprietary'],
+  },
+
+  // --- serving & inference harnesses -------------------------------
+  {
+    name: 'Ollama',
+    url: 'https://ollama.com',
+    description: 'Run open models locally with one command; OpenAI-compatible local API.',
+    type: 'aiModel',
+    tags: ['harness', 'local', 'inference'],
+  },
+  {
+    name: 'llama.cpp',
+    url: 'https://github.com/ggml-org/llama.cpp',
+    description: 'The GGUF inference engine most local runners are built on — CPU/GPU, quantized.',
+    type: 'aiModel',
+    tags: ['harness', 'local', 'inference'],
+  },
+  {
+    name: 'LM Studio',
+    url: 'https://lmstudio.ai',
+    description: 'Desktop app to discover, download, and chat with local models; serves a local API.',
+    type: 'aiModel',
+    tags: ['harness', 'local', 'desktop'],
+  },
+  {
+    name: 'Jan',
+    url: 'https://jan.ai',
+    description: 'Open-source offline ChatGPT alternative — local models, extensible, MCP support.',
+    type: 'aiModel',
+    tags: ['harness', 'local', 'desktop'],
+  },
+  {
+    name: 'SGLang',
+    url: 'https://github.com/sgl-project/sglang',
+    description: 'Fast serving runtime for LLMs and vision-language models with RadixAttention.',
+    type: 'aiModel',
+    tags: ['harness', 'serving', 'inference'],
+  },
+  {
+    name: 'text-generation-webui',
+    url: 'https://github.com/oobabooga/text-generation-webui',
+    description: 'The "oobabooga" web UI — many backends, extensions, and a chat interface for local models.',
+    type: 'aiModel',
+    tags: ['harness', 'local', 'ui'],
+  },
+  {
+    name: 'LocalAI',
+    url: 'https://localai.io',
+    description: 'Self-hosted OpenAI-compatible API for text, image, and audio — runs on consumer hardware.',
+    type: 'aiModel',
+    tags: ['harness', 'self-hosted', 'inference'],
+  },
+  {
+    name: 'Groq',
+    url: 'https://groq.com',
+    description: 'LPU-based inference provider — very high token throughput for open models.',
+    type: 'aiModel',
+    tags: ['harness', 'inference', 'hosted'],
+  },
+  {
+    name: 'Together AI',
+    url: 'https://www.together.ai',
+    description: 'Hosted inference and fine-tuning for a broad catalog of open models.',
+    type: 'aiModel',
+    tags: ['harness', 'inference', 'hosted'],
+  },
+  {
+    name: 'Fireworks AI',
+    url: 'https://fireworks.ai',
+    description: 'Fast hosted inference for open models with function calling and JSON mode.',
+    type: 'aiModel',
+    tags: ['harness', 'inference', 'hosted'],
   },
 ]
