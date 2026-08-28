@@ -95,6 +95,7 @@ export const RESOURCE_TYPES: ResourceType[] = [
   'aiSkill',
   'automation',
   'aiModel',
+  'devService',
 ]
 
 /**
@@ -3654,5 +3655,138 @@ export const EXTERNAL_RESOURCE_LINKS: ReferenceLink[] = [
     description: 'Fast hosted inference for open models with function calling and JSON mode.',
     type: 'aiModel',
     tags: ['harness', 'inference', 'hosted'],
+  },
+
+  // -------------------------------------------------------------------------
+  // Phase D5: devService — hosted infra products for shipping and exposing
+  // dev work: tunnels, static hosts, PaaS, deploy platforms. Links go to the
+  // product's main marketing site (never a login/dashboard URL — those carry
+  // session tokens; see KNOWLEDGE_HUB_AI_EXPANSION_PLAN.md §5.2).
+  // -------------------------------------------------------------------------
+  {
+    name: 'ngrok',
+    url: 'https://ngrok.com',
+    description: 'Instant public HTTPS URLs for a local port, plus an ingress platform with auth and policy.',
+    type: 'devService',
+    tags: ['tunnel', 'ingress'],
+  },
+  {
+    name: 'Cloudflare Tunnel',
+    url: 'https://www.cloudflare.com/products/tunnel/',
+    description: 'Expose a local service through Cloudflare with no inbound firewall port (free tier).',
+    type: 'devService',
+    tags: ['tunnel', 'free-tier'],
+  },
+  {
+    name: 'Tailscale',
+    url: 'https://tailscale.com',
+    description: 'WireGuard mesh VPN; Funnel exposes a node to the public internet over TLS.',
+    type: 'devService',
+    tags: ['tunnel', 'vpn', 'free-tier'],
+  },
+  {
+    name: 'localtonet',
+    url: 'https://localtonet.com',
+    description: 'Tunnel local servers to the internet — TCP/UDP/HTTP, with a free tier.',
+    type: 'devService',
+    tags: ['tunnel', 'free-tier'],
+  },
+  {
+    name: 'Pinggy',
+    url: 'https://pinggy.io',
+    description: 'One SSH-command public URL for a local port; no install.',
+    type: 'devService',
+    tags: ['tunnel', 'ssh'],
+  },
+  {
+    name: 'bore',
+    url: 'https://github.com/ekzhang/bore',
+    description: 'Tiny, self-hostable TCP tunnel in ~400 lines of Rust.',
+    type: 'devService',
+    tags: ['tunnel', 'self-hosted', 'rust'],
+  },
+  {
+    name: 'frp',
+    url: 'https://github.com/fatedier/frp',
+    description: 'Fast reverse proxy to expose a NATed/firewalled local server — the standard self-hosted option.',
+    type: 'devService',
+    tags: ['tunnel', 'reverse-proxy', 'self-hosted'],
+  },
+  {
+    name: 'Netlify',
+    url: 'https://www.netlify.com',
+    description: 'Static/edge hosting with CI builds, deploy previews, functions, and forms.',
+    type: 'devService',
+    tags: ['hosting', 'static', 'jamstack', 'free-tier'],
+  },
+  {
+    name: 'Vercel',
+    url: 'https://vercel.com',
+    description: 'Frontend cloud — Git-driven deploys, edge network, serverless and edge functions.',
+    type: 'devService',
+    tags: ['hosting', 'frontend', 'serverless', 'free-tier'],
+  },
+  {
+    name: 'Cloudflare Pages',
+    url: 'https://pages.cloudflare.com',
+    description: 'Static and full-stack hosting on Cloudflare\'s edge, paired with Workers.',
+    type: 'devService',
+    tags: ['hosting', 'static', 'edge', 'free-tier'],
+  },
+  {
+    name: 'Render',
+    url: 'https://render.com',
+    description: 'PaaS for web services, static sites, cron jobs, and managed Postgres/Redis.',
+    type: 'devService',
+    tags: ['paas', 'hosting', 'free-tier'],
+  },
+  {
+    name: 'Railway',
+    url: 'https://railway.com',
+    description: 'Deploy apps and databases from a repo with minimal config; usage-based pricing.',
+    type: 'devService',
+    tags: ['paas', 'hosting'],
+  },
+  {
+    name: 'Fly.io',
+    url: 'https://fly.io',
+    description: 'Run containers close to users on a global Anycast network; Postgres and volumes.',
+    type: 'devService',
+    tags: ['paas', 'hosting', 'edge'],
+  },
+  {
+    name: 'Shuttle',
+    url: 'https://www.shuttle.dev',
+    description: 'Deploy Rust backends with infrastructure declared in code; no Dockerfile.',
+    type: 'devService',
+    tags: ['paas', 'rust', 'deploy'],
+  },
+  {
+    name: 'Coolify',
+    url: 'https://coolify.io',
+    description: 'Self-hosted, open-source Heroku/Netlify alternative — deploy apps and databases on your own server.',
+    type: 'devService',
+    tags: ['paas', 'self-hosted', 'deploy'],
+  },
+  {
+    name: 'Dokploy',
+    url: 'https://dokploy.com',
+    description: 'Self-hostable deployment platform on Docker Swarm — apps, databases, and templates.',
+    type: 'devService',
+    tags: ['paas', 'self-hosted', 'docker'],
+  },
+  {
+    name: 'DeployStack',
+    url: 'https://deploystack.io',
+    description: 'Turn a docker-compose file into one-click deploy configs for multiple cloud providers.',
+    type: 'devService',
+    tags: ['deploy', 'docker', 'iac'],
+  },
+  {
+    name: 'Caddy',
+    url: 'https://caddyserver.com',
+    description: 'Web server with automatic HTTPS — a common front door for self-hosted deploys.',
+    type: 'devService',
+    tags: ['web-server', 'https', 'self-hosted'],
   },
 ]
