@@ -36,17 +36,23 @@ export function BalancedFlowScaffold({
   copyText,
 }: BalancedFlowScaffoldProps) {
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <ToolScaffoldHeader title={title} copyText={copyText} />
-      <div className="flex flex-1 flex-col gap-4 p-5">
-        <ToolScaffoldPanel label={configLabel} bordered className="flex-none bg-background">
+      {/* Stacked (< lg): one scroll. lg+: config band caps at half-height and
+          scrolls if huge; the results/preview split scrolls independently. */}
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5 lg:min-h-0 lg:overflow-hidden">
+        <ToolScaffoldPanel
+          label={configLabel}
+          bordered
+          className="flex-none bg-background lg:max-h-[50vh] lg:overflow-y-auto"
+        >
           {configPanel}
         </ToolScaffoldPanel>
-        <div className="flex flex-1 flex-col gap-4 lg:flex-row">
-          <ToolScaffoldPanel label={resultsLabel} bordered className="bg-background">
+        <div className="flex flex-1 flex-col gap-4 lg:min-h-0 lg:flex-row lg:overflow-hidden">
+          <ToolScaffoldPanel label={resultsLabel} bordered scrollable className="bg-background">
             {resultsPanel}
           </ToolScaffoldPanel>
-          <ToolScaffoldPanel label={previewLabel} bordered className="bg-card">
+          <ToolScaffoldPanel label={previewLabel} bordered scrollable className="bg-card">
             {previewPanel}
           </ToolScaffoldPanel>
         </div>

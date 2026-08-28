@@ -42,18 +42,24 @@ export function StepperWorkspaceScaffold({
   copyText,
 }: StepperWorkspaceScaffoldProps) {
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <ToolScaffoldHeader
         title={title}
         copyText={copyText}
         preview={{ label: outputLabel, content: outputPanel }}
       />
-      <div className="flex flex-1 flex-col gap-4 p-5">
+      {/* Stacked (< lg): one scroll. lg+: the builder band caps at half-height
+          and scrolls if huge; the terminal output scrolls independently. */}
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5 lg:min-h-0 lg:overflow-hidden">
         <StepperBar steps={steps} activeStep={activeStep} />
-        <ToolScaffoldPanel label={builderLabel} bordered className="flex-none bg-background">
+        <ToolScaffoldPanel
+          label={builderLabel}
+          bordered
+          className="flex-none bg-background lg:max-h-[50vh] lg:overflow-y-auto"
+        >
           {builderPanel}
         </ToolScaffoldPanel>
-        <ToolScaffoldPanel label={outputLabel} bordered className="flex-1 bg-card">
+        <ToolScaffoldPanel label={outputLabel} bordered scrollable className="bg-card">
           {outputPanel}
         </ToolScaffoldPanel>
       </div>

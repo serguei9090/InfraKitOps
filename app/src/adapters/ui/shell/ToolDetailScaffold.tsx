@@ -29,13 +29,15 @@ interface ToolDetailScaffoldProps {
  */
 export function ToolDetailScaffold({ title, inputPanel, outputPanel, copyText, preview, download }: ToolDetailScaffoldProps) {
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <ToolScaffoldHeader title={title} copyText={copyText} preview={preview} download={download} />
-      <div className="flex flex-1 flex-col gap-4 p-5 lg:flex-row">
-        <ToolScaffoldPanel label="INPUT PARAMETERS & CONTROLS" bordered className="bg-background">
+      {/* Stacked (< lg): the body scrolls as one. Side-by-side (lg+): the body
+          is pinned and each panel scrolls on its own. */}
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5 lg:min-h-0 lg:flex-row lg:overflow-hidden">
+        <ToolScaffoldPanel label="INPUT PARAMETERS & CONTROLS" bordered scrollable className="bg-background">
           {inputPanel}
         </ToolScaffoldPanel>
-        <ToolScaffoldPanel label="GENERATED OUTPUT & LIVE PREVIEW" bordered className="bg-card">
+        <ToolScaffoldPanel label="GENERATED OUTPUT & LIVE PREVIEW" bordered scrollable className="bg-card">
           {outputPanel}
         </ToolScaffoldPanel>
       </div>
@@ -125,18 +127,34 @@ export function ToolScaffoldPanel({
   label,
   className,
   bordered,
+  scrollable,
   children,
 }: {
   label: string
   className?: string
   /** Draw a full rounded border (card look) instead of the flush edge-to-edge T1 style. */
   bordered?: boolean
+  /**
+   * At `lg`+, make this panel its own scroll region (label pinned, content
+   * scrolls) instead of letting a tall panel push the whole page. Below `lg`
+   * the layout is stacked and scrolls naturally, so this is a no-op there.
+   */
+  scrollable?: boolean
   children: ReactNode
 }) {
   return (
-    <div className={cn('w-full min-w-0 flex-1 p-5', bordered && 'rounded-lg border border-border/60', className)}>
-      <p className="text-xs font-medium tracking-wide text-muted-foreground">{label}</p>
-      <div className="mt-3.5">{children}</div>
+    <div
+      className={cn(
+        'flex w-full min-w-0 flex-1 flex-col p-5',
+        bordered && 'rounded-lg border border-border/60',
+        scrollable && 'lg:min-h-0',
+        className,
+      )}
+    >
+      <p className="shrink-0 text-xs font-medium tracking-wide text-muted-foreground">{label}</p>
+      <div className={cn('mt-3.5', scrollable ? 'flex-1 lg:min-h-0 lg:overflow-y-auto lg:pr-1' : 'flex-1')}>
+        {children}
+      </div>
     </div>
   )
 }
