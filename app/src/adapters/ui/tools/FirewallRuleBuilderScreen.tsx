@@ -6,8 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { StepperWorkspaceScaffold } from '@/adapters/ui/shell/StepperWorkspaceScaffold'
-import { ConfigValidateButton } from '@/adapters/ui/config/ConfigValidateButton'
+import { GeneratorScaffold } from '@/adapters/ui/shell/GeneratorScaffold'
 import {
   FirewallRuleBuilder,
   PortRange,
@@ -117,18 +116,38 @@ export function FirewallRuleBuilderScreen() {
     }
   }, [rows, dialect, incoming, outgoing, forward, sshPort, includeHeader, allowLoopback, allowEstablished, allowIcmp])
 
-  const activeStep = rows.length === 0 ? 0 : result.error ? 1 : 2
+  const fileName = dialect === 'nftables' ? 'nftables-rules.sh' : dialect === 'ufw' ? 'ufw-rules.sh' : 'firewall-rules.sh'
 
   return (
-    <StepperWorkspaceScaffold
+    <GeneratorScaffold
       title="Firewall Rule Builder"
-      copyText={result.value?.script}
-      steps={[{ label: 'Set Dialect & Policy' }, { label: 'Add Rules' }, { label: 'Review & Copy' }]}
-      activeStep={activeStep}
-      builderLabel="DIALECT, POLICY & RULES"
-      outputLabel="GENERATED SCRIPT"
-      builderPanel={
+      output={
+        result.value
+          ? {
+              text: result.value.script,
+              fileName,
+              mimeType: 'text/x-shellscript;charset=utf-8',
+              label: 'Generated script',
+              notice:
+                result.value.warnings.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {result.value.warnings.map((warning, i) => (
+                      <Alert key={i} variant={warning.severity === 'critical' ? 'destructive' : 'default'}>
+                        <AlertTitle>{warning.severity === 'critical' ? 'LOCKOUT RISK' : 'Advisory'}</AlertTitle>
+                        <AlertDescription>{warning.message}</AlertDescription>
+                      </Alert>
+                    ))}
+                  </div>
+                ) : undefined,
+            }
+          : undefined
+      }
+      validate={
+        dialect === 'nftables' && result.value ? { kind: 'nftables', text: result.value.script } : undefined
+      }
+      formPanel={
         <div className="flex flex-col gap-5">
+          {result.error ? <p className="text-sm text-destructive">{result.error}</p> : null}
           <div>
             <p className="mb-2 text-sm font-medium">Dialect</p>
             <div className="flex gap-2">
@@ -194,30 +213,6 @@ export function FirewallRuleBuilderScreen() {
               ))}
             </div>
           </div>
-        </div>
-      }
-      outputPanel={
-        <div className="flex flex-col gap-3">
-          {result.error ? (
-            <p className="text-sm text-destructive">{result.error}</p>
-          ) : result.value ? (
-            <>
-              {result.value.warnings.length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  {result.value.warnings.map((warning, i) => (
-                    <Alert key={i} variant={warning.severity === 'critical' ? 'destructive' : 'default'}>
-                      <AlertTitle>{warning.severity === 'critical' ? 'LOCKOUT RISK' : 'Advisory'}</AlertTitle>
-                      <AlertDescription>{warning.message}</AlertDescription>
-                    </Alert>
-                  ))}
-                </div>
-              ) : null}
-              <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
-                {result.value.script}
-              </pre>
-              {dialect === 'nftables' ? <ConfigValidateButton kind="nftables" text={result.value.script} /> : null}
-            </>
-          ) : null}
         </div>
       }
     />
