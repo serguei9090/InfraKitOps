@@ -92,6 +92,8 @@ export const RESOURCE_TYPES: ResourceType[] = [
   'mcpServer',
   'aiFramework',
   'aiApp',
+  'aiSkill',
+  'automation',
 ]
 
 /**
@@ -3369,5 +3371,129 @@ export const EXTERNAL_RESOURCE_LINKS: ReferenceLink[] = [
     description: 'ComfyUI nodes for running HeartMuLa music generation in a node graph.',
     type: 'aiApp',
     tags: ['audio', 'music', 'comfyui'],
+  },
+
+  // -------------------------------------------------------------------------
+  // Phase D3: aiSkill (packaged agent skills + marketplaces) + automation
+  // -------------------------------------------------------------------------
+
+  // --- aiSkill --------------------------------------------------------
+  {
+    name: 'Anthropic Skills',
+    url: 'https://github.com/anthropics/skills',
+    description: 'Anthropic\'s open collection of Agent Skills (SKILL.md folders) for Claude.',
+    type: 'aiSkill',
+    tags: ['skills', 'claude', 'reference'],
+    isDirectory: true,
+  },
+  {
+    name: 'Agent Skills (Claude docs)',
+    url: 'https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview',
+    description: 'Official reference for the SKILL.md format — structure, frontmatter, progressive disclosure.',
+    type: 'aiSkill',
+    tags: ['skills', 'claude', 'documentation'],
+  },
+  {
+    name: 'agent-skills.md',
+    url: 'https://agent-skills.md/',
+    description: 'Community hub and spec index for the agent-skill (SKILL.md) format.',
+    type: 'aiSkill',
+    tags: ['skills', 'spec'],
+    isDirectory: true,
+  },
+  {
+    name: 'skills.sh',
+    url: 'https://skills.sh/',
+    description: 'Directory and installer for shareable agent skills.',
+    type: 'aiSkill',
+    tags: ['skills', 'directory'],
+    isDirectory: true,
+  },
+  {
+    name: 'SkillsMP',
+    url: 'https://skillsmp.com/',
+    description: 'Marketplace for discovering and publishing agent skills.',
+    type: 'aiSkill',
+    tags: ['skills', 'marketplace'],
+    isDirectory: true,
+  },
+  {
+    name: 'autoskills',
+    url: 'https://github.com/midudev/autoskills',
+    description: 'Tool that generates agent skills automatically from a description or a codebase.',
+    type: 'aiSkill',
+    tags: ['skills', 'codegen'],
+  },
+
+  // --- automation ----------------------------------------------------
+  {
+    name: 'n8n',
+    url: 'https://n8n.io',
+    description: 'Fair-code workflow automation with 400+ integrations and native AI/agent nodes.',
+    type: 'automation',
+    tags: ['workflow', 'self-hosted', 'low-code'],
+  },
+  {
+    name: 'Activepieces',
+    url: 'https://www.activepieces.com',
+    description: 'Open-source no-code automation (Zapier-style) with an MCP toolbox for agents.',
+    type: 'automation',
+    tags: ['workflow', 'no-code', 'self-hosted', 'mcp'],
+  },
+  {
+    name: 'Windmill',
+    url: 'https://www.windmill.dev',
+    description: 'Turn scripts (Python/TS/Go/Bash) into workflows and internal UIs; open-source.',
+    type: 'automation',
+    tags: ['workflow', 'scripts', 'self-hosted'],
+  },
+  {
+    name: 'Kestra',
+    url: 'https://kestra.io',
+    description: 'Declarative, event-driven orchestration platform — YAML workflows, rich plugin set.',
+    type: 'automation',
+    tags: ['orchestration', 'data', 'self-hosted'],
+  },
+  {
+    name: 'Pipedream',
+    url: 'https://pipedream.com',
+    description: 'Integration platform with code-level steps and thousands of prebuilt actions.',
+    type: 'automation',
+    tags: ['workflow', 'integrations'],
+  },
+  {
+    name: 'Node-RED',
+    url: 'https://nodered.org',
+    description: 'Flow-based programming for wiring together devices, APIs, and services.',
+    type: 'automation',
+    tags: ['flow', 'iot', 'self-hosted'],
+  },
+  {
+    name: 'Huginn',
+    url: 'https://github.com/huginn/huginn',
+    description: 'Self-hosted agents that watch the web and act on your behalf — an open IFTTT.',
+    type: 'automation',
+    tags: ['agents', 'self-hosted'],
+  },
+  {
+    name: 'Trigger.dev',
+    url: 'https://trigger.dev',
+    description: 'Open-source background jobs and long-running workflows for TypeScript, no timeouts.',
+    type: 'automation',
+    tags: ['jobs', 'typescript', 'self-hosted'],
+  },
+  {
+    name: 'Automatisch',
+    url: 'https://automatisch.io',
+    description: 'Open-source Zapier alternative you can self-host for data-privacy reasons.',
+    type: 'automation',
+    tags: ['workflow', 'no-code', 'self-hosted'],
+  },
+  {
+    name: 'Make',
+    url: 'https://www.make.com',
+    description: 'Visual automation platform with a large app catalog and branching scenarios.',
+    type: 'automation',
+    tags: ['workflow', 'no-code', 'saas'],
   },
 ]
