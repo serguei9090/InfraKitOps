@@ -79,6 +79,22 @@ export interface ToolEntry {
   icon: LucideIcon
   /** Set once the tool's screen is ported (Phase 3+). Undefined = "Coming soon". */
   route?: string
+  /**
+   * Optional short label for the visual cluster this tool belongs to. Tools
+   * are laid out in taxonomy order and the sidebar draws a divider + this
+   * label whenever it changes, so tools sharing a `group` MUST be contiguous
+   * in the module's `tools` array. Modules with no groups render a flat list.
+   */
+  group?: string
+}
+
+/** Ordered, de-duplicated list of the group labels used in a module. */
+export function toolGroups(module: ModuleDef): string[] {
+  const seen: string[] = []
+  for (const t of module.tools) {
+    if (t.group && !seen.includes(t.group)) seen.push(t.group)
+  }
+  return seen
 }
 
 export interface ModuleDef {
@@ -233,6 +249,9 @@ export const kModuleTaxonomy: ModuleDef[] = [
     id: 'network',
     title: '3. Network Toolkit',
     icon: Network,
+    // Grouped (see ToolEntry.group): Lookups → Reachability → Discovery →
+    // Local host → System → Devices & throughput. Tools in a group stay
+    // contiguous.
     tools: [
       {
         id: 'subnet-calculator',
@@ -240,23 +259,29 @@ export const kModuleTaxonomy: ModuleDef[] = [
         description: 'CIDR mask math — the one Network tool that needs no backend',
         icon: Calculator,
         route: '/tools/subnet-calculator',
+        group: 'Lookups',
       },
-      { id: 'dns-lookup', name: 'DNS Lookup', description: 'Any record type against public presets or a custom resolver', icon: Globe, route: '/tools/dns-lookup' },
-      { id: 'sntp', name: 'SNTP Lookup', description: 'Clock offset & round-trip delay from NTP servers', icon: Clock, route: '/tools/sntp' },
-      { id: 'whois', name: 'Whois', description: 'Registrar, dates & nameservers for a domain or IP', icon: FileSearch, route: '/tools/whois' },
-      { id: 'ip-geolocation', name: 'IP Geolocation', description: 'Country, ISP & coordinates for a public IP', icon: MapPin, route: '/tools/ip-geolocation' },
-      { id: 'connections', name: 'Connections & Listeners', description: 'netstat-style active TCP/UDP sockets with owning process', icon: ArrowLeftRight, route: '/tools/connections' },
-      { id: 'wake-on-lan', name: 'Wake on LAN', description: 'Send a magic packet to power on a host by MAC', icon: Power, route: '/tools/wake-on-lan' },
-      { id: 'ping-monitor', name: 'Ping Monitor', description: 'Continuous multi-host latency, loss % & live chart', icon: Activity, route: '/tools/ping-monitor' },
-      { id: 'traceroute', name: 'Traceroute', description: 'Per-hop RTT with geolocation and a route map', icon: Route, route: '/tools/traceroute' },
-      { id: 'port-scanner', name: 'Port Scanner', description: 'Concurrent TCP port sweep with service names', icon: ScanSearch, route: '/tools/port-scanner' },
-      { id: 'network-scanner', name: 'IP / Network Scanner', description: 'Discover hosts by ICMP, ARP, reverse DNS & port probe', icon: ScanLine, route: '/tools/network-scanner' },
-      { id: 'neighbor-table', name: 'Neighbor Table', description: 'ARP / NDP cache: IP ⟷ MAC ⟷ interface & state', icon: Table2, route: '/tools/neighbor-table' },
-      { id: 'hosts-editor', name: 'Hosts File Editor', description: 'Edit /etc/hosts with enable/disable, backup & restore', icon: FileText, route: '/tools/hosts-editor' },
-      { id: 'firewall-viewer', name: 'Firewall Viewer', description: 'Read-only view of OS firewall rules (Windows / firewalld)', icon: ShieldCheck, route: '/tools/firewall-viewer' },
-      { id: 'iperf3', name: 'iperf3 Throughput', description: 'Bandwidth test with optional MTU / MSS override', icon: Gauge, route: '/tools/iperf3' },
-      { id: 'snmp', name: 'SNMP', description: 'v1 / v2c / v3 Walk, Get & Set against an OID', icon: ServerCog, route: '/tools/snmp' },
-      { id: 'discovery-protocol', name: 'Discovery Protocol', description: 'Capture LLDP / CDP neighbor advertisements', icon: RadioTower },
+      { id: 'dns-lookup', name: 'DNS Lookup', description: 'Any record type against public presets or a custom resolver', icon: Globe, route: '/tools/dns-lookup', group: 'Lookups' },
+      { id: 'whois', name: 'Whois', description: 'Registrar, dates & nameservers for a domain or IP', icon: FileSearch, route: '/tools/whois', group: 'Lookups' },
+      { id: 'ip-geolocation', name: 'IP Geolocation', description: 'Country, ISP & coordinates for a public IP', icon: MapPin, route: '/tools/ip-geolocation', group: 'Lookups' },
+      { id: 'sntp', name: 'SNTP Lookup', description: 'Clock offset & round-trip delay from NTP servers', icon: Clock, route: '/tools/sntp', group: 'Lookups' },
+
+      { id: 'ping-monitor', name: 'Ping Monitor', description: 'Continuous multi-host latency, loss % & live chart', icon: Activity, route: '/tools/ping-monitor', group: 'Reachability' },
+      { id: 'traceroute', name: 'Traceroute', description: 'Per-hop RTT with geolocation and a route map', icon: Route, route: '/tools/traceroute', group: 'Reachability' },
+
+      { id: 'port-scanner', name: 'Port Scanner', description: 'Concurrent TCP port sweep with service names', icon: ScanSearch, route: '/tools/port-scanner', group: 'Discovery' },
+      { id: 'network-scanner', name: 'IP / Network Scanner', description: 'Discover hosts by ICMP, ARP, reverse DNS & port probe', icon: ScanLine, route: '/tools/network-scanner', group: 'Discovery' },
+
+      { id: 'connections', name: 'Connections & Listeners', description: 'netstat-style active TCP/UDP sockets with owning process', icon: ArrowLeftRight, route: '/tools/connections', group: 'Local host' },
+      { id: 'neighbor-table', name: 'Neighbor Table', description: 'ARP / NDP cache: IP ⟷ MAC ⟷ interface & state', icon: Table2, route: '/tools/neighbor-table', group: 'Local host' },
+      { id: 'wake-on-lan', name: 'Wake on LAN', description: 'Send a magic packet to power on a host by MAC', icon: Power, route: '/tools/wake-on-lan', group: 'Local host' },
+
+      { id: 'hosts-editor', name: 'Hosts File Editor', description: 'Edit /etc/hosts with enable/disable, backup & restore', icon: FileText, route: '/tools/hosts-editor', group: 'System' },
+      { id: 'firewall-viewer', name: 'Firewall Viewer', description: 'Read-only view of OS firewall rules (Windows / firewalld)', icon: ShieldCheck, route: '/tools/firewall-viewer', group: 'System' },
+
+      { id: 'iperf3', name: 'iperf3 Throughput', description: 'Bandwidth test with optional MTU / MSS override', icon: Gauge, route: '/tools/iperf3', group: 'Devices & throughput' },
+      { id: 'snmp', name: 'SNMP', description: 'v1 / v2c / v3 Walk, Get & Set against an OID', icon: ServerCog, route: '/tools/snmp', group: 'Devices & throughput' },
+      { id: 'discovery-protocol', name: 'Discovery Protocol', description: 'Capture LLDP / CDP neighbor advertisements', icon: RadioTower, group: 'Devices & throughput' },
     ],
   },
   {

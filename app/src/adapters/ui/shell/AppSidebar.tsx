@@ -135,30 +135,44 @@ function ToolListPane({ module, currentPath }: { module: ModuleDef; currentPath:
     <div className="flex h-full w-60 flex-col overflow-hidden">
       <p className="truncate px-4 pt-4 pb-2 text-sm font-bold text-foreground">{module.title}</p>
       <div className="flex-1 overflow-y-auto px-2 pb-2">
-        {tools.map((tool) => {
+        {tools.map((tool, i) => {
           const Icon = tool.icon
           const enabled = Boolean(tool.route)
           // The FormFlow builder route is shared by the "new design" entry and
           // every saved template's fill/edit view (disambiguated by `?t=`) —
           // this row owns the highlight only when no template is open.
           const selected = enabled && currentPath === tool.route && !(tool.id === 'formflow-builder' && openTemplateName)
+          // Group heading: shown when not searching and this tool starts a new
+          // group. The first one gets no divider rule (module title is above).
+          const showHeading = !query && Boolean(tool.group) && tool.group !== tools[i - 1]?.group
           return (
-            <button
-              key={tool.id}
-              type="button"
-              disabled={!enabled}
-              onClick={() => tool.route && navigate(tool.route)}
-              className={cn(
-                'flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-sm',
-                selected && 'bg-primary/15 text-foreground font-medium',
-                !selected && enabled && 'text-foreground hover:bg-accent/40',
-                !enabled && 'text-muted-foreground opacity-60',
-              )}
-            >
-              <Icon className="size-[18px] shrink-0" />
-              <span className="flex-1 truncate">{tool.name}</span>
-              {!enabled ? <span className="text-[10px] text-muted-foreground">soon</span> : null}
-            </button>
+            <div key={tool.id}>
+              {showHeading ? (
+                <p
+                  className={cn(
+                    'px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70',
+                    i > 0 && 'mt-3 border-t border-border/50 pt-3',
+                  )}
+                >
+                  {tool.group}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                disabled={!enabled}
+                onClick={() => tool.route && navigate(tool.route)}
+                className={cn(
+                  'flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-sm',
+                  selected && 'bg-primary/15 text-foreground font-medium',
+                  !selected && enabled && 'text-foreground hover:bg-accent/40',
+                  !enabled && 'text-muted-foreground opacity-60',
+                )}
+              >
+                <Icon className="size-[18px] shrink-0" />
+                <span className="flex-1 truncate">{tool.name}</span>
+                {!enabled ? <span className="text-[10px] text-muted-foreground">soon</span> : null}
+              </button>
+            </div>
           )
         })}
         {module.id === 'formflow' ? (
