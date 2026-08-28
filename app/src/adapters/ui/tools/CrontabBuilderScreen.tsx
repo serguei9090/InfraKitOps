@@ -54,6 +54,41 @@ function defaultColumnState(): ColumnState {
   return { kind: 'every', list: '', rangeStart: '', rangeEnd: '', step: '' }
 }
 
+function everyFields(): Record<ColumnKey, ColumnState> {
+  const f = {} as Record<ColumnKey, ColumnState>
+  for (const c of columns) f[c.key] = defaultColumnState()
+  return f
+}
+
+const listCol = (v: string): ColumnState => ({ ...defaultColumnState(), kind: 'list', list: v })
+const stepCol = (v: string): ColumnState => ({ ...defaultColumnState(), kind: 'step', step: v })
+const rangeCol = (a: string, b: string): ColumnState => ({ ...defaultColumnState(), kind: 'range', rangeStart: a, rangeEnd: b })
+
+/** Common schedules. `build` returns a full 5-field state; the grid stays editable and any edit flips back to "custom". */
+const schedulePresets: { id: string; label: string; build: () => Record<ColumnKey, ColumnState> }[] = [
+  { id: 'every-min', label: 'Every minute', build: () => everyFields() },
+  { id: 'every-5', label: 'Every 5 minutes', build: () => ({ ...everyFields(), minute: stepCol('5') }) },
+  { id: 'every-15', label: 'Every 15 minutes', build: () => ({ ...everyFields(), minute: stepCol('15') }) },
+  { id: 'every-30', label: 'Every 30 minutes', build: () => ({ ...everyFields(), minute: stepCol('30') }) },
+  { id: 'hourly', label: 'Hourly (at :00)', build: () => ({ ...everyFields(), minute: listCol('0') }) },
+  { id: 'daily', label: 'Daily at 00:00', build: () => ({ ...everyFields(), minute: listCol('0'), hour: listCol('0') }) },
+  {
+    id: 'weekdays-9',
+    label: 'Weekdays at 09:00',
+    build: () => ({ ...everyFields(), minute: listCol('0'), hour: listCol('9'), dayOfWeek: rangeCol('1', '5') }),
+  },
+  {
+    id: 'weekly-sun',
+    label: 'Weekly — Sunday 00:00',
+    build: () => ({ ...everyFields(), minute: listCol('0'), hour: listCol('0'), dayOfWeek: listCol('0') }),
+  },
+  {
+    id: 'monthly-1',
+    label: 'Monthly — 1st at 00:00',
+    build: () => ({ ...everyFields(), minute: listCol('0'), hour: listCol('0'), dayOfMonth: listCol('1') }),
+  },
+]
+
 const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const monthNames = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -126,9 +161,18 @@ export function CrontabBuilderScreen() {
     return initial
   })
   const [explainText, setExplainText] = useState('0 9 * * 1-5')
+  const [activePreset, setActivePreset] = useState<string>('every-min')
 
   function updateField(key: ColumnKey, patch: Partial<ColumnState>) {
+    setActivePreset('custom')
     setFields((s) => ({ ...s, [key]: { ...s[key], ...patch } }))
+  }
+
+  function applyPreset(id: string) {
+    const preset = schedulePresets.find((p) => p.id === id)
+    if (!preset) return
+    setActivePreset(id)
+    setFields(preset.build())
   }
 
   const buildResult = useMemo(() => {
@@ -204,16 +248,42 @@ export function CrontabBuilderScreen() {
           </div>
 
           {mode === 'build' ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {columns.map((meta) => (
-                <ColumnPicker
-                  key={meta.key}
-                  meta={meta}
-                  state={fields[meta.key]}
-                  error={buildResult.fieldErrors[meta.key]}
-                  onChange={(patch) => updateField(meta.key, patch)}
-                />
-              ))}
+            <div className="flex flex-col gap-4">
+              <div className="flex max-w-md flex-col gap-1.5">
+                <Label htmlFor="cron-preset">Common schedule</Label>
+                <Select value={activePreset} onValueChange={(v) => applyPreset(String(v))}>
+                  <SelectTrigger id="cron-preset" className="w-full">
+                    <SelectValue>
+                      {(v: string) =>
+                        v === 'custom' ? 'Custom' : (schedulePresets.find((p) => p.id === v)?.label ?? v)
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {schedulePresets.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                    {activePreset === 'custom' ? <SelectItem value="custom">Custom</SelectItem> : null}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Pick a preset, then fine-tune the fields below — any edit switches this to "Custom".
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {columns.map((meta) => (
+                  <ColumnPicker
+                    key={meta.key}
+                    meta={meta}
+                    state={fields[meta.key]}
+                    error={buildResult.fieldErrors[meta.key]}
+                    onChange={(patch) => updateField(meta.key, patch)}
+                  />
+                ))}
+              </div>
             </div>
           ) : (
             <div className="flex max-w-md flex-col gap-1.5">
