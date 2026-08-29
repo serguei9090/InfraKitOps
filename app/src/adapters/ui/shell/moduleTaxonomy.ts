@@ -185,6 +185,14 @@ export const kModuleTaxonomy: ModuleDef[] = [
         route: '/tools/cache-sizer',
         group: 'Sizing',
       },
+      {
+        id: 'kafka-sizer',
+        name: 'Kafka Sizer',
+        description: 'Ingress + retention + fan-out → partitions, brokers, storage, topic config',
+        icon: Waypoints,
+        route: '/tools/kafka-sizer',
+        group: 'Sizing',
+      },
 
       {
         id: 'slo-error-budget',
