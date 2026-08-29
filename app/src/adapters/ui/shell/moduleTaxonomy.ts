@@ -158,6 +158,14 @@ export const kModuleTaxonomy: ModuleDef[] = [
         route: '/tools/k8s-capacity-sizer',
         group: 'Sizing',
       },
+      {
+        id: 'storage-iops-sizer',
+        name: 'Storage IOPS & Capacity',
+        description: 'IOPS + RAID write penalty + growth → disks needed, usable IOPS/capacity, runway',
+        icon: HardDrive,
+        route: '/tools/storage-iops-sizer',
+        group: 'Sizing',
+      },
 
       {
         id: 'slo-error-budget',

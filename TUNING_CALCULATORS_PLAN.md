@@ -1,6 +1,14 @@
 # Tuning & Performance — SRE / platform calculators (wave 1)
 
-Status: **in progress** (2026-08-29). Branch `tuning-calculators`.
+Status: **wave 1 done** (2026-08-29). Branch `tuning-calculators`.
+
+All 7 built and verified — `queueing.ts` primitive + 6 screens (Load
+Balancer Sizer, Connection Pool Sizer, K8s Node & Pod Capacity, SLO &
+Error Budget, Availability & Redundancy, Storage IOPS & Capacity). New
+`Reliability` group in the Tuning & Performance module for the SLO and
+Availability tools. `bun run build` clean, 1175 tests, `src/core` React-free.
+Shared `adapters/ui/tuning/SizerPanels.tsx` (StatCard / StatGrid /
+BreakdownTable / SizerCaveat).
 
 Extends the **Tuning & Performance** module (today: DB RAM Sizer, Zabbix
 Monitoring Sizer, Ceph PG, Linux Sysctl, Firewall Command) with the
