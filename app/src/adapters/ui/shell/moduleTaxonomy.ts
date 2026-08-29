@@ -25,6 +25,7 @@ import {
   Clock,
   Cloud,
   Code,
+  Coins,
   Database,
   FileCog,
   FileKey,
@@ -191,6 +192,15 @@ export const kModuleTaxonomy: ModuleDef[] = [
         icon: ShieldCheck,
         route: '/tools/availability-calculator',
         group: 'Reliability',
+      },
+
+      {
+        id: 'cloud-right-size',
+        name: 'Cloud Right-Size & Commitment',
+        description: 'p95 util → recommended size; on-demand vs reserved vs spot mix, break-even',
+        icon: Coins,
+        route: '/tools/cloud-right-size',
+        group: 'Cost',
       },
 
       { id: 'linux-sysctl', name: 'Linux Kernel Sysctl', description: 'Network buffers, BBR, somaxconn', icon: Terminal, route: '/tools/linux-sysctl', group: 'Kernel & firewall' },
