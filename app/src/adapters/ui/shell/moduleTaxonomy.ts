@@ -58,6 +58,7 @@ import {
   RadioTower,
   Route,
   Router,
+  Scale,
   ScanLine,
   ScanSearch,
   SearchCode,
@@ -132,6 +133,14 @@ export const kModuleTaxonomy: ModuleDef[] = [
       { id: 'db-memory-sizer', name: 'Database RAM Sizer', description: 'PostgreSQL / MariaDB buffer sizing', icon: Server, route: '/tools/db-memory-sizer', group: 'Sizing' },
       { id: 'zabbix-sizer', name: 'Monitoring Sizing', description: 'Zabbix NVPS & poller allocation', icon: Activity, route: '/tools/zabbix-sizer', group: 'Sizing' },
       { id: 'ceph-pg', name: 'Ceph PG Calculator', description: 'Power-of-2 PG rounding math', icon: HardDrive, route: '/tools/ceph-pg', group: 'Sizing' },
+      {
+        id: 'load-balancer-sizer',
+        name: 'Load Balancer & App Tier Sizer',
+        description: 'RPS + latency → instances, workers, nginx/HAProxy tuning (Little’s Law, M/M/c)',
+        icon: Scale,
+        route: '/tools/load-balancer-sizer',
+        group: 'Sizing',
+      },
 
       { id: 'linux-sysctl', name: 'Linux Kernel Sysctl', description: 'Network buffers, BBR, somaxconn', icon: Terminal, route: '/tools/linux-sysctl', group: 'Kernel & firewall' },
       {
