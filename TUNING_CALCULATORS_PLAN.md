@@ -68,9 +68,21 @@ testing" caveat the existing sizers carry.
 Each phase: `bun run build` + `bun run test` green, `grep -rl "from 'react'
 app/src/core` empty, screen verified in-browser, its own commit.
 
-## Wave 2 (not now)
+## Wave 2 — in progress (2026-08-29, branch `tuning-calculators-w2`)
 
-Kafka broker/partition sizing · Cache hit-ratio & Redis `maxmemory` · etcd
-sizing · Backup window & RTO · VPC CIDR carve-up · On-call staffing ·
-Replication lag / RPO · MTU/MSS overhead · Retry/timeout budget · Rate-limit
-/ token-bucket · Cloud right-size + reserved break-even · Capacity runway.
+Same shape as wave 1 — pure `core/tuning/**` math on the T2
+`BalancedFlowScaffold`, generated snippet where it makes sense.
+
+| # | tool | inputs → output | generates |
+|---|---|---|---|
+| 1 | **Capacity Runway** | current usage, linear or compound growth, ceiling, order lead time → months to ceiling, "order by" date, headroom over time | — |
+| 2 | **Cloud Right-Size & Commitment** | current vCPU/RAM, observed p50/p95 util, hours/month, on-demand $, RI/SP discount %, term → recommended size, on-demand vs RI vs spot mix, monthly saving, break-even utilisation | — |
+| 3 | **Cache Sizer** | working-set size, item size + overhead, target hit ratio (Zipf), TTL, writes/s → `maxmemory`, eviction policy, memory for the target hit rate, cost-of-miss ROI | `redis.conf` maxmemory block |
+| 4 | **Kafka Sizer** | ingress MB/s, message size, replication factor, retention hours, consumer groups, per-partition throughput ceiling → partitions, brokers, disk/broker, network/broker, `retention.ms` | topic config + broker notes |
+| 5 | **Retry & Timeout Budget** | end-to-end latency budget, call graph depth, per-hop timeout, retries + backoff + jitter → worst-case latency, does it fit, retry-amplification factor, recommended per-layer timeout (each < parent) | — |
+| 6 | **etcd Sizer** | object count, avg object size, write churn/s, history/compaction window, snapshot interval → DB size vs the 8 GiB limit, memory, disk IOPS/bandwidth, defrag cadence, `--quota-backend-bytes` | etcd flags |
+
+### Wave 3 (later)
+
+Backup window & RTO · VPC CIDR carve-up · On-call staffing · Replication lag
+/ RPO · MTU/MSS overhead · Rate-limit / token-bucket.
