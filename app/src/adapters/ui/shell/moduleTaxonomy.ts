@@ -74,6 +74,7 @@ import {
   Table2,
   Target,
   Terminal,
+  TrendingUp,
   Type,
   Wand2,
   Waypoints,
@@ -164,6 +165,14 @@ export const kModuleTaxonomy: ModuleDef[] = [
         description: 'IOPS + RAID write penalty + growth → disks needed, usable IOPS/capacity, runway',
         icon: HardDrive,
         route: '/tools/storage-iops-sizer',
+        group: 'Sizing',
+      },
+      {
+        id: 'capacity-runway',
+        name: 'Capacity Runway',
+        description: 'Usage + growth vs a ceiling → months to full, "order by" date, projection',
+        icon: TrendingUp,
+        route: '/tools/capacity-runway',
         group: 'Sizing',
       },
 
