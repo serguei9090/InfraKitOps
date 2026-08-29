@@ -3,11 +3,11 @@ import { Loader2, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { FileDropField } from '@/adapters/ui/FileDropField'
 import { useOptionalBackend } from '@/adapters/backend/useOptionalBackend'
 import { x509FetchViaBackend, type BackendX509FetchResult } from '@/adapters/backend/inspectClients'
 import {
@@ -109,13 +109,14 @@ export function X509InspectorScreen() {
             Paste a PEM-encoded certificate. A fullchain PEM with multiple certificates works too — one bad
             block does not hide the rest.
           </p>
-          <Textarea
+          <FileDropField
             id="x509-pem"
+            accept=".pem,.crt,.cer,.cert,.ca-bundle,.txt"
             rows={16}
             className="font-mono text-xs"
             placeholder={'-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'}
             value={pemText}
-            onChange={(e) => setPemText(e.target.value)}
+            onChange={setPemText}
           />
           </div>
         </div>
