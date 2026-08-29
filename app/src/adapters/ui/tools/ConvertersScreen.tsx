@@ -3,6 +3,7 @@ import { ArrowLeftRight } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { FileDropField } from '@/adapters/ui/FileDropField'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -276,13 +277,14 @@ export function ConvertersScreen() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="df-source">Source</Label>
-                <Textarea
+                <FileDropField
                   id="df-source"
+                  accept=".json,.yaml,.yml,.toml,.xml"
                   rows={12}
                   className="font-mono text-sm"
                   placeholder="Paste source data here..."
                   value={dfSource}
-                  onChange={(e) => setDfSource(e.target.value)}
+                  onChange={setDfSource}
                 />
               </div>
             </div>

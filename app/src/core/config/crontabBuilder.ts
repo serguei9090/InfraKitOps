@@ -260,8 +260,17 @@ function renderCronFieldSpec(spec: CronFieldSpec, field: CronField): string {
   const meta = metaOf(field)
 
   function check(value: number, what: string): void {
+    if (!Number.isInteger(value)) {
+      throw new Error(`${what} ${value} must be a whole number for ${meta.label}`)
+    }
     if (value < meta.min || value > meta.max) {
       throw new Error(`${what} ${value} is out of range for ${meta.label} (allowed ${meta.min}-${meta.max})`)
+    }
+  }
+
+  function checkStep(n: number): void {
+    if (!Number.isInteger(n) || n < 1 || n > meta.max) {
+      throw new Error(`Step ${n} must be a whole number between 1 and ${meta.max} for ${meta.label}`)
     }
   }
 
@@ -292,9 +301,7 @@ function renderCronFieldSpec(spec: CronFieldSpec, field: CronField): string {
 
     case 'step': {
       const n = spec.step!
-      if (n < 1 || n > meta.max) {
-        throw new Error(`Step ${n} must be between 1 and ${meta.max} for ${meta.label}`)
-      }
+      checkStep(n)
       return n === 1 ? '*' : `*/${n}`
     }
 
@@ -307,9 +314,7 @@ function renderCronFieldSpec(spec: CronFieldSpec, field: CronField): string {
       if (s > e) {
         throw new Error(`Range start ${s} must not be greater than range end ${e} for ${meta.label}`)
       }
-      if (n < 1 || n > meta.max) {
-        throw new Error(`Step ${n} must be between 1 and ${meta.max} for ${meta.label}`)
-      }
+      checkStep(n)
       return n === 1 ? `${s}-${e}` : `${s}-${e}/${n}`
     }
   }

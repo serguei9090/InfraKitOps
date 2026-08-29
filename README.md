@@ -105,3 +105,11 @@ Tracked in more detail in `MIGRATION_PLAN.md`, `NETWORK_MODULE_PLAN.md`, and
   (Rust `set_permissions`), not the web build — a browser download always
   lands writable. Signing stays the user's job (their cert, their private
   key, Windows-only `rdpsign.exe`).
+- **Config-builder "import existing config".** The config builders (SSH,
+  sysctl, Zabbix, RDP, Web Server, Fail2ban) only *generate* files today.
+  Loading an existing config to pre-fill the form would need a reverse
+  parser per tool — tracking every argument/combination that maps back to a
+  form control. Deferred until there's demand; not a small change.
+- **Tuning calculators wave 3** — backup window & RTO, VPC CIDR carve-up,
+  on-call staffing, replication lag / RPO, MTU/MSS overhead, rate-limit /
+  token-bucket (see `TUNING_CALCULATORS_PLAN.md`).
