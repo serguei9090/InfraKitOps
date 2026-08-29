@@ -10,6 +10,7 @@ import { DbMemorySizerScreen } from './adapters/ui/tools/DbMemorySizerScreen'
 import { LoadBalancerSizerScreen } from './adapters/ui/tools/LoadBalancerSizerScreen'
 import { ConnectionPoolSizerScreen } from './adapters/ui/tools/ConnectionPoolSizerScreen'
 import { K8sCapacitySizerScreen } from './adapters/ui/tools/K8sCapacitySizerScreen'
+import { SloErrorBudgetScreen } from './adapters/ui/tools/SloErrorBudgetScreen'
 import { ZabbixSizerScreen } from './adapters/ui/tools/ZabbixSizerScreen'
 import { FirewallCommandBuilderScreen } from './adapters/ui/tools/FirewallCommandBuilderScreen'
 import { SshConfigBuilderScreen } from './adapters/ui/tools/SshConfigBuilderScreen'
@@ -109,6 +110,7 @@ export const router = createBrowserRouter([
       { path: 'tools/load-balancer-sizer', element: <LoadBalancerSizerScreen /> },
       { path: 'tools/connection-pool-sizer', element: <ConnectionPoolSizerScreen /> },
       { path: 'tools/k8s-capacity-sizer', element: <K8sCapacitySizerScreen /> },
+      { path: 'tools/slo-error-budget', element: <SloErrorBudgetScreen /> },
       { path: 'tools/zabbix-sizer', element: <ZabbixSizerScreen /> },
       { path: 'tools/firewall-command-builder', element: <FirewallCommandBuilderScreen /> },
       { path: 'tools/ssh-config-builder', element: <SshConfigBuilderScreen /> },

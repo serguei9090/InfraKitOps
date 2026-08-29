@@ -72,6 +72,7 @@ import {
   SlidersHorizontal,
   Table,
   Table2,
+  Target,
   Terminal,
   Type,
   Wand2,
@@ -156,6 +157,15 @@ export const kModuleTaxonomy: ModuleDef[] = [
         icon: Boxes,
         route: '/tools/k8s-capacity-sizer',
         group: 'Sizing',
+      },
+
+      {
+        id: 'slo-error-budget',
+        name: 'SLO & Error Budget',
+        description: 'SLO → allowed downtime, budget spent, multi-window burn-rate Prometheus alerts',
+        icon: Target,
+        route: '/tools/slo-error-budget',
+        group: 'Reliability',
       },
 
       { id: 'linux-sysctl', name: 'Linux Kernel Sysctl', description: 'Network buffers, BBR, somaxconn', icon: Terminal, route: '/tools/linux-sysctl', group: 'Kernel & firewall' },
