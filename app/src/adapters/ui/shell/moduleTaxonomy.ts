@@ -210,6 +210,14 @@ export const kModuleTaxonomy: ModuleDef[] = [
         route: '/tools/availability-calculator',
         group: 'Reliability',
       },
+      {
+        id: 'retry-budget',
+        name: 'Retry & Timeout Budget',
+        description: 'Call chain → worst-case latency vs budget, retry amplification, per-hop timeouts',
+        icon: Shuffle,
+        route: '/tools/retry-budget',
+        group: 'Reliability',
+      },
 
       {
         id: 'cloud-right-size',
