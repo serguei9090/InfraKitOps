@@ -15,6 +15,7 @@ import { AvailabilityCalculatorScreen } from './adapters/ui/tools/AvailabilityCa
 import { StorageIopsSizerScreen } from './adapters/ui/tools/StorageIopsSizerScreen'
 import { CapacityRunwayScreen } from './adapters/ui/tools/CapacityRunwayScreen'
 import { CloudRightSizeScreen } from './adapters/ui/tools/CloudRightSizeScreen'
+import { CacheSizerScreen } from './adapters/ui/tools/CacheSizerScreen'
 import { ZabbixSizerScreen } from './adapters/ui/tools/ZabbixSizerScreen'
 import { FirewallCommandBuilderScreen } from './adapters/ui/tools/FirewallCommandBuilderScreen'
 import { SshConfigBuilderScreen } from './adapters/ui/tools/SshConfigBuilderScreen'
@@ -119,6 +120,7 @@ export const router = createBrowserRouter([
       { path: 'tools/storage-iops-sizer', element: <StorageIopsSizerScreen /> },
       { path: 'tools/capacity-runway', element: <CapacityRunwayScreen /> },
       { path: 'tools/cloud-right-size', element: <CloudRightSizeScreen /> },
+      { path: 'tools/cache-sizer', element: <CacheSizerScreen /> },
       { path: 'tools/zabbix-sizer', element: <ZabbixSizerScreen /> },
       { path: 'tools/firewall-command-builder', element: <FirewallCommandBuilderScreen /> },
       { path: 'tools/ssh-config-builder', element: <SshConfigBuilderScreen /> },

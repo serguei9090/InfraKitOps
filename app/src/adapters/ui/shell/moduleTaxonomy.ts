@@ -80,6 +80,7 @@ import {
   Wand2,
   Waypoints,
   Workflow,
+  Zap,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -174,6 +175,14 @@ export const kModuleTaxonomy: ModuleDef[] = [
         description: 'Usage + growth vs a ceiling → months to full, "order by" date, projection',
         icon: TrendingUp,
         route: '/tools/capacity-runway',
+        group: 'Sizing',
+      },
+      {
+        id: 'cache-sizer',
+        name: 'Cache Sizer',
+        description: 'Working set + hit-ratio target → maxmemory, DB reads offloaded, redis.conf',
+        icon: Zap,
+        route: '/tools/cache-sizer',
         group: 'Sizing',
       },
 
