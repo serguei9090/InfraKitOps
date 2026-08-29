@@ -211,7 +211,10 @@ export function FormFlowBuilderScreen() {
                   className="font-mono text-xs"
                   placeholder={'Drop an XML / YAML / JSON file here, or paste:\n\n<config>\n  <server>...</server>\n</config>'}
                   value={pasteText}
-                  onChange={setPasteText}
+                  onChange={(t) => {
+                    setPasteText(t)
+                    if (parseError) setParseError(null)
+                  }}
                   toolbar={
                     <>
                       <Select

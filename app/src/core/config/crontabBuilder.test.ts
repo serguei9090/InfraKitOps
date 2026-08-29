@@ -64,6 +64,13 @@ describe('CrontabBuilder', () => {
       expect(() => builder.build({ hour: cronRange(10, 2) })).toThrow()
     })
 
+    it('rejects non-integer structured input instead of emitting an invalid field', () => {
+      expect(() => builder.build({ minute: cronValues([1.5]) })).toThrow(/whole number/)
+      expect(() => builder.build({ minute: cronStep(2.5) })).toThrow(/whole number/)
+      expect(() => builder.build({ hour: cronRange(1.2, 5) })).toThrow(/whole number/)
+      expect(() => builder.build({ minute: cronRangeStep(0, 30, 7.5) })).toThrow(/whole number/)
+    })
+
     it('day-of-week accepts both 0 and 7 for Sunday', () => {
       expect(builder.build({ dayOfWeek: cronValues([0]) })).toBe('* * * * 0')
       expect(builder.build({ dayOfWeek: cronValues([7]) })).toBe('* * * * 7')

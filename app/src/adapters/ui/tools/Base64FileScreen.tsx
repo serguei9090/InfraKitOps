@@ -119,6 +119,7 @@ export function Base64FileScreen() {
                   rows={14}
                   className="font-mono text-xs"
                   placeholder="Paste text to encode, or drop a file"
+                  maxBytes={64 * 1024 * 1024}
                   value={encodeText}
                   onChange={setEncodeText}
                   onBinaryFile={(f) => {
@@ -179,6 +180,7 @@ export function Base64FileScreen() {
                 rows={16}
                 className="font-mono text-xs"
                 placeholder="Paste Base64 or a data URI here"
+                maxBytes={64 * 1024 * 1024}
                 value={decodeText}
                 onChange={setDecodeText}
               />
