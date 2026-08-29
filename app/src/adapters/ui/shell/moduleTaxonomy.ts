@@ -149,6 +149,14 @@ export const kModuleTaxonomy: ModuleDef[] = [
         route: '/tools/connection-pool-sizer',
         group: 'Sizing',
       },
+      {
+        id: 'k8s-capacity-sizer',
+        name: 'Kubernetes Node & Pod Capacity',
+        description: 'Pods + node type → node count, pods/node, "survives 1 AZ?", ResourceQuota',
+        icon: Boxes,
+        route: '/tools/k8s-capacity-sizer',
+        group: 'Sizing',
+      },
 
       { id: 'linux-sysctl', name: 'Linux Kernel Sysctl', description: 'Network buffers, BBR, somaxconn', icon: Terminal, route: '/tools/linux-sysctl', group: 'Kernel & firewall' },
       {
