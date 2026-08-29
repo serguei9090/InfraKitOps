@@ -167,6 +167,14 @@ export const kModuleTaxonomy: ModuleDef[] = [
         route: '/tools/slo-error-budget',
         group: 'Reliability',
       },
+      {
+        id: 'availability-calculator',
+        name: 'Availability & Redundancy',
+        description: 'Compose component availabilities (series/parallel, k-of-n) → system nines & downtime',
+        icon: ShieldCheck,
+        route: '/tools/availability-calculator',
+        group: 'Reliability',
+      },
 
       { id: 'linux-sysctl', name: 'Linux Kernel Sysctl', description: 'Network buffers, BBR, somaxconn', icon: Terminal, route: '/tools/linux-sysctl', group: 'Kernel & firewall' },
       {
