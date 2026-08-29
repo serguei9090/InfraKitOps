@@ -7,13 +7,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
 import { FileDropField } from '@/adapters/ui/FileDropField'
-import {
-  BytesSourceField,
-  EMPTY_BYTES_SOURCE,
-  bytesSourceIsEmpty,
-  bytesSourceToBytes,
-  type BytesSource,
-} from '@/adapters/ui/BytesSourceField'
 import { downloadBlob } from '@/lib/downloadFile'
 import {
   Base64FileDecoder,
@@ -30,6 +23,12 @@ const decoder = new Base64FileDecoder()
 
 type Direction = 'encode' | 'decode'
 
+interface BinaryFile {
+  bytes: Uint8Array
+  name: string
+  size: number
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -45,7 +44,8 @@ const WRAPPING_LABELS: Record<Base64Wrapping, string> = {
 export function Base64FileScreen() {
   const [direction, setDirection] = useState<Direction>('encode')
 
-  const [source, setSource] = useState<BytesSource>(EMPTY_BYTES_SOURCE)
+  const [encodeText, setEncodeText] = useState('')
+  const [encodeFile, setEncodeFile] = useState<BinaryFile | null>(null)
   const [wrapping, setWrapping] = useState<Base64Wrapping>('plain')
   const [mimeType, setMimeType] = useState('')
   const [secretName, setSecretName] = useState('my-secret')
@@ -53,17 +53,12 @@ export function Base64FileScreen() {
 
   const [decodeText, setDecodeText] = useState('')
 
-  function handleSourceChange(next: BytesSource) {
-    setSource(next)
-    if (next.kind === 'file' && next.name) setMimeType(guessMimeType(next.name))
-    else if (next.kind === 'text' && mimeType.trim().length === 0) setMimeType('text/plain')
-  }
-
   const encodeResult = useMemo((): { value: Base64FileEncodeResult | null; error: string | null } => {
-    if (bytesSourceIsEmpty(source)) return { value: null, error: null }
+    const bytes = encodeFile ? encodeFile.bytes : new TextEncoder().encode(encodeText)
+    if (bytes.length === 0) return { value: null, error: null }
     try {
       const value = encoder.execute({
-        bytes: bytesSourceToBytes(source),
+        bytes,
         wrapping,
         mimeType: mimeType.trim().length === 0 ? undefined : mimeType.trim(),
         secretName: secretName.trim().length === 0 ? 'my-secret' : secretName.trim(),
@@ -73,7 +68,7 @@ export function Base64FileScreen() {
     } catch (e) {
       return { value: null, error: e instanceof Error ? e.message : String(e) }
     }
-  }, [source, wrapping, mimeType, secretName, secretKey])
+  }, [encodeText, encodeFile, wrapping, mimeType, secretName, secretKey])
 
   const decodeResult = useMemo((): { value: Base64FileDecodeResult | null; error: string | null } => {
     if (decodeText.trim().length === 0) return { value: null, error: null }
@@ -117,14 +112,21 @@ export function Base64FileScreen() {
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="encode-source">Source</Label>
                 <p className="text-xs text-muted-foreground">
-                  Paste text (encoded as UTF-8) or upload any file — binary is preserved byte-for-byte.
+                  Paste text (encoded as UTF-8) or drop any file — a binary file is kept as raw bytes.
                 </p>
-                <BytesSourceField
+                <FileDropField
                   id="encode-source"
                   rows={14}
-                  value={source}
-                  onChange={handleSourceChange}
-                  textPlaceholder="Paste text to encode to Base64"
+                  className="font-mono text-xs"
+                  placeholder="Paste text to encode, or drop a file"
+                  value={encodeText}
+                  onChange={setEncodeText}
+                  onBinaryFile={(f) => {
+                    setEncodeFile(f)
+                    setMimeType(guessMimeType(f.name))
+                  }}
+                  binaryFile={encodeFile ? { name: encodeFile.name, size: encodeFile.size } : null}
+                  onClearBinary={() => setEncodeFile(null)}
                 />
               </div>
 
