@@ -68,7 +68,10 @@ testing" caveat the existing sizers carry.
 Each phase: `bun run build` + `bun run test` green, `grep -rl "from 'react'
 app/src/core` empty, screen verified in-browser, its own commit.
 
-## Wave 2 — in progress (2026-08-29, branch `tuning-calculators-w2`)
+## Wave 2 — done (2026-08-29, branch `tuning-calculators-w2`)
+
+All 6 built + verified. New `Cost` group (Cloud Right-Size). `bun run
+build` clean, 1242 tests, `src/core` React-free.
 
 Same shape as wave 1 — pure `core/tuning/**` math on the T2
 `BalancedFlowScaffold`, generated snippet where it makes sense.
