@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Copy, Search, X } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { FileDropField } from '@/adapters/ui/FileDropField'
 import { cn } from '@/lib/utils'
 import {
   StructuredTreeParser,
@@ -218,13 +218,14 @@ export function StructuredTreeViewerScreen() {
       inputPanel={
         <div className="flex max-w-xl flex-col gap-3">
           <Label htmlFor="tree-document">Document</Label>
-          <Textarea
+          <FileDropField
             id="tree-document"
+            accept=".json,.yaml,.yml,.toml,.xml"
             rows={20}
             className="font-mono text-sm"
             placeholder={'{\n  "key": "value"\n}\n\n— or —\n\nkey: value'}
             value={source}
-            onChange={(e) => setSource(e.target.value)}
+            onChange={setSource}
           />
           {result.value ? (
             <p className="text-xs text-muted-foreground">

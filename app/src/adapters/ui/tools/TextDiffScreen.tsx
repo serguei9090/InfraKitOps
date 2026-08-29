@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { FileDropField } from '@/adapters/ui/FileDropField'
 import {
   TextDiff,
   diffLineMarker,
@@ -73,24 +73,24 @@ export function TextDiffScreen() {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="diff-left">Left (original)</Label>
-            <Textarea
+            <FileDropField
               id="diff-left"
               rows={10}
               className="font-mono text-sm"
               placeholder="Paste the original text"
               value={left}
-              onChange={(e) => setLeft(e.target.value)}
+              onChange={setLeft}
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="diff-right">Right (modified)</Label>
-            <Textarea
+            <FileDropField
               id="diff-right"
               rows={10}
               className="font-mono text-sm"
               placeholder="Paste the modified text"
               value={right}
-              onChange={(e) => setRight(e.target.value)}
+              onChange={setRight}
             />
           </div>
         </div>

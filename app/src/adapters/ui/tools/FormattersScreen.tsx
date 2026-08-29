@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { FileDropField } from '@/adapters/ui/FileDropField'
 import { JsonFormatter, type JsonFormatMode } from '@/core/utility/jsonFormatter'
 import { XmlFormatter } from '@/core/utility/xmlFormatter'
 import { YamlFormatter } from '@/core/utility/yamlFormatter'
@@ -25,6 +25,7 @@ interface FormatResult {
 }
 
 const FORMAT_LABELS: Record<FormatKind, string> = { json: 'JSON', xml: 'XML', yaml: 'YAML', sql: 'SQL' }
+const FORMAT_ACCEPT: Record<FormatKind, string> = { json: '.json', xml: '.xml,.svg,.xsd', yaml: '.yaml,.yml', sql: '.sql' }
 
 const MODE_OPTIONS: { value: Mode; label: string }[] = [
   { value: 'pretty', label: 'Pretty' },
@@ -91,12 +92,13 @@ export function FormattersScreen() {
               </Button>
             ))}
           </div>
-          <Textarea
+          <FileDropField
+            accept={FORMAT_ACCEPT[tab]}
             rows={16}
             className="font-mono text-sm"
             placeholder={`Paste ${FORMAT_LABELS[tab]} here`}
             value={active.source}
-            onChange={(e) => active.setSource(e.target.value)}
+            onChange={active.setSource}
           />
         </div>
       }

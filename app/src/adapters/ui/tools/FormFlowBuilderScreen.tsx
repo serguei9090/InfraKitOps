@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FileUp, Plus, Save, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Save, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch, type Control } from 'react-hook-form'
 import { useSearchParams } from 'react-router-dom'
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
+import { FileDropField } from '@/adapters/ui/FileDropField'
 import { ToolDetailScaffold, ToolScaffoldHeader, ToolScaffoldPanel } from '@/adapters/ui/shell/ToolDetailScaffold'
 import { createSchemaRepository } from '@/adapters/storage/schemaRepository'
 import { FormFlowParser } from '@/core/form_flow/formFlowParser'
@@ -64,9 +64,6 @@ export function FormFlowBuilderScreen() {
   const mode: 'design' | 'fill' = !openTemplateName || searchParams.get('mode') === 'edit' ? 'design' : 'fill'
 
   const [pasteText, setPasteText] = useState('')
-  const [sourceName, setSourceName] = useState<string | null>(null)
-  const [dragOver, setDragOver] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const [formatOverride, setFormatOverride] = useState<SourceFormat | undefined>(undefined)
   const [schema, setSchema] = useState<FormFlowSchema | null>(null)
   const [parseError, setParseError] = useState<string | null>(null)
@@ -115,27 +112,6 @@ export function FormFlowBuilderScreen() {
       setSchema(null)
       setParseError(messageOf(e))
     }
-  }
-
-  function loadFile(file: File) {
-    file.text().then((text) => {
-      setPasteText(text)
-      setSourceName(file.name)
-      setParseError(null)
-    })
-  }
-
-  function handleFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) loadFile(file)
-    e.target.value = ''
-  }
-
-  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
-    e.preventDefault()
-    setDragOver(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) loadFile(file)
   }
 
   function replaceTopField(index: number, updated: SchemaField) {
@@ -229,68 +205,37 @@ export function FormFlowBuilderScreen() {
             </button>
             {sourceExpanded ? (
               <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xml,.yaml,.yml,.json"
-                    onChange={handleFilePicked}
-                    className="sr-only"
-                  />
-                  <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                    <FileUp className="size-4" />
-                    Choose file…
-                  </Button>
-                  <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-                    {sourceName ? <span className="text-foreground">{sourceName}</span> : 'or drop a file / paste below'}
-                  </span>
-                  <Select
-                    value={formatOverride ?? 'auto'}
-                    onValueChange={(v) => setFormatOverride(v === 'auto' ? undefined : ((v as SourceFormat) ?? undefined))}
-                  >
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="Auto-detect format" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">Auto-detect format</SelectItem>
-                      {SOURCE_FORMATS.map((f) => (
-                        <SelectItem key={f} value={f}>
-                          {f.toUpperCase()}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button type="button" onClick={handleParse} disabled={pasteText.trim().length === 0}>
-                    Parse
-                  </Button>
-                </div>
-                <div
-                  onDragOver={(e) => {
-                    e.preventDefault()
-                    setDragOver(true)
-                  }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={handleDrop}
-                  className={
-                    'rounded-lg border border-dashed transition-colors ' +
-                    (dragOver ? 'border-primary bg-primary/5' : 'border-border/60')
+                <FileDropField
+                  accept=".xml,.yaml,.yml,.json"
+                  rows={10}
+                  className="font-mono text-xs"
+                  placeholder={'Drop an XML / YAML / JSON file here, or paste:\n\n<config>\n  <server>...</server>\n</config>'}
+                  value={pasteText}
+                  onChange={setPasteText}
+                  toolbar={
+                    <>
+                      <Select
+                        value={formatOverride ?? 'auto'}
+                        onValueChange={(v) => setFormatOverride(v === 'auto' ? undefined : ((v as SourceFormat) ?? undefined))}
+                      >
+                        <SelectTrigger className="w-40">
+                          <SelectValue placeholder="Auto-detect format" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">Auto-detect format</SelectItem>
+                          {SOURCE_FORMATS.map((f) => (
+                            <SelectItem key={f} value={f}>
+                              {f.toUpperCase()}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" onClick={handleParse} disabled={pasteText.trim().length === 0}>
+                        Parse
+                      </Button>
+                    </>
                   }
-                >
-                  <Textarea
-                    value={pasteText}
-                    onChange={(e) => {
-                      setPasteText(e.target.value)
-                      if (sourceName) setSourceName(null)
-                    }}
-                    rows={10}
-                    className="border-0 bg-transparent font-mono text-xs focus-visible:ring-0"
-                    placeholder={
-                      dragOver
-                        ? 'Drop to load the file…'
-                        : 'Drop an XML / YAML / JSON file here, or paste:\n\n<config>\n  <server>...</server>\n</config>'
-                    }
-                  />
-                </div>
+                />
                 {parseError ? <p className="text-sm text-destructive">Could not parse: {parseError}</p> : null}
               </>
             ) : null}

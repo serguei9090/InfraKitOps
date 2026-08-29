@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { FileDropField } from '@/adapters/ui/FileDropField'
 import { downloadBlob } from '@/lib/downloadFile'
 import {
   JsonToCsvConverter,
@@ -80,13 +80,14 @@ export function JsonToCsvScreen() {
         <div className="flex max-w-xl flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="json-to-csv-input">JSON input</Label>
-            <Textarea
+            <FileDropField
               id="json-to-csv-input"
+              accept=".json"
               rows={14}
               className="font-mono text-sm"
               placeholder='[{"a": 1, "b": 2}, {"a": 3, "b": 4}]'
               value={json}
-              onChange={(e) => setJson(e.target.value)}
+              onChange={setJson}
             />
           </div>
 

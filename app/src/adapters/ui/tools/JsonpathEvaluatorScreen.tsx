@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { CheckCircle2, XCircle } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { FileDropField } from '@/adapters/ui/FileDropField'
 import {
   JsonPathEvaluator,
   jsonPathPrettyValue,
@@ -35,13 +35,14 @@ export function JsonpathEvaluatorScreen() {
         <div className="flex max-w-xl flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="jsonpath-document">JSON document</Label>
-            <Textarea
+            <FileDropField
               id="jsonpath-document"
+              accept=".json"
               rows={16}
               className="font-mono text-sm"
               placeholder="Paste a JSON document here"
               value={document}
-              onChange={(e) => setDocument(e.target.value)}
+              onChange={setDocument}
             />
           </div>
           <div className="flex flex-col gap-1.5">
