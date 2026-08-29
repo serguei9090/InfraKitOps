@@ -162,6 +162,14 @@ export const kModuleTaxonomy: ModuleDef[] = [
         group: 'Sizing',
       },
       {
+        id: 'etcd-sizer',
+        name: 'etcd Sizer',
+        description: 'Objects + write churn → DB size vs the 8 GiB wall, RAM, disk IOPS, defrag cadence',
+        icon: Database,
+        route: '/tools/etcd-sizer',
+        group: 'Sizing',
+      },
+      {
         id: 'storage-iops-sizer',
         name: 'Storage IOPS & Capacity',
         description: 'IOPS + RAID write penalty + growth → disks needed, usable IOPS/capacity, runway',

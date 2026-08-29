@@ -18,6 +18,7 @@ import { CloudRightSizeScreen } from './adapters/ui/tools/CloudRightSizeScreen'
 import { CacheSizerScreen } from './adapters/ui/tools/CacheSizerScreen'
 import { KafkaSizerScreen } from './adapters/ui/tools/KafkaSizerScreen'
 import { RetryBudgetScreen } from './adapters/ui/tools/RetryBudgetScreen'
+import { EtcdSizerScreen } from './adapters/ui/tools/EtcdSizerScreen'
 import { ZabbixSizerScreen } from './adapters/ui/tools/ZabbixSizerScreen'
 import { FirewallCommandBuilderScreen } from './adapters/ui/tools/FirewallCommandBuilderScreen'
 import { SshConfigBuilderScreen } from './adapters/ui/tools/SshConfigBuilderScreen'
@@ -125,6 +126,7 @@ export const router = createBrowserRouter([
       { path: 'tools/cache-sizer', element: <CacheSizerScreen /> },
       { path: 'tools/kafka-sizer', element: <KafkaSizerScreen /> },
       { path: 'tools/retry-budget', element: <RetryBudgetScreen /> },
+      { path: 'tools/etcd-sizer', element: <EtcdSizerScreen /> },
       { path: 'tools/zabbix-sizer', element: <ZabbixSizerScreen /> },
       { path: 'tools/firewall-command-builder', element: <FirewallCommandBuilderScreen /> },
       { path: 'tools/ssh-config-builder', element: <SshConfigBuilderScreen /> },
