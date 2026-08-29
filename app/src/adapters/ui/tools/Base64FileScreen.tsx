@@ -3,10 +3,17 @@ import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToolDetailScaffold } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { FileDropField } from '@/adapters/ui/FileDropField'
+import {
+  BytesSourceField,
+  EMPTY_BYTES_SOURCE,
+  bytesSourceIsEmpty,
+  bytesSourceToBytes,
+  type BytesSource,
+} from '@/adapters/ui/BytesSourceField'
 import { downloadBlob } from '@/lib/downloadFile'
 import {
   Base64FileDecoder,
@@ -23,11 +30,6 @@ const decoder = new Base64FileDecoder()
 
 type Direction = 'encode' | 'decode'
 
-interface SourceFile {
-  name: string
-  bytes: Uint8Array
-}
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -43,7 +45,7 @@ const WRAPPING_LABELS: Record<Base64Wrapping, string> = {
 export function Base64FileScreen() {
   const [direction, setDirection] = useState<Direction>('encode')
 
-  const [sourceFile, setSourceFile] = useState<SourceFile | null>(null)
+  const [source, setSource] = useState<BytesSource>(EMPTY_BYTES_SOURCE)
   const [wrapping, setWrapping] = useState<Base64Wrapping>('plain')
   const [mimeType, setMimeType] = useState('')
   const [secretName, setSecretName] = useState('my-secret')
@@ -51,19 +53,17 @@ export function Base64FileScreen() {
 
   const [decodeText, setDecodeText] = useState('')
 
-  async function handleFilePicked(files: FileList | null) {
-    const file = files?.[0]
-    if (!file) return
-    const buffer = await file.arrayBuffer()
-    setSourceFile({ name: file.name, bytes: new Uint8Array(buffer) })
-    setMimeType(guessMimeType(file.name))
+  function handleSourceChange(next: BytesSource) {
+    setSource(next)
+    if (next.kind === 'file' && next.name) setMimeType(guessMimeType(next.name))
+    else if (next.kind === 'text' && mimeType.trim().length === 0) setMimeType('text/plain')
   }
 
   const encodeResult = useMemo((): { value: Base64FileEncodeResult | null; error: string | null } => {
-    if (!sourceFile) return { value: null, error: null }
+    if (bytesSourceIsEmpty(source)) return { value: null, error: null }
     try {
       const value = encoder.execute({
-        bytes: sourceFile.bytes,
+        bytes: bytesSourceToBytes(source),
         wrapping,
         mimeType: mimeType.trim().length === 0 ? undefined : mimeType.trim(),
         secretName: secretName.trim().length === 0 ? 'my-secret' : secretName.trim(),
@@ -73,7 +73,7 @@ export function Base64FileScreen() {
     } catch (e) {
       return { value: null, error: e instanceof Error ? e.message : String(e) }
     }
-  }, [sourceFile, wrapping, mimeType, secretName, secretKey])
+  }, [source, wrapping, mimeType, secretName, secretKey])
 
   const decodeResult = useMemo((): { value: Base64FileDecodeResult | null; error: string | null } => {
     if (decodeText.trim().length === 0) return { value: null, error: null }
@@ -104,7 +104,7 @@ export function Base64FileScreen() {
             <p className="text-sm font-medium">Direction</p>
             <div className="flex gap-2">
               <Button type="button" size="sm" variant={direction === 'encode' ? 'default' : 'outline'} onClick={() => setDirection('encode')}>
-                Encode (file → Base64)
+                Encode (→ Base64)
               </Button>
               <Button type="button" size="sm" variant={direction === 'decode' ? 'default' : 'outline'} onClick={() => setDirection('decode')}>
                 Decode (Base64 → file)
@@ -115,18 +115,17 @@ export function Base64FileScreen() {
           {direction === 'encode' ? (
             <>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="source-file">Source file</Label>
-                <input
-                  id="source-file"
-                  type="file"
-                  className="text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border file:border-input file:bg-transparent file:px-2.5 file:py-1 file:text-sm file:font-medium file:text-foreground"
-                  onChange={(e) => void handleFilePicked(e.target.files)}
+                <Label htmlFor="encode-source">Source</Label>
+                <p className="text-xs text-muted-foreground">
+                  Paste text (encoded as UTF-8) or upload any file — binary is preserved byte-for-byte.
+                </p>
+                <BytesSourceField
+                  id="encode-source"
+                  rows={14}
+                  value={source}
+                  onChange={handleSourceChange}
+                  textPlaceholder="Paste text to encode to Base64"
                 />
-                {sourceFile ? (
-                  <p className="text-xs text-muted-foreground">
-                    {sourceFile.name} · {formatBytes(sourceFile.bytes.byteLength)}
-                  </p>
-                ) : null}
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -170,13 +169,16 @@ export function Base64FileScreen() {
               <Label htmlFor="decode-input">Base64 input</Label>
               <p className="text-xs text-muted-foreground">
                 Plain Base64 or a data: URI. Line breaks, missing padding and the URL-safe alphabet are all fine.
+                Drop a file that contains the Base64, or paste it.
               </p>
-              <Textarea
+              <FileDropField
                 id="decode-input"
-                className="min-h-64 font-mono text-xs"
+                accept=".txt,.b64,.base64,.pem,.crt,.cer"
+                rows={16}
+                className="font-mono text-xs"
                 placeholder="Paste Base64 or a data URI here"
                 value={decodeText}
-                onChange={(e) => setDecodeText(e.target.value)}
+                onChange={setDecodeText}
               />
             </div>
           )}
@@ -191,16 +193,16 @@ export function Base64FileScreen() {
       outputPanel={
         direction === 'encode' ? (
           encodeResult.value == null ? (
-            <p className="text-sm text-muted-foreground">Choose a file on the left to see its Base64 form here.</p>
+            <p className="text-sm text-muted-foreground">Add a source on the left to see its Base64 form here.</p>
           ) : (
-            <div className="flex flex-col gap-4">
+            <div className="flex h-full min-h-0 flex-col gap-4">
               <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                 <span className="text-muted-foreground">Source size</span>
                 <span className="text-right font-mono">{formatBytes(encodeResult.value.byteSize)}</span>
                 <span className="text-muted-foreground">Encoded length</span>
                 <span className="text-right font-mono">{encodeResult.value.encodedLength} chars</span>
               </div>
-              <pre className="max-h-80 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
+              <pre className="min-h-64 w-full flex-1 overflow-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
                 {encodeResult.value.output}
               </pre>
             </div>
