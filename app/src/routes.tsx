@@ -8,6 +8,7 @@ import { CephPgScreen } from './adapters/ui/tools/CephPgScreen'
 import { LinuxSysctlScreen } from './adapters/ui/tools/LinuxSysctlScreen'
 import { DbMemorySizerScreen } from './adapters/ui/tools/DbMemorySizerScreen'
 import { LoadBalancerSizerScreen } from './adapters/ui/tools/LoadBalancerSizerScreen'
+import { ConnectionPoolSizerScreen } from './adapters/ui/tools/ConnectionPoolSizerScreen'
 import { ZabbixSizerScreen } from './adapters/ui/tools/ZabbixSizerScreen'
 import { FirewallCommandBuilderScreen } from './adapters/ui/tools/FirewallCommandBuilderScreen'
 import { SshConfigBuilderScreen } from './adapters/ui/tools/SshConfigBuilderScreen'
@@ -105,6 +106,7 @@ export const router = createBrowserRouter([
       { path: 'tools/linux-sysctl', element: <LinuxSysctlScreen /> },
       { path: 'tools/db-memory-sizer', element: <DbMemorySizerScreen /> },
       { path: 'tools/load-balancer-sizer', element: <LoadBalancerSizerScreen /> },
+      { path: 'tools/connection-pool-sizer', element: <ConnectionPoolSizerScreen /> },
       { path: 'tools/zabbix-sizer', element: <ZabbixSizerScreen /> },
       { path: 'tools/firewall-command-builder', element: <FirewallCommandBuilderScreen /> },
       { path: 'tools/ssh-config-builder', element: <SshConfigBuilderScreen /> },

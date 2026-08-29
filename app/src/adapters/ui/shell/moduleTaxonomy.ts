@@ -141,6 +141,14 @@ export const kModuleTaxonomy: ModuleDef[] = [
         route: '/tools/load-balancer-sizer',
         group: 'Sizing',
       },
+      {
+        id: 'connection-pool-sizer',
+        name: 'Connection Pool Sizer',
+        description: 'Does the app tier fit inside max_connections? Pool size + PgBouncer config',
+        icon: Cable,
+        route: '/tools/connection-pool-sizer',
+        group: 'Sizing',
+      },
 
       { id: 'linux-sysctl', name: 'Linux Kernel Sysctl', description: 'Network buffers, BBR, somaxconn', icon: Terminal, route: '/tools/linux-sysctl', group: 'Kernel & firewall' },
       {
