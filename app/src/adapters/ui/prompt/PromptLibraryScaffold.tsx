@@ -1,5 +1,5 @@
 import { BookmarkPlus, Check, Copy, FileText, Save, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { currentMessages, isDirty, nextVersionNumber } from '@/core/prompt/promptModel'
 import { usePromptLibraryStore } from '@/stores/promptLibraryStore'
@@ -27,6 +27,21 @@ export function PromptLibraryScaffold() {
   const [fillOpen, setFillOpen] = useState(false)
   const [newOpen, setNewOpen] = useState(false)
   const [promoted, setPromoted] = useState(false)
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (e.key === 's') {
+        e.preventDefault()
+        if (prompt && isDirty(prompt)) saveVersion(prompt.id)
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (prompt) setFillOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [prompt, saveVersion])
 
   return (
     <div className="flex h-full min-h-0 flex-col">

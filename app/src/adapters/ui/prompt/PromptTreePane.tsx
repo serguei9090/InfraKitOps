@@ -1,11 +1,33 @@
-import { ChevronRight, FilePlus2, FolderPlus, MoreHorizontal, Search, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
+  ChevronRight,
+  Download,
+  FilePlus2,
+  FolderPlus,
+  MoreHorizontal,
+  Search,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import { type ChangeEvent, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { currentMessages, isDirty, type Folder, type Prompt } from '@/core/prompt/promptModel'
+import { exportPrompts } from '@/core/prompt/promptIo'
 import { usePromptLibraryStore } from '@/stores/promptLibraryStore'
+import { downloadBlob } from '@/lib/downloadFile'
 import { cn } from '@/lib/utils'
 import { NewPromptDialog } from './NewPromptDialog'
 
@@ -28,6 +50,9 @@ export function PromptTreePane() {
   const createFolder = usePromptLibraryStore((s) => s.createFolder)
   const renameFolder = usePromptLibraryStore((s) => s.renameFolder)
   const deleteFolder = usePromptLibraryStore((s) => s.deleteFolder)
+  const moveToFolder = usePromptLibraryStore((s) => s.moveToFolder)
+  const reorderInFolder = usePromptLibraryStore((s) => s.reorderInFolder)
+  const importFromJson = usePromptLibraryStore((s) => s.importFromJson)
 
   const [query, setQuery] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -37,38 +62,66 @@ export function PromptTreePane() {
   const [renaming, setRenaming] = useState<Folder | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [deletingFolder, setDeletingFolder] = useState<Folder | null>(null)
-  // `undefined` = closed; `null` / string = open, targeting that folder.
   const [newPromptFolder, setNewPromptFolder] = useState<string | null | undefined>(undefined)
+  const [importMsg, setImportMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const allTags = useMemo(
-    () => [...new Set(prompts.flatMap((p) => p.tags))].sort(),
-    [prompts],
-  )
+  const allTags = useMemo(() => [...new Set(prompts.flatMap((p) => p.tags))].sort(), [prompts])
 
   const visible = useMemo(
     () => prompts.filter((p) => matches(p, query) && (!activeTag || p.tags.includes(activeTag))),
     [prompts, query, activeTag],
   )
 
-  const sortedFolders = useMemo(
-    () => [...folders].sort((a, b) => a.name.localeCompare(b.name)),
-    [folders],
-  )
+  const groups = useMemo(() => {
+    const byOrder = (a: Prompt, b: Prompt) => a.order - b.order
+    const sortedFolders = [...folders].sort((a, b) => a.name.localeCompare(b.name))
+    return [
+      ...sortedFolders.map((f) => ({
+        key: f.id,
+        label: f.name,
+        folder: f,
+        items: visible.filter((p) => p.folderId === f.id).sort(byOrder),
+      })),
+      {
+        key: UNFILED,
+        label: 'Unfiled',
+        folder: null,
+        items: visible.filter((p) => p.folderId == null).sort(byOrder),
+      },
+    ]
+  }, [folders, visible])
 
-  const groups: { key: string; label: string; folder: Folder | null; items: Prompt[] }[] = [
-    ...sortedFolders.map((f) => ({
-      key: f.id,
-      label: f.name,
-      folder: f,
-      items: visible.filter((p) => p.folderId === f.id).sort((a, b) => a.name.localeCompare(b.name)),
-    })),
-    {
-      key: UNFILED,
-      label: 'Unfiled',
-      folder: null,
-      items: visible.filter((p) => p.folderId == null).sort((a, b) => a.name.localeCompare(b.name)),
-    },
-  ]
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over) return
+    const activeId = String(active.id)
+    const dragged = prompts.find((p) => p.id === activeId)
+    if (!dragged) return
+
+    // Dropped on a folder header droppable.
+    if (String(over.id).startsWith('drop:')) {
+      const target = String(over.id).slice('drop:'.length)
+      const targetFolderId = target === UNFILED ? null : target
+      if (dragged.folderId !== targetFolderId) moveToFolder(activeId, targetFolderId)
+      return
+    }
+
+    // Dropped on another prompt — adopt its folder and slot in at its position.
+    const overPrompt = prompts.find((p) => p.id === String(over.id))
+    if (!overPrompt || overPrompt.id === activeId) return
+    const targetFolderId = overPrompt.folderId
+    const list = prompts
+      .filter((p) => p.folderId === targetFolderId && p.id !== activeId)
+      .sort((a, b) => a.order - b.order)
+      .map((p) => p.id)
+    const insertAt = list.indexOf(overPrompt.id)
+    list.splice(insertAt, 0, activeId)
+    if (dragged.folderId !== targetFolderId) moveToFolder(activeId, targetFolderId)
+    reorderInFolder(targetFolderId, list)
+  }
 
   function confirmNewFolder() {
     const name = newFolderName.trim()
@@ -81,6 +134,30 @@ export function PromptTreePane() {
   function confirmRename() {
     if (renaming && renameValue.trim()) renameFolder(renaming.id, renameValue.trim())
     setRenaming(null)
+  }
+
+  function exportOne(p: Prompt) {
+    downloadBlob(
+      exportPrompts([p], folders),
+      `${p.name.replace(/[^\w-]+/g, '_') || 'prompt'}.json`,
+      'application/json',
+    )
+  }
+
+  function exportAll() {
+    downloadBlob(exportPrompts(prompts, folders), 'prompt-library.json', 'application/json')
+  }
+
+  async function onImportFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const { added } = importFromJson(await file.text())
+      setImportMsg({ kind: 'ok', text: `Imported ${added} prompt${added === 1 ? '' : 's'}.` })
+    } catch (err) {
+      setImportMsg({ kind: 'err', text: err instanceof Error ? err.message : 'Import failed.' })
+    }
   }
 
   return (
@@ -125,89 +202,69 @@ export function PromptTreePane() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
-        {groups.map((g) => {
-          if (g.folder == null && g.items.length === 0) return null
-          const isCollapsed = collapsed[g.key]
-          return (
-            <div key={g.key} className="mb-1">
-              <div className="group flex items-center gap-1 px-1 py-1 text-xs font-medium text-muted-foreground">
-                <button
-                  type="button"
-                  onClick={() => setCollapsed((c) => ({ ...c, [g.key]: !c[g.key] }))}
-                  className="flex flex-1 items-center gap-1 hover:text-foreground"
-                >
-                  <ChevronRight className={cn('size-3 transition-transform', !isCollapsed && 'rotate-90')} />
-                  {g.label}
-                  <span className="text-muted-foreground/60">{g.items.length}</span>
-                </button>
-                {g.folder && (
-                  <>
-                    <button
-                      type="button"
-                      aria-label={`New prompt in ${g.label}`}
-                      onClick={() => setNewPromptFolder(g.folder!.id)}
-                      className="hidden text-muted-foreground hover:text-foreground group-hover:block"
-                    >
-                      <FilePlus2 className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Folder options for ${g.label}`}
-                      onClick={() => {
-                        setRenaming(g.folder!)
-                        setRenameValue(g.folder!.name)
-                      }}
-                      className="hidden text-muted-foreground hover:text-foreground group-hover:block"
-                    >
-                      <MoreHorizontal className="size-3.5" />
-                    </button>
-                  </>
-                )}
-              </div>
-
-              {!isCollapsed && (
-                <ul className="flex flex-col gap-0.5">
-                  {g.items.map((p) => (
-                    <li
-                      key={p.id}
-                      className={cn(
-                        'group flex items-center gap-1 rounded-md px-2 py-1 text-sm',
-                        p.id === selectedPromptId ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/40',
-                      )}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => selectPrompt(p.id)}
-                        className="min-w-0 flex-1 truncate text-left"
-                        title={p.name}
-                      >
-                        {p.name}
-                        {isDirty(p) && <span className="ml-1 text-muted-foreground">•</span>}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Delete ${p.name}`}
-                        onClick={() => deletePrompt(p.id)}
-                        className="hidden shrink-0 text-muted-foreground hover:text-destructive group-hover:block"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </li>
-                  ))}
-                  {g.items.length === 0 && (
-                    <li className="px-2 py-1 text-xs text-muted-foreground/70">empty</li>
-                  )}
-                </ul>
-              )}
-            </div>
-          )
-        })}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          {groups.map((g) => {
+            if (g.folder == null && g.items.length === 0) return null
+            return (
+              <FolderGroup
+                key={g.key}
+                group={g}
+                collapsed={!!collapsed[g.key]}
+                selectedPromptId={selectedPromptId}
+                onToggleCollapse={() => setCollapsed((c) => ({ ...c, [g.key]: !c[g.key] }))}
+                onNewPrompt={() => g.folder && setNewPromptFolder(g.folder.id)}
+                onFolderOptions={() => {
+                  if (!g.folder) return
+                  setRenaming(g.folder)
+                  setRenameValue(g.folder.name)
+                }}
+                onSelect={selectPrompt}
+                onDelete={deletePrompt}
+                onExport={exportOne}
+              />
+            )
+          })}
+        </DndContext>
         {prompts.length === 0 && (
           <p className="px-2 py-8 text-center text-xs text-muted-foreground">
             No prompts yet. Press <span className="font-medium">Prompt</span> to create one.
           </p>
         )}
       </div>
+
+      <div className="flex shrink-0 items-center gap-1.5 border-t border-border/60 p-2">
+        <Button size="xs" variant="ghost" className="flex-1" onClick={() => fileInputRef.current?.click()}>
+          <Upload className="size-3.5" /> Import
+        </Button>
+        <Button
+          size="xs"
+          variant="ghost"
+          className="flex-1"
+          disabled={prompts.length === 0}
+          onClick={exportAll}
+        >
+          <Download className="size-3.5" /> Export all
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={onImportFile}
+        />
+      </div>
+
+      <Dialog open={importMsg != null} onOpenChange={(o) => !o && setImportMsg(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{importMsg?.kind === 'ok' ? 'Import complete' : 'Import failed'}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{importMsg?.text}</p>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline">OK</Button>} />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* New folder */}
       <Dialog open={newFolderOpen} onOpenChange={setNewFolderOpen}>
@@ -275,9 +332,7 @@ export function PromptTreePane() {
           <DialogHeader>
             <DialogTitle>Delete “{deletingFolder?.name}”?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            What should happen to the prompts inside it?
-          </p>
+          <p className="text-sm text-muted-foreground">What should happen to the prompts inside it?</p>
           <DialogFooter className="flex-col gap-2 sm:flex-col">
             <Button
               variant="outline"
@@ -309,5 +364,145 @@ export function PromptTreePane() {
         folderId={newPromptFolder ?? null}
       />
     </div>
+  )
+}
+
+interface Group {
+  key: string
+  label: string
+  folder: Folder | null
+  items: Prompt[]
+}
+
+function FolderGroup({
+  group,
+  collapsed,
+  selectedPromptId,
+  onToggleCollapse,
+  onNewPrompt,
+  onFolderOptions,
+  onSelect,
+  onDelete,
+  onExport,
+}: {
+  group: Group
+  collapsed: boolean
+  selectedPromptId: string | null
+  onToggleCollapse: () => void
+  onNewPrompt: () => void
+  onFolderOptions: () => void
+  onSelect: (id: string) => void
+  onDelete: (id: string) => void
+  onExport: (p: Prompt) => void
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `drop:${group.key}` })
+
+  return (
+    <div ref={setNodeRef} className={cn('mb-1 rounded-md', isOver && 'bg-primary/10 ring-1 ring-primary/40')}>
+      <div className="group flex items-center gap-1 px-1 py-1 text-xs font-medium text-muted-foreground">
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="flex flex-1 items-center gap-1 hover:text-foreground"
+        >
+          <ChevronRight className={cn('size-3 transition-transform', !collapsed && 'rotate-90')} />
+          {group.label}
+          <span className="text-muted-foreground/60">{group.items.length}</span>
+        </button>
+        {group.folder && (
+          <>
+            <button
+              type="button"
+              aria-label={`New prompt in ${group.label}`}
+              onClick={onNewPrompt}
+              className="hidden text-muted-foreground hover:text-foreground group-hover:block"
+            >
+              <FilePlus2 className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label={`Folder options for ${group.label}`}
+              onClick={onFolderOptions}
+              className="hidden text-muted-foreground hover:text-foreground group-hover:block"
+            >
+              <MoreHorizontal className="size-3.5" />
+            </button>
+          </>
+        )}
+      </div>
+
+      {!collapsed && (
+        <SortableContext items={group.items.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+          <ul className="flex flex-col gap-0.5">
+            {group.items.map((p) => (
+              <PromptRow
+                key={p.id}
+                prompt={p}
+                selected={p.id === selectedPromptId}
+                onSelect={() => onSelect(p.id)}
+                onDelete={() => onDelete(p.id)}
+                onExport={() => onExport(p)}
+              />
+            ))}
+            {group.items.length === 0 && (
+              <li className="px-2 py-1 text-xs text-muted-foreground/70">empty — drop a prompt here</li>
+            )}
+          </ul>
+        </SortableContext>
+      )}
+    </div>
+  )
+}
+
+function PromptRow({
+  prompt,
+  selected,
+  onSelect,
+  onDelete,
+  onExport,
+}: {
+  prompt: Prompt
+  selected: boolean
+  onSelect: () => void
+  onDelete: () => void
+  onExport: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: prompt.id,
+  })
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        'group flex items-center gap-1 rounded-md px-2 py-1 text-sm',
+        selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/40',
+        isDragging && 'z-10 opacity-80 shadow-md ring-1 ring-border',
+      )}
+      {...attributes}
+      {...listeners}
+    >
+      <button type="button" onClick={onSelect} className="min-w-0 flex-1 truncate text-left" title={prompt.name}>
+        {prompt.name}
+        {isDirty(prompt) && <span className="ml-1 text-muted-foreground">•</span>}
+      </button>
+      <button
+        type="button"
+        aria-label={`Export ${prompt.name}`}
+        onClick={onExport}
+        className="hidden shrink-0 text-muted-foreground hover:text-foreground group-hover:block"
+      >
+        <Download className="size-3.5" />
+      </button>
+      <button
+        type="button"
+        aria-label={`Delete ${prompt.name}`}
+        onClick={onDelete}
+        className="hidden shrink-0 text-muted-foreground hover:text-destructive group-hover:block"
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+    </li>
   )
 }

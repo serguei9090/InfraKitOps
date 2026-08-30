@@ -1,10 +1,17 @@
-import { ChevronDown, ChevronUp, Copy, Check, Trash2, CopyPlus } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronDown, ChevronUp, Copy, Check, GripVertical, Trash2, CopyPlus } from 'lucide-react'
+import { useState, type CSSProperties, type HTMLAttributes } from 'react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { ROLES, type Message, type Role } from '@/core/prompt/promptModel'
 import { cn } from '@/lib/utils'
+
+export interface MessageDragProps {
+  setNodeRef: (el: HTMLElement | null) => void
+  style: CSSProperties
+  isDragging: boolean
+  handleProps: HTMLAttributes<HTMLButtonElement>
+}
 
 const ROLE_LABEL: Record<Role, string> = { system: 'System', user: 'User', assistant: 'Assistant' }
 
@@ -13,6 +20,7 @@ interface MessageCardProps {
   index: number
   count: number
   readOnly?: boolean
+  drag?: MessageDragProps
   onChange: (patch: Partial<Pick<Message, 'role' | 'content'>>) => void
   onMove: (dir: -1 | 1) => void
   onDuplicate: () => void
@@ -24,6 +32,7 @@ export function MessageCard({
   index,
   count,
   readOnly,
+  drag,
   onChange,
   onMove,
   onDuplicate,
@@ -38,8 +47,25 @@ export function MessageCard({
   }
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card">
+    <div
+      ref={drag?.setNodeRef}
+      style={drag?.style}
+      className={cn(
+        'rounded-lg border border-border/60 bg-card',
+        drag?.isDragging && 'z-10 opacity-80 shadow-lg ring-1 ring-border',
+      )}
+    >
       <div className="flex items-center gap-1 border-b border-border/60 px-2 py-1.5">
+        {drag && !readOnly && (
+          <button
+            type="button"
+            aria-label="Drag to reorder message"
+            className="flex size-6 shrink-0 cursor-grab touch-none items-center justify-center text-muted-foreground active:cursor-grabbing"
+            {...drag.handleProps}
+          >
+            <GripVertical className="size-3.5" />
+          </button>
+        )}
         {readOnly ? (
           <span className="px-1.5 text-xs font-medium text-muted-foreground">{ROLE_LABEL[message.role]}</span>
         ) : (

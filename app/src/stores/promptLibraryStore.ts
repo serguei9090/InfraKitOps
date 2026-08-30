@@ -23,6 +23,7 @@ import {
   type Message,
   type Prompt,
 } from '@/core/prompt/promptModel'
+import { materializeImport, parsePromptExport } from '@/core/prompt/promptIo'
 import type { SeedTemplate } from '@/core/prompt/templates/index'
 
 const repo = createPromptRepository()
@@ -54,6 +55,8 @@ interface PromptLibraryState {
   renamePrompt: (id: string, name: string) => void
   setTags: (id: string, tags: string[]) => void
   moveToFolder: (id: string, folderId: string | null) => void
+  /** Reassign `order` for the prompts of one folder (`null` = Unfiled). */
+  reorderInFolder: (folderId: string | null, orderedIds: string[]) => void
   setVariableMeta: (id: string, name: string, meta: { description?: string; defaultValue?: string }) => void
 
   /** Replace the working message list; autosaves debounced. */
@@ -76,6 +79,10 @@ interface PromptLibraryState {
   /** Copy a prompt's current messages into a reusable user template. */
   promoteToTemplate: (id: string) => void
   deleteUserTemplate: (templateId: string) => void
+
+  /** Import a Prompt Library export blob. Returns how many prompts landed;
+   *  throws `Error` with a readable message on a bad file. */
+  importFromJson: (json: string) => { added: number }
 }
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -211,6 +218,19 @@ export const usePromptLibraryStore = create<PromptLibraryState>((set, get) => {
       persistNow(id)
     },
 
+    reorderInFolder(folderId, orderedIds) {
+      set((s) => ({
+        prompts: s.prompts.map((p) => {
+          const idx = orderedIds.indexOf(p.id)
+          return idx >= 0 && p.folderId === folderId ? { ...p, order: idx } : p
+        }),
+      }))
+      for (const pid of orderedIds) {
+        const p = get().prompts.find((x) => x.id === pid)
+        if (p) void repo.savePrompt(p)
+      }
+    },
+
     setVariableMeta(id, name, meta) {
       const p = get().prompts.find((x) => x.id === id)
       if (!p) return
@@ -319,6 +339,21 @@ export const usePromptLibraryStore = create<PromptLibraryState>((set, get) => {
     deleteUserTemplate(templateId) {
       set((s) => ({ userTemplates: s.userTemplates.filter((t) => t.id !== templateId) }))
       void repo.deleteUserTemplate(templateId)
+    },
+
+    importFromJson(json) {
+      const exp = parsePromptExport(json)
+      const { folders: newFolders, prompts: newPrompts } = materializeImport(exp, {
+        folders: get().folders,
+        promptNames: get().prompts.map((p) => p.name),
+      })
+      set((s) => ({
+        folders: [...s.folders, ...newFolders],
+        prompts: [...s.prompts, ...newPrompts],
+      }))
+      for (const f of newFolders) void repo.saveFolder(f)
+      for (const p of newPrompts) void repo.savePrompt(p)
+      return { added: newPrompts.length }
     },
 
     deleteFolder(id, orphanTo) {

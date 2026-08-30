@@ -176,12 +176,13 @@ App in `app/`:
   keys, like `schemaRepository.ts`). Single-tool shell module —
   `ModuleDef.hideToolPane` + `moduleRailRoute()` open it directly from the rail
   (FormFlow now also skips its one-card page). Plan + phases:
-  [`PROMPT_MODULE_PLAN.md`](PROMPT_MODULE_PLAN.md). **P3 done** — 10 full
-  IT-troubleshooting seed templates (`core/prompt/templates/`, agent seeds carry
-  a few-shot pair) + `NewPromptDialog`/`TemplateGallery` + promote-to-template.
-  P4 = dnd + export/import; **LLM runtime (playground / connect Ollama·LM Studio·
-  OpenAI·Anthropic·Gemini) is deferred to P5** — `src/core/prompt/ai/` stays
-  interfaces-only until then, no networking code.
+  [`PROMPT_MODULE_PLAN.md`](PROMPT_MODULE_PLAN.md). **P1–P4 done** — 10 full
+  IT-troubleshooting seed templates + gallery + promote-to-template; dnd
+  reorder (messages + tree prompts/folders); export/import JSON
+  (`core/prompt/promptIo.ts`); ⌘S / ⌘↵ shortcuts. Deferred: responsive Tabs.
+  **LLM runtime (playground / connect Ollama·LM Studio·OpenAI·Anthropic·Gemini)
+  is deferred to P5** — `src/core/prompt/ai/` stays interfaces-only until then,
+  no networking code.
 - Package manager: **bun** (user preference, 2026-08-25 — switched from the initial npm
   scaffold; `bun.lock` is the lockfile, `package-lock.json` removed). Use `bun`/`bunx`,
   not `npm`/`npx`, for everything in `app/` from here on.

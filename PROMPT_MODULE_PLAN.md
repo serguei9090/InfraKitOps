@@ -574,14 +574,31 @@ seeds; clone → independent 4-message v1 with tags; promote → appears as a se
   gallery after reload; all 10 seeds pass the well-formedness test.
 </details>
 
-### P4 — Polish
-- dnd-kit: drag prompts between folders + reorder; drag message cards
-  (folder move already exists as a header `Select` since P2 — dnd is the upgrade)
-- Export / Import — single prompt JSON **and** whole-library JSON; import merges
-  (new ids, name-collision → " (imported)")
-- responsive `Tabs` collapse < `lg`
-- keyboard: ⌘/Ctrl-S save, ⌘/Ctrl-↵ Fill & Copy
-- **DoD**: move/reorder persist; export→import round-trips; mobile layout usable.
+### P4 — Polish — **mostly DONE 2026-08-29**
+
+Shipped:
+- **dnd-kit** — drag message cards to reorder (grip handle, `PromptEditor`);
+  drag prompts between folders + reorder within a folder (`PromptTreePane`:
+  one `DndContext`, per-folder `SortableContext`, folder headers are
+  `useDroppable` targets; `reorderInFolder` store action assigns `order`, tree
+  now sorts by `order` not name).
+- **Export / Import** — `core/prompt/promptIo.ts` (`exportPrompts` /
+  `parsePromptExport` / `materializeImport`, all pure, 6 tests). Per-prompt
+  export from the tree row; **Export all** / **Import** in the tree footer.
+  Import drops all internal ids, matches folders by name, de-collides prompt
+  names with " (imported)", validates the blob and reports failures.
+- **Keyboard** — ⌘/Ctrl-S saves the dirty prompt, ⌘/Ctrl-↵ opens Fill & Copy
+  (`PromptLibraryScaffold`, `preventDefault` so the browser's Save dialog stays
+  out of the way).
+
+1285 tests green; build + lint clean. Verified in-browser: Ctrl-S saves a new
+version; drag handles render, dnd context mounts, no console errors; export/
+import logic unit-tested. **Manual pass still needed:** an actual drag-drop
+(synthetic pointer events don't reliably drive dnd-kit's PointerSensor —
+same caveat class as `tauri dev`) and a real file-input import.
+
+**Deferred:** responsive `Tabs` collapse `< lg` — the app is desktop-first
+(design.md), other tools don't do it either; a fast-follow, not blocking P5.
 
 ### P5 — LLM Playground *(deferred — separate effort, §8)*
 

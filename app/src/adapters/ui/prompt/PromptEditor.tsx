@@ -1,3 +1,19 @@
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Eye, Plus, X } from 'lucide-react'
 import { useId, useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +33,31 @@ import { TEMPLATE_TAGS } from '@/core/prompt/templates/index'
 import { MessageCard } from './MessageCard'
 
 const NO_FOLDER = '__none__'
+
+function SortableMessageCard(props: {
+  message: Message
+  index: number
+  count: number
+  onChange: (patch: Partial<Pick<Message, 'role' | 'content'>>) => void
+  onMove: (dir: -1 | 1) => void
+  onDuplicate: () => void
+  onDelete: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.message.id,
+  })
+  return (
+    <MessageCard
+      {...props}
+      drag={{
+        setNodeRef,
+        style: { transform: CSS.Transform.toString(transform), transition },
+        isDragging,
+        handleProps: { ...attributes, ...listeners },
+      }}
+    />
+  )
+}
 
 interface PromptEditorProps {
   prompt: Prompt
@@ -109,6 +150,23 @@ export function PromptEditor({ prompt }: PromptEditorProps) {
     .filter((t) => !prompt.tags.includes(t))
     .filter((t) => t.includes(tagInput.trim().toLowerCase()))
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  function handleMessageDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const from = messages.findIndex((m) => m.id === active.id)
+    const to = messages.findIndex((m) => m.id === over.id)
+    if (from === -1 || to === -1) return
+    const next = [...messages]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    update(next)
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b border-border/60 p-4">
@@ -196,19 +254,40 @@ export function PromptEditor({ prompt }: PromptEditorProps) {
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-2.5">
-          {messages.map((m, i) => (
-            <MessageCard
-              key={m.id}
-              message={m}
-              index={i}
-              count={messages.length}
-              readOnly={readOnly}
-              onChange={(patch) => patchMessage(m.id, patch)}
-              onMove={(dir) => moveMessage(i, dir)}
-              onDuplicate={() => duplicateMessage(i)}
-              onDelete={() => deleteMessage(m.id)}
-            />
-          ))}
+          {readOnly ? (
+            messages.map((m, i) => (
+              <MessageCard
+                key={m.id}
+                message={m}
+                index={i}
+                count={messages.length}
+                readOnly
+                onChange={() => {}}
+                onMove={() => {}}
+                onDuplicate={() => {}}
+                onDelete={() => {}}
+              />
+            ))
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMessageDragEnd}>
+              <SortableContext items={messages.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+                <div className="flex flex-col gap-2.5">
+                  {messages.map((m, i) => (
+                    <SortableMessageCard
+                      key={m.id}
+                      message={m}
+                      index={i}
+                      count={messages.length}
+                      onChange={(patch) => patchMessage(m.id, patch)}
+                      onMove={(dir) => moveMessage(i, dir)}
+                      onDuplicate={() => duplicateMessage(i)}
+                      onDelete={() => deleteMessage(m.id)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
 
           {!readOnly && (
             <div className="flex gap-2">
