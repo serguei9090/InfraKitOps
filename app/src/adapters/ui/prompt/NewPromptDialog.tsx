@@ -1,4 +1,4 @@
-import { FilePlus2, LayoutTemplate } from 'lucide-react'
+import { FilePlus2 } from 'lucide-react'
 import { useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { mergeTemplates } from '@/core/prompt/templates/index'
@@ -21,32 +21,34 @@ export function NewPromptDialog({ open, onOpenChange, folderId }: NewPromptDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-2xl flex-col">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[88vh] w-[calc(100vw-2rem)] max-w-6xl flex-col gap-0 p-0 sm:max-w-6xl">
+        <DialogHeader className="shrink-0 border-b border-border/60 px-5 py-3.5">
           <DialogTitle>New prompt</DialogTitle>
         </DialogHeader>
 
-        <button
-          type="button"
-          onClick={() => {
-            createPrompt(folderId)
-            onOpenChange(false)
-          }}
-          className="flex items-center gap-3 rounded-lg border border-border/60 bg-card p-3 text-left hover:border-primary/60"
-        >
-          <FilePlus2 className="size-5 shrink-0 text-muted-foreground" />
-          <div>
-            <p className="text-sm font-medium">Start from scratch</p>
-            <p className="text-xs text-muted-foreground">One empty system + user message.</p>
-          </div>
-        </button>
+        <div className="shrink-0 px-5 pt-4">
+          <button
+            type="button"
+            onClick={() => {
+              createPrompt(folderId)
+              onOpenChange(false)
+            }}
+            className="flex w-full items-center gap-3 rounded-lg border border-border/60 bg-card p-3.5 text-left transition-colors hover:border-primary/60 hover:bg-accent/30"
+          >
+            <FilePlus2 className="size-5 shrink-0 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Start from scratch</p>
+              <p className="text-xs text-muted-foreground">One empty system + user message.</p>
+            </div>
+          </button>
 
-        <div className="flex items-center gap-2 pt-1 text-xs font-medium tracking-wide text-muted-foreground">
-          <LayoutTemplate className="size-3.5" />
-          OR START FROM A TEMPLATE
+          <p className="mt-4 mb-1 text-xs font-medium tracking-wide text-muted-foreground">
+            OR START FROM A TEMPLATE
+          </p>
         </div>
 
         <TemplateGallery
+          className="min-h-0 flex-1 px-5 pb-5"
           templates={templates}
           onUse={(t) => {
             createPrompt(folderId, { fromTemplate: t })
