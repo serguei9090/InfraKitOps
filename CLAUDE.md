@@ -287,6 +287,33 @@ go run ./cmd/infrakit-backend       # run the service (prints LISTENING + TOKEN)
 ./build-sidecar.sh                   # cross-compile into app/src-tauri/binaries/
 ```
 
+## Commit workflow
+
+Solo, local-first. **Commit straight to `main` — no feature branch.** Never `git
+push` unless explicitly asked.
+
+- **One logical change per commit** (not one file, not one session). If the subject
+  needs an "and", it's probably two commits. Each commit must **build and pass
+  tests on its own** — bundle tightly-coupled work (e.g. a module's P1–P3 that
+  share scaffolding) rather than land pieces that don't compile alone.
+- **Green gate before every commit** — never commit red:
+  ```bash
+  cd app && bun run build && bun run test && bun run lint      # frontend
+  cd backend && go vet ./... && go test ./...                   # if backend touched
+  ```
+  Half-done work stays in the working tree (or `git stash`), never a red commit.
+- **Commit at each green checkpoint, before starting the next feature** — gives a
+  clean diff for the next change and a safe rollback point (`git reset --hard
+  HEAD` / `git checkout .`) before the next edits land.
+- Multi-phase work: commit per phase when phases are individually shippable
+  (Network N0…N3), else bundle. Plan docs say "commit after every checkpoint
+  bullet" — follow that.
+- **Message**: conventional-ish subject saying *what* changed; body for non-obvious
+  decisions + test status. End with:
+  `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`
+- No PR review catches a bad commit here — **green + small + clear message** is the
+  only safety net.
+
 ## Working conventions
 
 - Keep `src/core/**` framework-free — this is the part every future backend/frontend
