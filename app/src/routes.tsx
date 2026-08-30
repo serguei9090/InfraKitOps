@@ -79,6 +79,9 @@ import { QrReaderScreen } from './adapters/ui/tools/QrReaderScreen'
 // Phase 5 — FormFlow Dynamic Builder
 import { FormFlowBuilderScreen } from './adapters/ui/tools/FormFlowBuilderScreen'
 
+// Prompt Library
+import { PromptLibraryScreen } from './adapters/ui/tools/PromptLibraryScreen'
+
 // Configuration Builders — Zabbix / Fail2ban
 import { ZabbixConfigBuilderScreen } from './adapters/ui/tools/ZabbixConfigBuilderScreen'
 import { Fail2banConfigBuilderScreen } from './adapters/ui/tools/Fail2banConfigBuilderScreen'
@@ -184,6 +187,9 @@ export const router = createBrowserRouter([
 
       // Phase 5 — FormFlow Dynamic Builder
       { path: 'tools/formflow-builder', element: <FormFlowBuilderScreen /> },
+
+      // Prompt Library
+      { path: 'tools/prompt-library', element: <PromptLibraryScreen /> },
 
       // Configuration Builders — Zabbix / Fail2ban
       { path: 'tools/zabbix-config-builder', element: <ZabbixConfigBuilderScreen /> },

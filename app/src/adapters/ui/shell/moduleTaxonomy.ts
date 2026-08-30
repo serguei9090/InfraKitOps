@@ -43,6 +43,7 @@ import {
   Image,
   KeyRound,
   KeySquare,
+  Library,
   LibraryBig,
   List,
   ListTree,
@@ -116,6 +117,24 @@ export interface ModuleDef {
   title: string
   icon: LucideIcon
   tools: ToolEntry[]
+  /**
+   * Single-tool module that is just a shell for its one tool: the rail opens
+   * the tool directly and the adjacent tool-list swap pane is suppressed
+   * (no point listing one item). Only honoured when `tools` has exactly one
+   * routed entry. FormFlow is single-tool too but keeps its pane for the
+   * saved-template rows — it can set this once that list moves into its screen.
+   */
+  hideToolPane?: boolean
+}
+
+/**
+ * The route the rail should open for a module: the tool itself for a
+ * single-routed-tool module (skips the one-card `/modules/:id` page), else
+ * the module page.
+ */
+export function moduleRailRoute(module: ModuleDef): string {
+  const only = module.tools.length === 1 ? module.tools[0] : null
+  return only?.route ?? `/modules/${module.id}`
 }
 
 /** Finds the module that owns the tool at `route`, or null if none does. */
@@ -597,6 +616,24 @@ export const kModuleTaxonomy: ModuleDef[] = [
         group: 'AI & Automation',
       },
       { id: 'dev-services', name: 'Dev Services & Hosting', description: 'Tunnels, static hosts, PaaS & deploy platforms', icon: Cloud, route: '/tools/dev-services', group: 'AI & Automation' },
+    ],
+  },
+  {
+    id: 'prompt',
+    title: 'Prompt Library',
+    icon: Library,
+    // Single-tool module — the tool *is* the three-pane workspace, so the rail
+    // opens it directly and the tool-list pane is suppressed. See
+    // PROMPT_MODULE_PLAN.md.
+    hideToolPane: true,
+    tools: [
+      {
+        id: 'prompt-library',
+        name: 'Prompt Library',
+        description: 'Author, version & reuse LLM prompt templates',
+        icon: Library,
+        route: '/tools/prompt-library',
+      },
     ],
   },
 ]

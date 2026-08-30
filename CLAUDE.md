@@ -164,6 +164,24 @@ App in `app/`:
 - `npm run build` (web) and `cargo check` (desktop shell) both verified early on. **Not
   yet verified**: `npm run tauri dev` opening an actual native window — that launches a
   GUI process this environment can't observe; run it yourself once to confirm.
+- **Prompt Library** module (`moduleTaxonomy.ts` id `prompt`, route
+  `/tools/prompt-library`) — **P1 + P2 shipped 2026-08-29**. Client-only prompt
+  authoring: one-level folders (move via a header `Select`), tags, ordered
+  system/user/assistant messages, `{{VAR}}` auto-detect, Fill & Copy (per-message
+  + copy-all, 4 formats), full version history (`Save · v{n}`, read-only view,
+  restore, pin, per-version delete, word-level compare), autosaved draft with
+  Discard. Custom **T6 "Library Workspace"** three-pane scaffold
+  (`adapters/ui/prompt/`). Core in `src/core/prompt/**` (framework-free),
+  persistence via `promptRepository.ts` on `IStoragePort` (index + per-prompt
+  keys, like `schemaRepository.ts`). Single-tool shell module —
+  `ModuleDef.hideToolPane` + `moduleRailRoute()` open it directly from the rail
+  (FormFlow now also skips its one-card page). Plan + phases:
+  [`PROMPT_MODULE_PLAN.md`](PROMPT_MODULE_PLAN.md). **P3 done** — 10 full
+  IT-troubleshooting seed templates (`core/prompt/templates/`, agent seeds carry
+  a few-shot pair) + `NewPromptDialog`/`TemplateGallery` + promote-to-template.
+  P4 = dnd + export/import; **LLM runtime (playground / connect Ollama·LM Studio·
+  OpenAI·Anthropic·Gemini) is deferred to P5** — `src/core/prompt/ai/` stays
+  interfaces-only until then, no networking code.
 - Package manager: **bun** (user preference, 2026-08-25 — switched from the initial npm
   scaffold; `bun.lock` is the lockfile, `package-lock.json` removed). Use `bun`/`bunx`,
   not `npm`/`npx`, for everything in `app/` from here on.

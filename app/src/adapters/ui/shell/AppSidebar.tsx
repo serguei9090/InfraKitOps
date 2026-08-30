@@ -10,7 +10,7 @@ import { NetworkSettingsDialog } from '@/adapters/ui/network/NetworkSettingsDial
 import { useModuleVisibilityStore, visibleModulesInOrder } from '@/stores/moduleVisibilityStore'
 import { useSearchQueryStore } from '@/stores/searchQueryStore'
 import { ModuleSettingsDialog } from './ModuleSettingsDialog'
-import { moduleContainingRoute, type ModuleDef } from './moduleTaxonomy'
+import { moduleContainingRoute, moduleRailRoute, type ModuleDef } from './moduleTaxonomy'
 
 const schemaRepository = createSchemaRepository()
 const FORMFLOW_BUILDER_ROUTE = '/tools/formflow-builder'
@@ -33,6 +33,7 @@ export function AppSidebar() {
   const modules = visibleModulesInOrder(order, hiddenIds)
   const activeModuleId = activeModuleIdFor(pathname)
   const activeModule = modules.find((m) => m.id === activeModuleId) ?? null
+  const showPane = activeModule != null && !activeModule.hideToolPane
 
   return (
     <div className="flex h-full shrink-0">
@@ -41,10 +42,10 @@ export function AppSidebar() {
       <div
         className={cn(
           'overflow-hidden transition-[width] duration-150 ease-out',
-          activeModule ? 'w-60' : 'w-0',
+          showPane ? 'w-60' : 'w-0',
         )}
       >
-        {activeModule ? <ToolListPane module={activeModule} currentPath={pathname} /> : null}
+        {showPane ? <ToolListPane module={activeModule} currentPath={pathname} /> : null}
       </div>
     </div>
   )
@@ -92,7 +93,7 @@ function ModuleRail({ modules, activeModuleId }: { modules: ModuleDef[]; activeM
             label={module.title}
             expanded={expanded}
             selected={module.id === activeModuleId}
-            onClick={() => navigate(`/modules/${module.id}`)}
+            onClick={() => navigate(moduleRailRoute(module))}
           />
         ))}
       </div>
