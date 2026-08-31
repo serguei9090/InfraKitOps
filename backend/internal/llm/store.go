@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -199,11 +200,17 @@ func (s *Store) GetTask(id string) (*Task, error) {
 	return nil, ErrNotFound
 }
 
+var taskIDRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
+
 // PutTask upserts a custom task row (creating an override of a built-in, or a
 // brand-new task).
 func (s *Store) PutTask(t Task) (Task, error) {
-	if strings.TrimSpace(t.ID) == "" || strings.TrimSpace(t.Title) == "" || strings.TrimSpace(t.SystemTemplate) == "" {
+	t.ID = strings.TrimSpace(t.ID)
+	if t.ID == "" || strings.TrimSpace(t.Title) == "" || strings.TrimSpace(t.SystemTemplate) == "" {
 		return t, errors.New("task id, title and systemTemplate are required")
+	}
+	if !taskIDRe.MatchString(t.ID) {
+		return t, errors.New("task id may only contain letters, digits, '.', '_' and '-'")
 	}
 	if t.OutputShape == "" {
 		t.OutputShape = OutputText

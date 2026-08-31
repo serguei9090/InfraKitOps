@@ -104,7 +104,7 @@ func (e *Engine) RunTask(
 ) {
 	task, err := e.Store.GetTask(taskID)
 	if err != nil {
-		out <- sse.Message{Event: "error", Data: map[string]string{"error": "task not found: " + taskID}}
+		sendOrDone(ctx, out, sse.Message{Event: "error", Data: map[string]string{"error": "task not found: " + taskID}})
 		return
 	}
 	system := RenderTask(*task, vars, input)
@@ -120,26 +120,28 @@ func (e *Engine) RunTask(
 // provider, forward deltas, and — for a JSON-shaped task — emit a final
 // `parsed` event with the extracted JSON.
 func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, shape TaskOutputShape, out chan<- sse.Message) {
+	send := func(m sse.Message) bool { return sendOrDone(ctx, out, m) }
+
 	conn, err := e.Store.GetConnection(connID)
 	if err != nil {
-		out <- sse.Message{Event: "error", Data: map[string]string{"error": "connection not found"}}
+		send(sse.Message{Event: "error", Data: map[string]string{"error": "connection not found"}})
 		return
 	}
 	key, err := e.resolveKey(*conn)
 	if err != nil {
-		out <- sse.Message{Event: "error", Data: map[string]string{"error": err.Error()}}
+		send(sse.Message{Event: "error", Data: map[string]string{"error": err.Error()}})
 		return
 	}
 	p := For(conn.Provider)
 	if p == nil {
-		out <- sse.Message{Event: "error", Data: map[string]string{"error": "unsupported provider"}}
+		send(sse.Message{Event: "error", Data: map[string]string{"error": "unsupported provider"}})
 		return
 	}
 	if req.Model == "" {
 		req.Model = conn.DefaultModel
 	}
 	if req.Model == "" {
-		out <- sse.Message{Event: "error", Data: map[string]string{"error": "no model selected"}}
+		send(sse.Message{Event: "error", Data: map[string]string{"error": "no model selected"}})
 		return
 	}
 
@@ -152,28 +154,54 @@ func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, sha
 		close(deltas)
 		close(done)
 	}()
+	// Always drain `deltas` so the provider goroutine never blocks on a send,
+	// even if the client has gone and `out` is no longer being read.
+	drain := func() {
+		for range deltas {
+		}
+		<-done
+	}
 
-	out <- sse.Message{Event: "start", Data: map[string]any{"model": req.Model, "provider": string(conn.Provider)}}
+	if !send(sse.Message{Event: "start", Data: map[string]any{"model": req.Model, "provider": string(conn.Provider)}}) {
+		drain()
+		return
+	}
 	var full strings.Builder
 	for d := range deltas {
-		if d.Text != "" {
-			full.WriteString(d.Text)
-			out <- sse.Message{Event: "delta", Data: map[string]string{"text": d.Text}}
+		if d.Text == "" {
+			continue
+		}
+		full.WriteString(d.Text)
+		if !send(sse.Message{Event: "delta", Data: map[string]string{"text": d.Text}}) {
+			drain()
+			return
 		}
 	}
 	<-done
 	if chatErr != nil {
-		out <- sse.Message{Event: "error", Data: map[string]string{"error": chatErr.Error()}}
+		send(sse.Message{Event: "error", Data: map[string]string{"error": chatErr.Error()}})
 		return
 	}
 	if shape == OutputJSON {
 		if j := extractJSON(full.String()); j != "" {
-			out <- sse.Message{Event: "parsed", Data: map[string]string{"json": j}}
+			send(sse.Message{Event: "parsed", Data: map[string]string{"json": j}})
 		}
 	}
-	out <- sse.Message{Event: "end", Data: map[string]any{
+	send(sse.Message{Event: "end", Data: map[string]any{
 		"usage": map[string]int{"promptTokens": usage.PromptTokens, "completionTokens": usage.CompletionTokens},
-	}}
+	}})
+}
+
+// sendOrDone sends m on out, or returns false if ctx is cancelled first (the
+// client disconnected). Prevents the streaming goroutine leaking on a full
+// channel when nobody is reading it any more.
+func sendOrDone(ctx context.Context, out chan<- sse.Message, m sse.Message) bool {
+	select {
+	case out <- m:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // extractJSON pulls the first JSON object/array out of a model reply: a fenced

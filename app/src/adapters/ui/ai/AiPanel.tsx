@@ -99,13 +99,16 @@ export function AiPanel({
     if (connId) void loadModels(connId)
   }, [connId, loadModels])
 
-  // chat: when a run finishes, commit the assistant reply into the turn list
+  // chat: when a run finishes, commit the assistant reply into the turn list.
+  // On error, leave the error + partial text visible (reset() would wipe them);
+  // the next send clears them.
   useEffect(() => {
     if (mode !== 'chat' || running || !pendingRef.current) return
     pendingRef.current = false
+    if (error) return
     if (text) setTurns((t) => [...t, { role: 'assistant', content: text }])
     reset()
-  }, [mode, running, text, reset])
+  }, [mode, running, text, error, reset])
 
   const connModels = models[connId] ?? []
   const before = context[diffKey] ?? ''

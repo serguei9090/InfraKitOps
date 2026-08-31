@@ -21,15 +21,31 @@ type geminiProvider struct{}
 func (geminiProvider) Kind() ProviderKind { return ProviderGemini }
 func (geminiProvider) KeylessOK() bool    { return false }
 
+// scrubKey removes the API key from an error string — Go's *url.Error embeds
+// the full request URL, and Gemini carries the key as a query param, so a raw
+// transport error would otherwise leak the key to the client.
+func scrubKey(err error, key string) error {
+	if err == nil || key == "" {
+		return err
+	}
+	s := err.Error()
+	s = strings.ReplaceAll(s, url.QueryEscape(key), "***")
+	s = strings.ReplaceAll(s, key, "***")
+	if s == err.Error() {
+		return err
+	}
+	return fmt.Errorf("%s", s)
+}
+
 func (geminiProvider) ListModels(ctx context.Context, conn Connection, key string) ([]Model, error) {
 	u := baseURL(conn) + "/v1beta/models?key=" + url.QueryEscape(key)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, err
+		return nil, scrubKey(err, key)
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, scrubKey(err, key)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -99,12 +115,12 @@ func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr 
 		baseURL(conn), url.PathEscape(cr.Model), url.QueryEscape(key))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(raw))
 	if err != nil {
-		return Usage{}, err
+		return Usage{}, scrubKey(err, key)
 	}
 	req.Header.Set("content-type", "application/json")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return Usage{}, err
+		return Usage{}, scrubKey(err, key)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
