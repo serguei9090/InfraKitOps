@@ -401,6 +401,33 @@ cancel polish.
 
 ---
 
+## 9b. Related — a Settings module (separate work, not an AI phase)
+
+Raised 2026-08-31: replace the rearrange-only `ModuleSettingsDialog` with a
+real **Settings** rail module (own page + left menu), and make it the home for
+scattered config — module order/visibility (`moduleVisibilityStore`), theme,
+Runbooks retention + vault auto-lock (`runbook_settings`), Network module
+settings, backend endpoint, **and AI settings**.
+
+This is an app-shell change, **not** a phase of this plan. It gets its own
+short `SETTINGS_MODULE_PLAN.md`, sequenced **after A2** (A2 ships real user
+value — the Runbooks Assistant; Settings is organisation).
+
+What it needs from the AI layer — mostly already built:
+
+| Setting | Scope | Where it lives now | Settings module adds |
+|---|---|---|---|
+| Per-feature **system prompt** (e.g. "Prompt Library → Improve") | per task | custom `llm_task` row overriding a built-in (A1) | a view that groups tasks by id-prefix → module name, product-labelled, editing the same override |
+| Default connection / model / temperature | global | `llm_settings` table exists (A0), no UI | a "Defaults" form; `AiPanel`/`useLlm` fall back to these when the caller/localStorage has none |
+| Preferred connection/model **per task** | per task | — | optional `Task.preferredConnectionId` / `preferredModel` fields |
+| Connections CRUD | global | AI Hub → Connections (A0) | link out to it, or embed the same view |
+
+So the Settings module is ~90% presentation over what A0/A1 already store. The
+only new AI-layer work it would pull in is the optional per-task
+preferred-connection fields.
+
+---
+
 ## 10. Reused from existing code
 
 | Need | Reuse |
