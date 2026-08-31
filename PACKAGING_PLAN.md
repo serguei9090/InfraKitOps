@@ -74,15 +74,40 @@ residue, plus a **static web bundle** that deploys as-is. Linux is best-effort.
 **DoD**: `bun install && bun run build:sidecar && bun run tauri build` — see
 the Verification log for the first full run.
 
-### P7c — Capability / permission least-privilege audit
-- Enumerate every Tauri command + plugin the frontend actually invokes
-  (`fs`, `dialog`, `shell`, `os`?). Grep `@tauri-apps/api` + `invoke(` in
-  `app/src`.
-- Narrow `default.json` — `$APPDATA/**` recursive is broad; scope to
-  `$APPDATA/InfraKitStudio/**` if the fs adapter allows.
-- Document each grant + why in a `capabilities/README.md`.
-**DoD**: app runs packaged with the narrowed set; no runtime "not allowed on
-the configured scope" errors across a click-through of every module. One commit.
+### P7c — Capability / permission least-privilege audit — **analysed 2026-09-01, change deferred to P7e**
+
+Frontend Tauri surface (grep of `@tauri-apps/*` + `invoke(` in `app/src`, test
+files excluded) is tiny:
+
+| Call site | API | Scope actually used |
+|---|---|---|
+| `backendClient.ts`, `sseClient.ts` | `invoke('backend_endpoint')`, `isTauri()` | custom command — allowed by default in Tauri v2, no capability entry needed |
+| `createStoragePort.ts` | `isTauri()` | — |
+| `tauriFsStoragePort.ts` | `@tauri-apps/plugin-fs`: `exists`, `mkdir`, `readTextFile`, `writeTextFile` | **only** `$APPDATA/` (the dir) + `$APPDATA/storage.json` |
+
+No `dialog`, no `shell` from JS (`shell:allow-spawn` in `sidecar.json` is
+Rust-side, already scoped to the one binary). The Go backend writes its own
+DBs (`%APPDATA%\InfraKitStudio\*.db`, `vault.enc`) directly — not through
+Tauri, no capability involved.
+
+**Current `default.json` is too broad** — `fs:allow-appdata-{read,write,meta}-recursive`
+grants the webview read/write to *everything* under `%APPDATA%`. Proposed
+tightening:
+
+```jsonc
+"permissions": [
+  "core:default",
+  { "identifier": "fs:allow-exists",         "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/storage.json" }] },
+  { "identifier": "fs:allow-mkdir",           "allow": [{ "path": "$APPDATA" }] },
+  { "identifier": "fs:allow-read-text-file",  "allow": [{ "path": "$APPDATA/storage.json" }] },
+  { "identifier": "fs:allow-write-text-file", "allow": [{ "path": "$APPDATA/storage.json" }] }
+]
+```
+
+**Why deferred**: an over-tight fs scope fails *silently* (the adapter catches
+and returns `{}` → desktop prefs quietly stop persisting). Needs a real
+`tauri dev` / packaged run to confirm — do it as the first step of P7e, not
+blind. Also add `capabilities/README.md` documenting each grant then.
 
 ### P7d — Windows installer
 - NSIS config in `tauri.conf.json` `bundle.windows.nsis` — per-user,
