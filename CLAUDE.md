@@ -258,6 +258,33 @@ second big consumer of the Go backend. Plan + phases:
   Assistant (reuses Prompt Library P5 model connections), multi-user approvals,
   run artifacts, macOS/Linux keyring backends.
 
+### AI module — "AI Hub" (started 2026-08-31, A0 done)
+
+Central LLM layer every module reuses instead of wiring its own AI. Plan +
+phases: [`AI_MODULE_PLAN.md`](AI_MODULE_PLAN.md). Supersedes the never-built
+`core/prompt/ai` stub; delivers the deferred Prompt Library P5 + Runbooks R4
+Assistant.
+
+- **Backend `internal/llm/`** — `Provider` adapter iface (`ollama` +
+  `openai-compatible` in A0; `anthropic` + `gemini` in A2), `Connection`
+  registry in a **new pure-Go `llm.db`** (`--llm-db`, sibling of
+  `orchestrator.db`), `Engine` (key resolution via the **Vault**, 60 s model
+  cache, streamed `Chat`). Endpoints `/llm/connections*`, `/{id}/{test,models}`,
+  `/llm/chat/stream` (SSE). **Zero new Go deps** — no SDK / agent framework
+  (Python-only, breaks the one-binary sidecar model; wire formats are ~80
+  lines each; `openai-compatible` covers most of the market). Rationale
+  recorded in `AI_MODULE_PLAN.md` §6.5.
+- **Frontend** — `core/llm/**` (framework-free), `llmClient.ts`, `llmStore`
+  (Zustand chat buffer over the existing `openStream` SSE client — no Vercel
+  `ai` SDK), T7 `AiConsoleScaffold` (Playground + Connections), rail module
+  `ai` (`hideToolPane`), backend-mandatory.
+- **Grounding = Task** (A1, not yet built): a module adds AI via one built-in
+  `Task` (id + `{{context.*}}` system template + output shape) in
+  `internal/llm/tasks/builtins.go` + a drop-in `<AiPanel taskId context mode />`
+  / `useLlm(taskId)`. No change to the central layer or `App`.
+- **A1 next**: Task engine + `AiPanel` + wire Prompt Library "Improve". **A2**:
+  anthropic/gemini + chat mode + Runbooks Assistant.
+
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 
 A handful of the 44 client-only tools now have an **optional** backend upgrade —

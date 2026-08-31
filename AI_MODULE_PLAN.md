@@ -224,6 +224,45 @@ with a small `bufio.Scanner` loop per wire format. If this proves painful for
 Anthropic/Gemini in A2, any added dep goes through the CLAUDE.md library
 license gate first.
 
+### 6.5 Why no SDK / framework (decided 2026-08-31)
+
+**No agent framework** (CrewAI, LangGraph, LangChain, Google ADK, AutoGen).
+They are Python; the backend is one Go binary shipped as a Tauri sidecar
+(CLAUDE.md). Adopting one means a second runtime in the bundle or a rewrite —
+rejected. They also solve multi-agent orchestration, which is not what A0–A2
+needs (call an endpoint, stream tokens, swap providers, inject a templated
+system prompt).
+
+**No provider SDKs** (`openai-go`, `anthropic-sdk-go`, `google/generative-ai-go`).
+Four providers = four SDKs, each with its own transitive deps, release cadence,
+and opinions about the HTTP client / streaming / auth — you adapt between four
+SDK shapes instead of four wire formats. The wire formats (OpenAI
+chat-completions, Anthropic messages, Ollama, Gemini generateContent) are
+stable, documented, and ~80 lines each to implement. The `openai-compatible`
+adapter alone reaches OpenAI, LM Studio, vLLM, LocalAI, OpenRouter, Groq,
+Together, DeepSeek, Mistral — one adapter, most of the market, because they
+all copy OpenAI's shape. `langchaingo` exists but lags its Python parent and
+is thinly maintained — not something to build on.
+
+**No Vercel `ai` SDK** on the frontend. Its `useChat`/`useCompletion` hooks
+assume the LLM call happens in a JS/Node route handler and speak its own
+data-stream protocol. Our call is in Go over plain SSE; adapting to Vercel's
+format is more glue than the ~150-line Zustand `llmStore` already is.
+
+**Frontend chat state** = Zustand (`llmStore`) + the existing `openStream` SSE
+client + shadcn components. History persistence (A3) = SQLite rows in `llm.db`,
+same JSON-blob pattern as everywhere else.
+
+**Where an SDK could earn its place (A3+):** a real tool-calling agent loop
+(model → tool → result → model, iterated). That loop is ~50 lines hand-rolled
+or `anthropic-sdk-go`'s tool-runner — still Go, still no Python. Revisit only
+when a module actually needs agentic behaviour.
+
+**Maintenance verdict:** hand-rolled is the *lower*-maintenance choice given
+the Go + Tauri-sidecar constraints — no dependency treadmill, one runtime,
+`openai-compatible` covers most providers for free, and the wire formats
+change slowly and additively.
+
 ---
 
 ## 7. Frontend — the T7 "Console Workspace" archetype (reused)
@@ -296,18 +335,25 @@ Library's `diffWordsWithSpace` view).
 
 ## 9. Phasing
 
-### A0 — Foundations
-- `internal/llm/`: `Provider` iface, `ollama` + `openai-compatible` adapters,
-  `Connection` store in `llm.db`, model listing (+cache), `Chat` SSE engine.
-- Endpoints: `/llm/connections*`, `/llm/connections/{id}/{test,models}`,
-  `/llm/chat/stream`. `capabilities` gains `llm` + `llmProviders`.
-- `server.Options` + `main.go` (`--llm-db`), 503 when absent.
-- Frontend: `core/llm/**` (move the `core/prompt/ai/` stub here), `llmClient.ts`,
-  `llmStore`, T7 module shell with **Connections** + **Playground**. Rail
-  module `ai`.
-- **DoD**: add an Ollama connection, list its models, hold a streamed multi-turn
-  chat in the playground; add an OpenAI connection with a Vault-stored key,
-  same; delete a connection.
+### A0 — Foundations — **DONE 2026-08-31**
+- `internal/llm/`: `Provider` iface + `For`/`Providers`, `ollama` +
+  `openai-compatible` adapters (stdlib HTTP+JSON, streamed), `Connection` store
+  in `llm.db`, `Engine` (key resolution via the Vault, 60 s model cache,
+  `Chat` fan-out to `sse.Message`).
+- Endpoints: `/llm/connections` CRUD + `/{id}/{test,models}` +
+  `/llm/chat/stream`. `capabilities` gains `"llm"` + `llmProviders`.
+- `server.Options.{LLM,LLMEngine}` + `main.go` `--llm-db` + `openLLM()`
+  (`"" = OS config dir`, `"off" = disabled`), 503 when absent.
+- Frontend: `core/llm/llmModel.ts`, `adapters/backend/llmClient.ts`,
+  `stores/llmStore.ts`, T7 `AiConsoleScaffold` (Playground + Connections,
+  Vault button, backend gate), rail module `ai` ("AI Hub", `Sparkles`,
+  `hideToolPane`), route `/tools/ai`.
+- 5 new backend tests (store CRUD, both provider adapters over httptest,
+  engine→SSE). No new Go deps.
+- **Verified in-browser** against a live local Ollama: created a connection,
+  Test pulled 5 models, playground streamed a completion ("pong", token usage
+  shown) end-to-end through the Go backend; fresh-tab load has zero console
+  errors.
 
 ### A1 — Grounding + first consumer
 - `internal/llm/tasks`: `Builtins()` (the §4 seed set), custom-task CRUD,

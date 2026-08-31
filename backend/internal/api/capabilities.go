@@ -73,12 +73,15 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		// Runbooks module. The store/vault are wired at process start; the
 		// endpoints 503 if not, and the UI already gates on that.
 		"runbook": {Available: true},
+		// AI layer. Same deal — endpoints 503 when llm.db isn't open.
+		"llm": {Available: true},
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"elevated":     elevated,
-		"capabilities": caps,
+		"elevated":         elevated,
+		"capabilities":     caps,
 		"runbookExecutors": RunbookExecutors(),
+		"llmProviders":     LLMProviders(),
 	})
 }
 

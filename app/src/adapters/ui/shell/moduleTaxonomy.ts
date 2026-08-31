@@ -73,6 +73,7 @@ import {
   Shuffle,
   SlidersHorizontal,
   SquareTerminal,
+  Sparkles,
   Table,
   Table2,
   Target,
@@ -651,6 +652,24 @@ export const kModuleTaxonomy: ModuleDef[] = [
         description: 'Reusable multi-step command runbooks with a Vault',
         icon: SquareTerminal,
         route: '/tools/runbook',
+      },
+    ],
+  },
+  {
+    id: 'ai',
+    title: 'AI Hub',
+    icon: Sparkles,
+    // Single-tool shell module — the central LLM layer every module reuses.
+    // Own top nav (Playground / Connections). Backend-mandatory.
+    // See AI_MODULE_PLAN.md.
+    hideToolPane: true,
+    tools: [
+      {
+        id: 'ai',
+        name: 'AI Hub',
+        description: 'Connect LLM endpoints, browse models, run a playground',
+        icon: Sparkles,
+        route: '/tools/ai',
       },
     ],
   },

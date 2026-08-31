@@ -28,6 +28,7 @@ import (
 
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/history"
+	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/server"
 	"github.com/infrakit/backend/internal/tools/iperf"
@@ -43,6 +44,7 @@ func main() {
 	retentionDays := flag.Int("history-retention-days", 90, "default history retention")
 	maxPerTarget := flag.Int("history-max-per-target", 20, "default history runs kept per (tool,target)")
 	runbookDBPath := flag.String("runbook-db", "", `runbooks database path ("" = OS config dir, "off" = disabled)`)
+	llmDBPath := flag.String("llm-db", "", `AI-layer database path ("" = OS config dir, "off" = disabled)`)
 	vaultPath := flag.String("vault", "", `vault file path ("" = OS config dir, "off" = disabled)`)
 	vaultAutoLock := flag.Duration("vault-autolock", 15*time.Minute, "lock the vault after this idle time (0 = never)")
 	maxConcurrentRuns := flag.Int("max-concurrent-runs", 4, "cap on runbooks executing at once (0 = unlimited)")
@@ -81,6 +83,17 @@ func main() {
 		scheduler.Start()
 		defer scheduler.Stop()
 	}
+
+	llmStore := openLLM(*llmDBPath)
+	var llmEngine *llm.Engine
+	if llmStore != nil {
+		defer llmStore.Close()
+		var secrets llm.SecretResolver
+		if vlt != nil {
+			secrets = vlt
+		}
+		llmEngine = llm.NewEngine(llmStore, secrets)
+	}
 	defer iperf.StopServer() // kill any managed `iperf3 -s` child
 
 	ln, err := net.Listen("tcp", *addr)
@@ -103,6 +116,8 @@ func main() {
 		Orchestrator:  orch,
 		RunbookEngine: engine,
 		Vault:         vlt,
+		LLM:           llmStore,
+		LLMEngine:     llmEngine,
 		AppVersion:    api.Version,
 		HistoryPolicy: history.PrunePolicy{
 			RetentionDays: *retentionDays,
@@ -194,6 +209,30 @@ func openOrchestrator(path string) *orchestrator.Store {
 		return nil
 	}
 	log.Printf("runbooks: %s", path)
+	return s
+}
+
+// openLLM resolves the AI-layer DB path and opens the store. A failure is
+// logged, not fatal — the /llm endpoints then 503 and the UI shows the
+// connect state.
+func openLLM(path string) *llm.Store {
+	if path == "off" {
+		return nil
+	}
+	if path == "" {
+		d, err := appDataDir()
+		if err != nil {
+			log.Printf("llm: config dir: %v (module disabled)", err)
+			return nil
+		}
+		path = filepath.Join(d, "llm.db")
+	}
+	s, err := llm.Open("file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	if err != nil {
+		log.Printf("llm: open %s: %v (module disabled)", path, err)
+		return nil
+	}
+	log.Printf("llm: %s", path)
 	return s
 }
 

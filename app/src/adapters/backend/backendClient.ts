@@ -72,6 +72,8 @@ export interface CapabilitiesInfo {
   capabilities: Record<string, ToolCapability>
   /** Runbooks module: which executor kinds this host can run. */
   runbookExecutors?: Record<string, boolean>
+  /** AI layer: which provider kinds this build supports. */
+  llmProviders?: string[]
 }
 
 /** GET a JSON endpoint under `/api/v1`. Throws `BackendUnavailableError` if no backend. */

@@ -12,6 +12,7 @@ import (
 
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/history"
+	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/vault"
 )
@@ -36,6 +37,10 @@ type Options struct {
 	RunbookEngine *orchestrator.Engine
 	// Vault is the secret store. Nil → /vault* endpoints 503.
 	Vault *vault.Vault
+	// LLM is the AI-layer store. Nil → /llm* endpoints 503.
+	LLM *llm.Store
+	// LLMEngine runs model listing + chat. Nil → the same.
+	LLMEngine *llm.Engine
 }
 
 // NewRouter returns the fully wired API handler.
@@ -53,6 +58,7 @@ func NewRouter(opts Options) http.Handler {
 	}
 	rbh := &api.RunbookHandlers{Store: opts.Orchestrator, Engine: opts.RunbookEngine}
 	vh := &api.VaultHandlers{Vault: opts.Vault}
+	lh := &api.LLMHandlers{Store: opts.LLM, Engine: opts.LLMEngine}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", api.Health)
@@ -132,6 +138,17 @@ func NewRouter(opts Options) http.Handler {
 		r.Get("/packages/install/stream", rbh.PackagesInstall)
 		r.Post("/library/export", rbh.LibraryExport)
 		r.Post("/library/import", rbh.LibraryImport)
+
+		// AI layer (AI_MODULE_PLAN.md §6.3).
+		r.Route("/llm", func(r chi.Router) {
+			r.Get("/connections", lh.ListConnections)
+			r.Post("/connections", lh.PutConnection)
+			r.Put("/connections/{id}", lh.PutConnection)
+			r.Delete("/connections/{id}", lh.DeleteConnection)
+			r.Post("/connections/{id}/test", lh.TestConnection)
+			r.Get("/connections/{id}/models", lh.Models)
+			r.Get("/chat/stream", lh.ChatStream)
+		})
 
 		r.Route("/vault", func(r chi.Router) {
 			r.Get("/status", vh.Status)

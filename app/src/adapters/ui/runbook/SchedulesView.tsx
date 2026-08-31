@@ -155,7 +155,12 @@ function ScheduleDialog({ draft, published, argSpecFor, onClose, onSave }: Dialo
               <Label className="text-xs">Runbook</Label>
               <Select value={runbookId} onValueChange={(v) => v && setD((c) => ({ ...c!, runbookId: v }))}>
                 <SelectTrigger size="sm">
-                  <SelectValue placeholder="Pick a published runbook" />
+                  <SelectValue placeholder="Pick a published runbook">
+                    {(v) => {
+                      const rb = published.find((r) => r.id === v)
+                      return rb ? currentSpec(rb)?.name ?? rb.slug : 'Pick a published runbook'
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {published.map((rb) => (
