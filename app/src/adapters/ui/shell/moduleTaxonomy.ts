@@ -72,6 +72,7 @@ import {
   ShieldCheck,
   Shuffle,
   SlidersHorizontal,
+  SquareTerminal,
   Table,
   Table2,
   Target,
@@ -633,6 +634,23 @@ export const kModuleTaxonomy: ModuleDef[] = [
         description: 'Author, version & reuse LLM prompt templates',
         icon: Library,
         route: '/tools/prompt-library',
+      },
+    ],
+  },
+  {
+    id: 'runbook',
+    title: 'Runbooks',
+    icon: SquareTerminal,
+    // Single-tool shell module — the tool is the full "Console Workspace"
+    // (own top nav). Backend-mandatory. See RUNBOOK_MODULE_PLAN.md.
+    hideToolPane: true,
+    tools: [
+      {
+        id: 'runbook',
+        name: 'Runbooks',
+        description: 'Reusable multi-step command runbooks with a Vault',
+        icon: SquareTerminal,
+        route: '/tools/runbook',
       },
     ],
   },

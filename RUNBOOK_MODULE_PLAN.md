@@ -500,7 +500,28 @@ Commit per checkpoint (CLAUDE.md commit workflow). Green gate: `bun run build`
 + `bun run test` + `bun run lint`, and `go vet ./... && go test ./...` in
 `backend/`.
 
-### R0 — Foundations (no user-visible runbooks)
+### R0 — Foundations — **DONE 2026-08-31**
+
+Shipped. Backend: `internal/vault/` (Argon2id → AES-256-GCM, `vault.enc` file,
+init/unlock/lock, auto-lock, export/import, 5 tests) · `internal/executor/`
+(interface + `shell.go` for powershell/cmd/bash, stdin-fed, ctx timeout, 4
+tests) · `internal/orchestrator/` (`store.go` all tables in `orchestrator.db`,
+`render.go` `{{VAR}}`/`{{secret:}}`/`{{steps.N.}}` + redaction, `destructive.go`
+17 patterns, `engine.go` validate → resolve → scan → dry-run → per-step SSE +
+concurrency cap, 6 tests) · `api/runbook.go` + `api/vault.go` · routes in
+`server.go` · `capabilities` gains `runbook` + `runbookExecutors`. Frontend:
+`core/runbook/**` (model + `variableExtractor` + tests, framework-free) ·
+`runbookClient.ts` (with null-slice normalisers) · `runbookStore` + `vaultStore`
+· `RunbookConsoleScaffold` (T7: top nav, status strip, backend gate) + section
+views + `VaultDialog` + `RunSetupDialog` (fill args, preview, dry-run) +
+`RunPanel` (live SSE) · module `runbook` (`hideToolPane`) + route. 1290 frontend
+tests + all backend tests green; build + lint + `go vet` clean.
+Verified end-to-end in-browser: vault init/unlock → create runbook → publish →
+Run with a `{{secret:GREETING}}` ref → SSE stream → output shows the secret
+resolved **and redacted** (`‹secret:GREETING›`), run lands in History.
+
+<details><summary>original R0 checkpoint</summary>
+
 - `backend/internal/orchestrator/store.go` — all tables + migrations + CRUD
 - `backend/internal/vault/**` — argon2id KDF, AES-GCM, locked/unlocked state,
   auto-lock, `/vault/*` endpoints + tests
@@ -516,6 +537,7 @@ Commit per checkpoint (CLAUDE.md commit workflow). Green gate: `bun run build`
 - **DoD**: `go test` + `bun run test` green; vault init/unlock/lock round-trips;
   a hard-coded one-step bash runbook runs end-to-end over SSE from a scratch UI;
   web-without-backend shows the connect state.
+</details>
 
 ### R1 — Library + single-step shell runbooks
 - `RunbookEditorScreen` (single step, shell executors, `{{ARG}}` auto-detect,

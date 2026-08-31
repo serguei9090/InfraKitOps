@@ -28,8 +28,10 @@ import (
 
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/history"
+	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/server"
 	"github.com/infrakit/backend/internal/tools/iperf"
+	"github.com/infrakit/backend/internal/vault"
 )
 
 func main() {
@@ -40,6 +42,10 @@ func main() {
 	dbPath := flag.String("db", "", `history database path ("" = OS config dir, "off" = no history)`)
 	retentionDays := flag.Int("history-retention-days", 90, "default history retention")
 	maxPerTarget := flag.Int("history-max-per-target", 20, "default history runs kept per (tool,target)")
+	runbookDBPath := flag.String("runbook-db", "", `runbooks database path ("" = OS config dir, "off" = disabled)`)
+	vaultPath := flag.String("vault", "", `vault file path ("" = OS config dir, "off" = disabled)`)
+	vaultAutoLock := flag.Duration("vault-autolock", 15*time.Minute, "lock the vault after this idle time (0 = never)")
+	maxConcurrentRuns := flag.Int("max-concurrent-runs", 4, "cap on runbooks executing at once (0 = unlimited)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -59,6 +65,19 @@ func main() {
 	if store != nil {
 		defer store.Close()
 	}
+	orch := openOrchestrator(*runbookDBPath)
+	if orch != nil {
+		defer orch.Close()
+	}
+	vlt := openVault(*vaultPath, *vaultAutoLock)
+	var engine *orchestrator.Engine
+	if orch != nil {
+		var secrets orchestrator.SecretResolver
+		if vlt != nil {
+			secrets = vlt
+		}
+		engine = orchestrator.NewEngine(orch, secrets, *maxConcurrentRuns)
+	}
 	defer iperf.StopServer() // kill any managed `iperf3 -s` child
 
 	ln, err := net.Listen("tcp", *addr)
@@ -75,10 +94,13 @@ func main() {
 
 	wd := server.NewWatchdog(*idleTimeout, *parentPID)
 	handler := server.NewRouter(server.Options{
-		Token:      tok,
-		OnActivity: wd.Touch,
-		History:    store,
-		AppVersion: api.Version,
+		Token:         tok,
+		OnActivity:    wd.Touch,
+		History:       store,
+		Orchestrator:  orch,
+		RunbookEngine: engine,
+		Vault:         vlt,
+		AppVersion:    api.Version,
 		HistoryPolicy: history.PrunePolicy{
 			RetentionDays: *retentionDays,
 			MaxPerTarget:  *maxPerTarget,
@@ -137,6 +159,61 @@ func openHistory(path string) *history.Store {
 	}
 	log.Printf("history: %s", path)
 	return store
+}
+
+// appDataDir returns %AppData%/InfraKitStudio (or the OS equivalent), created.
+func appDataDir() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	d := filepath.Join(dir, "InfraKitStudio")
+	return d, os.MkdirAll(d, 0o755)
+}
+
+// openOrchestrator resolves the runbooks DB path and opens the store.
+// A failure is logged, not fatal — the module then reports unavailable.
+func openOrchestrator(path string) *orchestrator.Store {
+	if path == "off" {
+		return nil
+	}
+	if path == "" {
+		d, err := appDataDir()
+		if err != nil {
+			log.Printf("runbooks: config dir: %v (module disabled)", err)
+			return nil
+		}
+		path = filepath.Join(d, "orchestrator.db")
+	}
+	s, err := orchestrator.Open("file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	if err != nil {
+		log.Printf("runbooks: open %s: %v (module disabled)", path, err)
+		return nil
+	}
+	log.Printf("runbooks: %s", path)
+	return s
+}
+
+// openVault loads (does not unlock) the vault file.
+func openVault(path string, autoLock time.Duration) *vault.Vault {
+	if path == "off" {
+		return nil
+	}
+	if path == "" {
+		d, err := appDataDir()
+		if err != nil {
+			log.Printf("vault: config dir: %v (vault disabled)", err)
+			return nil
+		}
+		path = filepath.Join(d, "vault.enc")
+	}
+	v, err := vault.Open(path, autoLock)
+	if err != nil {
+		log.Printf("vault: open %s: %v (vault disabled)", path, err)
+		return nil
+	}
+	log.Printf("vault: %s", path)
+	return v
 }
 
 func mustToken() string {

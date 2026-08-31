@@ -12,6 +12,8 @@ import (
 
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/history"
+	"github.com/infrakit/backend/internal/orchestrator"
+	"github.com/infrakit/backend/internal/vault"
 )
 
 // Options configures the router.
@@ -28,6 +30,12 @@ type Options struct {
 	AppVersion string
 	// HistoryPolicy is the default prune policy (per-request overridable).
 	HistoryPolicy history.PrunePolicy
+	// Orchestrator is the Runbooks store. Nil → the /runbook* endpoints 503.
+	Orchestrator *orchestrator.Store
+	// RunbookEngine executes runbooks. Nil → running is unavailable.
+	RunbookEngine *orchestrator.Engine
+	// Vault is the secret store. Nil → /vault* endpoints 503.
+	Vault *vault.Vault
 }
 
 // NewRouter returns the fully wired API handler.
@@ -43,6 +51,8 @@ func NewRouter(opts Options) http.Handler {
 		AppVersion:    opts.AppVersion,
 		DefaultPolicy: opts.HistoryPolicy,
 	}
+	rbh := &api.RunbookHandlers{Store: opts.Orchestrator, Engine: opts.RunbookEngine}
+	vh := &api.VaultHandlers{Vault: opts.Vault}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", api.Health)
@@ -84,6 +94,45 @@ func NewRouter(opts Options) http.Handler {
 			r.Get("/{id}", hist.Get)
 			r.Patch("/{id}", hist.Patch)
 			r.Delete("/{id}", hist.Delete)
+		})
+
+		// Runbooks module (RUNBOOK_MODULE_PLAN.md §6.3).
+		r.Route("/runbooks", func(r chi.Router) {
+			r.Get("/", rbh.List)
+			r.Post("/", rbh.Create)
+			r.Get("/{id}", rbh.Get)
+			r.Delete("/{id}", rbh.Delete)
+			r.Put("/{id}/draft", rbh.SaveDraft)
+			r.Delete("/{id}/draft", rbh.DiscardDraft)
+			r.Post("/{id}/versions", rbh.SaveVersion)
+			r.Post("/{id}/versions/{n}/{action}", rbh.VersionAction)
+			r.Delete("/{id}/versions/{n}", rbh.DeleteVersion)
+			r.Post("/{id}/publish", rbh.Publish)
+			r.Post("/{id}/preview", rbh.Preview)
+			r.Get("/{id}/run/stream", rbh.RunStream)
+		})
+		r.Get("/runs", rbh.ListRuns)
+		r.Get("/runs/{id}", rbh.GetRun)
+		r.Route("/ssh-nodes", func(r chi.Router) {
+			r.Get("/", rbh.ListNodes)
+			r.Post("/", rbh.PutNode)
+			r.Put("/{id}", rbh.PutNode)
+			r.Delete("/{id}", rbh.DeleteNode)
+		})
+		r.Get("/runbook-settings", rbh.GetSettings)
+		r.Put("/runbook-settings", rbh.PutSettings)
+
+		r.Route("/vault", func(r chi.Router) {
+			r.Get("/status", vh.Status)
+			r.Post("/init", vh.Init)
+			r.Post("/unlock", vh.Unlock)
+			r.Post("/lock", vh.Lock)
+			r.Get("/secrets", vh.ListSecrets)
+			r.Post("/secrets", vh.PutSecret)
+			r.Put("/secrets/{id}", vh.PutSecret)
+			r.Delete("/secrets/{id}", vh.DeleteSecret)
+			r.Get("/export", vh.Export)
+			r.Post("/import", vh.Import)
 		})
 	})
 

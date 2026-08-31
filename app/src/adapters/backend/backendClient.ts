@@ -70,6 +70,8 @@ export interface ToolCapability {
 export interface CapabilitiesInfo {
   elevated: boolean
   capabilities: Record<string, ToolCapability>
+  /** Runbooks module: which executor kinds this host can run. */
+  runbookExecutors?: Record<string, boolean>
 }
 
 /** GET a JSON endpoint under `/api/v1`. Throws `BackendUnavailableError` if no backend. */

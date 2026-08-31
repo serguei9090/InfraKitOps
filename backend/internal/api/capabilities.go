@@ -69,11 +69,16 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"config-validate": {Available: true},
 		"qr-reader":       {Available: true},
 		"x509-inspector":  {Available: true},
+
+		// Runbooks module. The store/vault are wired at process start; the
+		// endpoints 503 if not, and the UI already gates on that.
+		"runbook": {Available: true},
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
 		"elevated":     elevated,
 		"capabilities": caps,
+		"runbookExecutors": RunbookExecutors(),
 	})
 }
 

@@ -82,6 +82,9 @@ import { FormFlowBuilderScreen } from './adapters/ui/tools/FormFlowBuilderScreen
 // Prompt Library
 import { PromptLibraryScreen } from './adapters/ui/tools/PromptLibraryScreen'
 
+// Runbooks
+import { RunbookScreen } from './adapters/ui/tools/RunbookScreen'
+
 // Configuration Builders — Zabbix / Fail2ban
 import { ZabbixConfigBuilderScreen } from './adapters/ui/tools/ZabbixConfigBuilderScreen'
 import { Fail2banConfigBuilderScreen } from './adapters/ui/tools/Fail2banConfigBuilderScreen'
@@ -190,6 +193,9 @@ export const router = createBrowserRouter([
 
       // Prompt Library
       { path: 'tools/prompt-library', element: <PromptLibraryScreen /> },
+
+      // Runbooks
+      { path: 'tools/runbook', element: <RunbookScreen /> },
 
       // Configuration Builders — Zabbix / Fail2ban
       { path: 'tools/zabbix-config-builder', element: <ZabbixConfigBuilderScreen /> },

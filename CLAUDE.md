@@ -220,6 +220,30 @@ diagnostics only. Plan + roadmap: [`NETWORK_MODULE_PLAN.md`](NETWORK_MODULE_PLAN
 - CI: `.github/workflows/backend.yml` (vet/test + cross-compile). `bun run tauri dev`
   opening a real window still needs a manual pass — same caveat as the rest of the app.
 
+### Runbooks module (started 2026-08-31, R0 done)
+
+**Runbooks** (`moduleTaxonomy.ts` id `runbook`, route `/tools/runbook`) is a
+**backend-mandatory** module for reusable multi-step command runbooks — the
+second big consumer of the Go backend. Plan + phases:
+[`RUNBOOK_MODULE_PLAN.md`](RUNBOOK_MODULE_PLAN.md).
+
+- **Backend**: `internal/vault/` (Argon2id → AES-256-GCM, `vault.enc` file,
+  RAM-only key, auto-lock), `internal/executor/` (executor adapters — R0:
+  powershell/cmd/bash; SSH + HTTP in R2), `internal/orchestrator/`
+  (`orchestrator.db`, `{{VAR}}`/`{{secret:NAME}}`/`{{steps.N.stdout}}` render +
+  server-side secret **redaction** everywhere, destructive-pattern scan, run
+  engine over SSE with a concurrency cap). `capabilities` gains `runbook` +
+  `runbookExecutors`. No new Go deps (`x/crypto/ssh`+`argon2` already vendored).
+- **Frontend**: `src/core/runbook/**` (framework-free), `runbookClient.ts`
+  (normalises Go's `null` slices), `runbookStore` + `vaultStore`, T7 **"Console
+  Workspace"** scaffold (`adapters/ui/runbook/` — own top nav, not a sidebar),
+  single-tool shell module.
+- **No dedicated Ansible / kubectl executor** — run them as plain commands in a
+  shell/SSH step (§3.3). Ansible + kubectl get their own modules later.
+- R1 = full step editor + versioning + published gate; R2 = multi-step + SSH +
+  HTTP + Nodes; R3 = Packages + git sync; **R4 deferred**: Python-uv executor,
+  AI Assistant (reuses Prompt Library P5 model connections), scheduled runs.
+
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 
 A handful of the 44 client-only tools now have an **optional** backend upgrade —
