@@ -89,7 +89,7 @@ export function RunbookConsoleScaffold() {
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <Header>
-        <nav className="flex items-center gap-0.5">
+        <nav className="flex items-center gap-0.5 overflow-x-auto">
           {NAV.map((n) => (
             <button
               key={n.id}

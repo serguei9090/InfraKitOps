@@ -1,12 +1,21 @@
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, GripVertical, Trash2 } from 'lucide-react'
+import type { CSSProperties, HTMLAttributes } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 import { EXECUTOR_KINDS, EXECUTOR_LABEL, type ExecutorKind, type StepSpec } from '@/core/runbook/runbookModel'
 import { SshStepForm } from './SshStepForm'
 import { HttpStepForm } from './HttpStepForm'
 import { PythonStepForm } from './PythonStepForm'
+
+export interface StepDragProps {
+  setNodeRef: (el: HTMLElement | null) => void
+  style?: CSSProperties
+  isDragging?: boolean
+  handleProps: HTMLAttributes<HTMLButtonElement>
+}
 
 interface Props {
   step: StepSpec
@@ -15,15 +24,33 @@ interface Props {
   readOnly?: boolean
   /** which executor kinds the connected backend can actually run */
   runnable: Record<string, boolean>
+  drag?: StepDragProps
   onChange: (patch: Partial<StepSpec>) => void
   onMove: (dir: -1 | 1) => void
   onDelete: () => void
 }
 
-export function StepCard({ step, index, count, readOnly, runnable, onChange, onMove, onDelete }: Props) {
+export function StepCard({ step, index, count, readOnly, runnable, drag, onChange, onMove, onDelete }: Props) {
   return (
-    <div className="rounded-lg border border-border/60 bg-card">
+    <div
+      ref={drag?.setNodeRef}
+      style={drag?.style}
+      className={cn(
+        'rounded-lg border border-border/60 bg-card',
+        drag?.isDragging && 'z-10 opacity-80 shadow-lg ring-1 ring-border',
+      )}
+    >
       <div className="flex items-center gap-2 border-b border-border/60 px-2.5 py-1.5">
+        {drag && !readOnly ? (
+          <button
+            type="button"
+            aria-label="Drag to reorder"
+            className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+            {...drag.handleProps}
+          >
+            <GripVertical className="size-3.5" />
+          </button>
+        ) : null}
         <span className="text-xs font-medium text-muted-foreground">{index + 1}</span>
         <Input
           value={step.name}

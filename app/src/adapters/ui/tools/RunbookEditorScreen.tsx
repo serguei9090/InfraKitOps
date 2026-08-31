@@ -1,6 +1,22 @@
 import { ArrowLeft, Download, Eye, Play, Plus, Save, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { downloadBlob } from '@/lib/downloadFile'
@@ -20,6 +36,7 @@ import {
   type StepSpec,
 } from '@/core/runbook/runbookModel'
 import { StepCard } from '@/adapters/ui/runbook/StepCard'
+import type { StepDragProps } from '@/adapters/ui/runbook/StepCard'
 import { ArgConfigPanel } from '@/adapters/ui/runbook/ArgConfigPanel'
 import { RunbookVersionList } from '@/adapters/ui/runbook/RunbookVersionList'
 import { RunbookCompareDialog } from '@/adapters/ui/runbook/RunbookCompareDialog'
@@ -32,6 +49,11 @@ export function RunbookEditorScreen() {
   const refreshLibrary = useRunbookStore((s) => s.refresh)
   const runnable = useBackendStore((s) => s.capabilities?.runbookExecutors)
   const runnableMap = useMemo(() => runnable ?? {}, [runnable])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   const [rb, setRb] = useState<Runbook | null>(null)
   const [spec, setSpecState] = useState<RunbookSpec>(() => emptySpec())
@@ -100,10 +122,13 @@ export function RunbookEditorScreen() {
     setSpec({ ...spec, steps: spec.steps.map((s, j) => (j === i ? { ...s, ...p } : s)) })
   }
   function moveStep(i: number, dir: -1 | 1) {
-    const t = i + dir
-    if (t < 0 || t >= spec.steps.length) return
+    reorderSteps(i, i + dir)
+  }
+  function reorderSteps(from: number, to: number) {
+    if (to < 0 || to >= spec.steps.length || from === to) return
     const steps = [...spec.steps]
-    ;[steps[i], steps[t]] = [steps[t], steps[i]]
+    const [moved] = steps.splice(from, 1)
+    steps.splice(to, 0, moved)
     setSpec({ ...spec, steps })
   }
 
@@ -235,7 +260,7 @@ export function RunbookEditorScreen() {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[1fr_320px] overflow-hidden">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[1fr_320px]">
         <div className="min-h-0 overflow-y-auto p-4">
           <div className="mx-auto flex max-w-3xl flex-col gap-3">
             <Input
@@ -245,21 +270,54 @@ export function RunbookEditorScreen() {
               placeholder="Short description"
               className="h-8"
             />
-            {viewedSpec.steps.map((step, i) => (
-              <StepCard
-                key={step.id}
-                step={step}
-                index={i}
-                count={viewedSpec.steps.length}
-                readOnly={readOnly}
-                runnable={runnableMap}
-                onChange={(p) => !readOnly && patchStep(i, p)}
-                onMove={(d) => !readOnly && moveStep(i, d)}
-                onDelete={() =>
-                  !readOnly && setSpec({ ...spec, steps: spec.steps.filter((_, j) => j !== i) })
-                }
-              />
-            ))}
+            {readOnly ? (
+              viewedSpec.steps.map((step, i) => (
+                <StepCard
+                  key={step.id}
+                  step={step}
+                  index={i}
+                  count={viewedSpec.steps.length}
+                  readOnly
+                  runnable={runnableMap}
+                  onChange={() => {}}
+                  onMove={() => {}}
+                  onDelete={() => {}}
+                />
+              ))
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(e: DragEndEvent) => {
+                  const { active, over } = e
+                  if (!over || active.id === over.id) return
+                  reorderSteps(
+                    spec.steps.findIndex((s) => s.id === active.id),
+                    spec.steps.findIndex((s) => s.id === over.id),
+                  )
+                }}
+              >
+                <SortableContext
+                  items={spec.steps.map((s) => s.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="flex flex-col gap-3">
+                    {spec.steps.map((step, i) => (
+                      <SortableStepCard
+                        key={step.id}
+                        step={step}
+                        index={i}
+                        count={spec.steps.length}
+                        runnable={runnableMap}
+                        onChange={(p) => patchStep(i, p)}
+                        onMove={(d) => moveStep(i, d)}
+                        onDelete={() => setSpec({ ...spec, steps: spec.steps.filter((_, j) => j !== i) })}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
             {!readOnly && (
               <Button
                 variant="outline"
@@ -273,7 +331,7 @@ export function RunbookEditorScreen() {
           </div>
         </div>
 
-        <aside className="min-h-0 overflow-y-auto border-l border-border/60 bg-card p-3">
+        <aside className="min-h-0 overflow-y-auto border-t border-border/60 bg-card p-3 lg:border-l lg:border-t-0">
           <RunbookVersionList
             runbook={rb}
             viewing={viewing}
@@ -304,6 +362,27 @@ export function RunbookEditorScreen() {
       <RunPanel />
     </div>
   )
+}
+
+function SortableStepCard(props: {
+  step: StepSpec
+  index: number
+  count: number
+  runnable: Record<string, boolean>
+  onChange: (patch: Partial<StepSpec>) => void
+  onMove: (dir: -1 | 1) => void
+  onDelete: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.step.id,
+  })
+  const drag: StepDragProps = {
+    setNodeRef,
+    style: { transform: CSS.Transform.toString(transform), transition },
+    isDragging,
+    handleProps: { ...attributes, ...listeners },
+  }
+  return <StepCard {...props} drag={drag} />
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

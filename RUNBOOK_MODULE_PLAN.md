@@ -674,6 +674,17 @@ History rows tagged `scheduled`. Verified in-browser: create → edit (cron
 persists) → scheduler fired `* * * * *` → run #6 `ok` `triggeredBy=schedule`,
 NextRunAt advanced → delete.
 
+**R4c — dnd step reorder + responsive. DONE 2026-08-31.** `RunbookEditorScreen`
+steps wrapped in `DndContext`/`SortableContext` (`@dnd-kit`, same setup as the
+Prompt Library `PromptEditor`); `StepCard` gained an optional `drag` prop + a
+`GripVertical` handle; the up/down buttons stay as the always-reliable
+fallback (`moveStep` → shared `reorderSteps`). Editor grid is now
+`grid-cols-1 lg:grid-cols-[1fr_320px]` (version/args pane stacks below the
+steps under `lg`, border flips top↔left); console nav is `overflow-x-auto`.
+Verified in-browser: grips render, `reorderSteps` reorders (via the up/down
+path — synthetic dnd drag events are unreliable to script, same caveat as the
+other dnd work), draft autosaves, discard restores.
+
 **Still deferred:** **AI Assistant** (script generation — reuses the Prompt
 Library P5 model-connection layer) · OS-keyring-sealed vault master key
 (desktop) · multi-user approvals + immutable audit log · file-type run
