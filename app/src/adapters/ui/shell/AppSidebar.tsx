@@ -6,7 +6,6 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { createSchemaRepository } from '@/adapters/storage/schemaRepository'
-import { NetworkSettingsDialog } from '@/adapters/ui/network/NetworkSettingsDialog'
 import { useModuleVisibilityStore, visibleModulesInOrder } from '@/stores/moduleVisibilityStore'
 import { useSearchQueryStore } from '@/stores/searchQueryStore'
 import { moduleContainingRoute, moduleRailRoute, type ModuleDef } from './moduleTaxonomy'
@@ -215,17 +214,14 @@ function ToolListPane({ module, currentPath }: { module: ModuleDef; currentPath:
       </div>
       {module.id === 'network' ? (
         <div className="border-t border-border/60 px-2 py-2">
-          <NetworkSettingsDialog
-            trigger={
-              <button
-                type="button"
-                className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-sm text-muted-foreground hover:bg-accent/40 hover:text-foreground"
-              >
-                <Settings className="size-[18px] shrink-0" />
-                <span className="flex-1 truncate">Toolkit settings</span>
-              </button>
-            }
-          />
+          <button
+            type="button"
+            onClick={() => navigate('/settings/network')}
+            className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-sm text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+          >
+            <Settings className="size-[18px] shrink-0" />
+            <span className="flex-1 truncate">Toolkit settings</span>
+          </button>
         </div>
       ) : null}
     </div>

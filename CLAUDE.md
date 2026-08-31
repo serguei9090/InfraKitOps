@@ -292,7 +292,7 @@ Assistant.
   (`AssistantView`, `runbook.assistant` task, chat grounded on the spec) +
   editor "Generate step" (`runbook.gen-step` → append) + per-`StepCard`
   "Explain" (`command.explain`).
-### Settings module (started 2026-08-31, S0 + S1 done)
+### Settings module (started 2026-08-31, S0–S2 done)
 
 `/settings` page (`adapters/ui/settings/`) — replaces the old rearrange-only
 `ModuleSettingsDialog` (deleted). Left menu of sections from a
@@ -309,9 +309,14 @@ phases: [`SETTINGS_MODULE_PLAN.md`](SETTINGS_MODULE_PLAN.md).
   system prompts grouped by `TASK_GROUPS` prefix (reuses the extracted
   `adapters/ui/ai/TaskDialog`), `AiPanel` resolution chain (localStorage pick →
   task preferred → global default → first connection).
-- **S2 next**: Runbooks section (`runbook_settings` retention/autolock/
-  concurrency — flags become defaults) + Network section (move
-  `NetworkSettingsDialog` body in, module keeps a deep-link).
+- **S2 done**: Runbooks section (`runbook_settings` retention/keep/concurrency/
+  vault-autolock — `api.ApplyRunbookSettings` pushes concurrency +
+  vault-autolock onto live objects at startup and on every write;
+  `Engine.SetMaxConcurrent` new) + Network section (`NetworkSettingsDialog`
+  body moved in, the dialog deleted, the module's "Toolkit settings" button
+  deep-links to `/settings/network`).
+- **S3 deferred**: export/import all settings, keyboard-shortcut editor,
+  per-section reset, settings search, cross-device sync.
 - Shared config → backend (`llm_settings` / `runbook_settings`); local
   (theme, module order, network blob) → client `IStoragePort`.
 

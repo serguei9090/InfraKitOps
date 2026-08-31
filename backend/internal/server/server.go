@@ -56,7 +56,7 @@ func NewRouter(opts Options) http.Handler {
 		AppVersion:    opts.AppVersion,
 		DefaultPolicy: opts.HistoryPolicy,
 	}
-	rbh := &api.RunbookHandlers{Store: opts.Orchestrator, Engine: opts.RunbookEngine}
+	rbh := &api.RunbookHandlers{Store: opts.Orchestrator, Engine: opts.RunbookEngine, Vault: opts.Vault}
 	vh := &api.VaultHandlers{Vault: opts.Vault}
 	lh := &api.LLMHandlers{Store: opts.LLM, Engine: opts.LLMEngine}
 

@@ -15,12 +15,34 @@ import (
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/packages"
 	"github.com/infrakit/backend/internal/sse"
+	"github.com/infrakit/backend/internal/vault"
 )
 
 // RunbookHandlers wires the /runbook* endpoints. Nil Store → every endpoint 503.
 type RunbookHandlers struct {
 	Store  *orchestrator.Store
 	Engine *orchestrator.Engine
+	Vault  *vault.Vault // for applying vault-autolock from module settings
+}
+
+// ApplyRunbookSettings pushes the settings that map onto live objects — the
+// concurrency cap and the vault idle timeout. Called at startup and after every
+// settings write. Missing / unparseable keys are left at their current value.
+func ApplyRunbookSettings(st map[string]string, engine *orchestrator.Engine, vlt *vault.Vault) {
+	if engine != nil {
+		if v := st["maxConcurrentRuns"]; v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				engine.SetMaxConcurrent(n)
+			}
+		}
+	}
+	if vlt != nil {
+		if v := st["vaultAutoLockMinutes"]; v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				vlt.SetAutoLock(time.Duration(n) * time.Minute)
+			}
+		}
+	}
 }
 
 func (h *RunbookHandlers) ok() bool { return h != nil && h.Store != nil && h.Engine != nil }
@@ -409,7 +431,9 @@ func (h *RunbookHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 	for k, v := range body {
 		_ = h.Store.PutSetting(k, v)
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{"settings": h.Store.GetSettings()})
+	merged := h.Store.GetSettings()
+	ApplyRunbookSettings(merged, h.Engine, h.Vault)
+	WriteJSON(w, http.StatusOK, map[string]any{"settings": merged})
 }
 
 // --- packages -------------------------------------------------------

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/infrakit/backend/internal/executor"
@@ -23,17 +24,36 @@ type SecretResolver interface {
 type Engine struct {
 	Store   *Store
 	Secrets SecretResolver
-	// MaxConcurrent caps how many runs may be in flight (0 = unlimited).
-	sem chan struct{}
+	// sem caps how many runs may be in flight (nil = unlimited). Guarded by
+	// semMu so SetMaxConcurrent can swap it; each Run captures its own
+	// reference, so a swap never affects an in-flight run.
+	semMu sync.RWMutex
+	sem   chan struct{}
 }
 
 // NewEngine builds an engine with a concurrency cap.
 func NewEngine(store *Store, secrets SecretResolver, maxConcurrent int) *Engine {
-	var sem chan struct{}
-	if maxConcurrent > 0 {
-		sem = make(chan struct{}, maxConcurrent)
+	e := &Engine{Store: store, Secrets: secrets}
+	e.SetMaxConcurrent(maxConcurrent)
+	return e
+}
+
+// SetMaxConcurrent resizes the concurrency cap (0 = unlimited). Runs already in
+// flight keep their old slot; only new runs see the new limit.
+func (e *Engine) SetMaxConcurrent(n int) {
+	e.semMu.Lock()
+	defer e.semMu.Unlock()
+	if n <= 0 {
+		e.sem = nil
+		return
 	}
-	return &Engine{Store: store, Secrets: secrets, sem: sem}
+	e.sem = make(chan struct{}, n)
+}
+
+func (e *Engine) getSem() chan struct{} {
+	e.semMu.RLock()
+	defer e.semMu.RUnlock()
+	return e.sem
 }
 
 // ValidationError is one failed arg check.
@@ -216,10 +236,10 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 		}
 	}
 
-	if e.sem != nil {
+	if sem := e.getSem(); sem != nil {
 		select {
-		case e.sem <- struct{}{}:
-			defer func() { <-e.sem }()
+		case sem <- struct{}{}:
+			defer func() { <-sem }()
 		case <-ctx.Done():
 			return 0
 		}

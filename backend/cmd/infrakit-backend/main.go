@@ -79,6 +79,8 @@ func main() {
 			secrets = vlt
 		}
 		engine = orchestrator.NewEngine(orch, secrets, *maxConcurrentRuns)
+		// Stored module settings override the process flags.
+		api.ApplyRunbookSettings(orch.GetSettings(), engine, vlt)
 		scheduler := orchestrator.NewScheduler(orch, engine)
 		scheduler.Start()
 		defer scheduler.Stop()

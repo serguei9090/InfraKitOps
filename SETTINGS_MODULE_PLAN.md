@@ -199,17 +199,25 @@ deleted.
   command" `AiPanel` opened pre-selected on the global default
   (`Local Ollama` / `gemma4:e2b`); fresh-tab zero console errors. Green.
 
-### S2 — Runbooks + Network sections
-- Backend: `runbook_settings` gains `vaultAutoLockMinutes` /
-  `maxConcurrentRuns`; wire to `vault.SetAutoLock` / new
-  `Engine.SetMaxConcurrent`; the process flags become defaults.
-- Frontend: `RunbookSettings` (retention + autolock + concurrency form via the
-  existing `/runbook-settings` endpoints); `NetworkSettings` = the old
-  `NetworkSettingsDialog` body moved in; retire the dialog, add the deep-link
-  from the Network module.
-- **DoD**: change retention + see the next run prune to it; change auto-lock
-  and the vault status strip reflects it; edit a proxy URL from Settings and a
-  network tool uses it.
+### S2 — Runbooks + Network sections — **DONE 2026-08-31**
+- Backend: `orchestrator.Engine.SetMaxConcurrent(n)` (RW-mutex-guarded sem
+  swap; in-flight runs keep their captured slot). `api.ApplyRunbookSettings
+  (settings, engine, vault)` — pushes `maxConcurrentRuns` →
+  `Engine.SetMaxConcurrent` and `vaultAutoLockMinutes` → `vault.SetAutoLock`;
+  called at startup (after the process flags, so stored values win) and after
+  every `PUT /runbook-settings`. `RunbookHandlers` gained `Vault`. 1 new test.
+- Frontend: **Runbooks** section — retention / keep-per-runbook / max-
+  concurrent / vault-autolock, loaded + committed on blur via the existing
+  `/runbook-settings` endpoints. **Network** section = the old
+  `NetworkSettingsDialog` body verbatim (`useNetworkSettingsStore`) + a
+  "Reset to defaults". `NetworkSettingsDialog.tsx` deleted; the Network
+  module's "Toolkit settings" button now `navigate('/settings/network')`.
+- **Verified in-browser**: `/settings/runbooks` loaded 90/20/4/15, a retention
+  edit persisted to `/runbook-settings`; a `vaultAutoLockMinutes` write live-
+  applied (`vault/status.autoLockTotalSec` → 600); `/settings/network` renders
+  the full form; the module deep-link lands on it; fresh tab zero console
+  errors. Green: build + 1299 tests + lint (1 new accepted set-state-in-
+  effect); go vet + go test ./... .
 
 ### S3 — Deferred
 Export / import **all** settings as one JSON · a keyboard-shortcut editor ·

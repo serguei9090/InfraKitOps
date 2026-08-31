@@ -1,8 +1,10 @@
-import { Info, Server, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { Info, Network, Server, SlidersHorizontal, Sparkles, SquareTerminal } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { GeneralSettings } from './sections/GeneralSettings'
 import { AiSettings } from './sections/AiSettings'
+import { RunbookSettings } from './sections/RunbookSettings'
+import { NetworkSettings } from './sections/NetworkSettings'
 import { BackendSettings } from './sections/BackendSettings'
 import { AboutSettings } from './sections/AboutSettings'
 
@@ -23,6 +25,8 @@ export interface SettingsSectionDef {
 export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
   { id: 'general', label: 'General', icon: SlidersHorizontal, scope: 'local', element: <GeneralSettings /> },
   { id: 'ai', label: 'AI', icon: Sparkles, scope: 'global', element: <AiSettings /> },
+  { id: 'runbooks', label: 'Runbooks', icon: SquareTerminal, scope: 'global', element: <RunbookSettings /> },
+  { id: 'network', label: 'Network', icon: Network, scope: 'local', element: <NetworkSettings /> },
   { id: 'backend', label: 'Backend', icon: Server, scope: 'info', element: <BackendSettings /> },
   { id: 'about', label: 'About', icon: Info, scope: 'info', element: <AboutSettings /> },
 ]
