@@ -122,6 +122,12 @@ func NewRouter(opts Options) http.Handler {
 		})
 		r.Get("/runbook-settings", rbh.GetSettings)
 		r.Put("/runbook-settings", rbh.PutSettings)
+		r.Route("/runbook-schedules", func(r chi.Router) {
+			r.Get("/", rbh.ListSchedules)
+			r.Post("/", rbh.PutSchedule)
+			r.Put("/{id}", rbh.PutSchedule)
+			r.Delete("/{id}", rbh.DeleteSchedule)
+		})
 		r.Get("/packages", rbh.Packages)
 		r.Get("/packages/install/stream", rbh.PackagesInstall)
 		r.Post("/library/export", rbh.LibraryExport)

@@ -77,6 +77,9 @@ func main() {
 			secrets = vlt
 		}
 		engine = orchestrator.NewEngine(orch, secrets, *maxConcurrentRuns)
+		scheduler := orchestrator.NewScheduler(orch, engine)
+		scheduler.Start()
+		defer scheduler.Stop()
 	}
 	defer iperf.StopServer() // kill any managed `iperf3 -s` child
 

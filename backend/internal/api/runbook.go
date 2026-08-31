@@ -264,7 +264,7 @@ func (h *RunbookHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	go func() {
-		h.Engine.Run(ctx, rb, version, args, dryRun, ch)
+		h.Engine.Run(ctx, rb, version, args, dryRun, "local", ch)
 		close(ch)
 	}()
 	sw.Pump(ctx, ch)
@@ -502,6 +502,54 @@ func (h *RunbookHandlers) LibraryImport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]int{"imported": n})
+}
+
+// --- schedules -----------------------------------------------------
+
+// ListSchedules: GET /runbook-schedules
+func (h *RunbookHandlers) ListSchedules(w http.ResponseWriter, _ *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	list, err := h.Store.ListSchedules()
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"schedules": list})
+}
+
+// PutSchedule: POST /runbook-schedules  or  PUT /runbook-schedules/{id}
+func (h *RunbookHandlers) PutSchedule(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var sc orchestrator.RunSchedule
+	if err := json.NewDecoder(r.Body).Decode(&sc); err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if id := chi.URLParam(r, "id"); id != "" {
+		sc.ID = id
+	}
+	saved, err := h.Store.PutSchedule(sc)
+	if err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"schedule": saved})
+}
+
+// DeleteSchedule: DELETE /runbook-schedules/{id}
+func (h *RunbookHandlers) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	if err := h.Store.DeleteSchedule(chi.URLParam(r, "id")); err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 // RunbookExecutors reports which executor kinds this host can run.

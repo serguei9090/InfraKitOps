@@ -5,9 +5,15 @@
  */
 import { create } from 'zustand'
 import * as api from '@/adapters/backend/runbookClient'
-import { emptySpec, type Runbook, type RunStep, type SshNode } from '@/core/runbook/runbookModel'
+import {
+  emptySpec,
+  type Runbook,
+  type RunSchedule,
+  type RunStep,
+  type SshNode,
+} from '@/core/runbook/runbookModel'
 
-export type Section = 'library' | 'history' | 'nodes' | 'packages' | 'assistant'
+export type Section = 'library' | 'history' | 'schedules' | 'nodes' | 'packages' | 'assistant'
 
 /** A run currently streaming in the UI. */
 export interface LiveRun {
@@ -25,6 +31,7 @@ interface RunbookStore {
   section: Section
   runbooks: Runbook[]
   nodes: SshNode[]
+  schedules: RunSchedule[]
   loaded: boolean
   error: string | null
   live: LiveRun | null
@@ -34,6 +41,9 @@ interface RunbookStore {
   refreshNodes: () => Promise<void>
   putNode: (n: Partial<SshNode>) => Promise<void>
   deleteNode: (id: string) => Promise<void>
+  refreshSchedules: () => Promise<void>
+  putSchedule: (s: Partial<RunSchedule>) => Promise<void>
+  deleteSchedule: (id: string) => Promise<void>
   createBlank: () => Promise<Runbook | null>
   remove: (id: string) => Promise<void>
   setPublished: (id: string, published: boolean) => Promise<void>
@@ -53,6 +63,7 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
   section: 'library',
   runbooks: [],
   nodes: [],
+  schedules: [],
   loaded: false,
   error: null,
   live: null,
@@ -84,6 +95,24 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
   deleteNode: async (id) => {
     await api.deleteNode(id)
     await get().refreshNodes()
+  },
+
+  refreshSchedules: async () => {
+    try {
+      set({ schedules: await api.listSchedules() })
+    } catch (e) {
+      set({ error: msg(e) })
+    }
+  },
+
+  putSchedule: async (s) => {
+    await api.putSchedule(s)
+    await get().refreshSchedules()
+  },
+
+  deleteSchedule: async (id) => {
+    await api.deleteSchedule(id)
+    await get().refreshSchedules()
   },
 
   createBlank: async () => {

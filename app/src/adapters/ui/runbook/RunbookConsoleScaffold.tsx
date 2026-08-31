@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Boxes, History, Lock, LockOpen, Network, Package, Plus, Sparkles } from 'lucide-react'
+import { Boxes, CalendarClock, History, Lock, LockOpen, Network, Package, Plus, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useBackendStore } from '@/stores/backendStore'
 import { useRunbookStore, type Section } from '@/stores/runbookStore'
@@ -11,6 +11,7 @@ import { LibraryView } from './LibraryView'
 import { HistoryView } from './HistoryView'
 import { SshNodesView } from './SshNodesView'
 import { PackagesView } from './PackagesView'
+import { SchedulesView } from './SchedulesView'
 import { AssistantPlaceholder } from './AssistantPlaceholder'
 import { VaultDialog } from './VaultDialog'
 import { LibrarySyncDialog } from './LibrarySyncDialog'
@@ -19,6 +20,7 @@ import { RunPanel } from './RunPanel'
 const NAV: { id: Section; label: string; icon: typeof History }[] = [
   { id: 'library', label: 'Library', icon: Boxes },
   { id: 'history', label: 'History', icon: History },
+  { id: 'schedules', label: 'Schedules', icon: CalendarClock },
   { id: 'nodes', label: 'Nodes', icon: Network },
   { id: 'packages', label: 'Packages', icon: Package },
   { id: 'assistant', label: 'Assistant', icon: Sparkles },
@@ -47,6 +49,7 @@ export function RunbookConsoleScaffold() {
   const setSection = useRunbookStore((s) => s.setSection)
   const refresh = useRunbookStore((s) => s.refresh)
   const refreshNodes = useRunbookStore((s) => s.refreshNodes)
+  const refreshSchedules = useRunbookStore((s) => s.refreshSchedules)
   const createBlank = useRunbookStore((s) => s.createBlank)
   const live = useRunbookStore((s) => s.live)
   const navigate = useNavigate()
@@ -67,9 +70,10 @@ export function RunbookConsoleScaffold() {
     if (status === 'available') {
       void refresh()
       void refreshNodes()
+      void refreshSchedules()
       void refreshVault()
     }
-  }, [status, refresh, refreshNodes, refreshVault])
+  }, [status, refresh, refreshNodes, refreshSchedules, refreshVault])
 
   if (status === 'unavailable' || status === 'connecting' || status === 'unknown') {
     return (
@@ -114,6 +118,7 @@ export function RunbookConsoleScaffold() {
       <div className="min-h-0 flex-1 overflow-auto">
         {section === 'library' && <LibraryView />}
         {section === 'history' && <HistoryView />}
+        {section === 'schedules' && <SchedulesView />}
         {section === 'nodes' && <SshNodesView />}
         {section === 'packages' && <PackagesView />}
         {section === 'assistant' && <AssistantPlaceholder />}

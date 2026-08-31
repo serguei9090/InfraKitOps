@@ -61,6 +61,13 @@ CREATE TABLE IF NOT EXISTS runbook_settings (
   key    TEXT PRIMARY KEY,
   value  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS runbook_schedule (
+  id             TEXT PRIMARY KEY,
+  runbook_id     TEXT NOT NULL,
+  schedule_json  TEXT NOT NULL,
+  created_at     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_schedule_runbook ON runbook_schedule(runbook_id);
 `
 
 // Store is the orchestrator database handle.
@@ -270,11 +277,98 @@ func (s *Store) SetPublished(id string, published bool) error {
 	return err
 }
 
-// DeleteRunbook removes a runbook and its versions/draft (runs are kept).
+// DeleteRunbook removes a runbook and its versions/draft/schedules (runs are kept).
 func (s *Store) DeleteRunbook(id string) error {
 	_, _ = s.db.Exec(`DELETE FROM runbook_version WHERE runbook_id = ?`, id)
 	_, _ = s.db.Exec(`DELETE FROM runbook_draft WHERE runbook_id = ?`, id)
+	_, _ = s.db.Exec(`DELETE FROM runbook_schedule WHERE runbook_id = ?`, id)
 	_, err := s.db.Exec(`DELETE FROM runbook WHERE id = ?`, id)
+	return err
+}
+
+// --- schedules --------------------------------------------------------
+
+// ListSchedules returns every schedule, newest first.
+func (s *Store) ListSchedules() ([]RunSchedule, error) {
+	rows, err := s.db.Query(`SELECT schedule_json FROM runbook_schedule ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []RunSchedule{}
+	for rows.Next() {
+		var j string
+		if err := rows.Scan(&j); err != nil {
+			return nil, err
+		}
+		var sc RunSchedule
+		_ = json.Unmarshal([]byte(j), &sc)
+		out = append(out, sc)
+	}
+	return out, rows.Err()
+}
+
+// GetSchedule loads one schedule.
+func (s *Store) GetSchedule(id string) (*RunSchedule, error) {
+	var j string
+	err := s.db.QueryRow(`SELECT schedule_json FROM runbook_schedule WHERE id = ?`, id).Scan(&j)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	var sc RunSchedule
+	_ = json.Unmarshal([]byte(j), &sc)
+	return &sc, nil
+}
+
+// PutSchedule upserts a schedule. The cron expression is validated and
+// NextRunAt is (re)computed from now whenever the schedule is enabled.
+func (s *Store) PutSchedule(sc RunSchedule) (RunSchedule, error) {
+	expr, err := ParseCron(sc.Cron)
+	if err != nil {
+		return sc, err
+	}
+	if _, err := s.GetRunbook(sc.RunbookID); err != nil {
+		return sc, fmt.Errorf("runbook: %w", err)
+	}
+	if sc.ID == "" {
+		sc.ID = newID("sched")
+		sc.CreatedAt = time.Now().UnixMilli()
+	} else if sc.CreatedAt == 0 {
+		if existing, err := s.GetSchedule(sc.ID); err == nil {
+			sc.CreatedAt = existing.CreatedAt
+		}
+	}
+	if sc.Args == nil {
+		sc.Args = map[string]string{}
+	}
+	if sc.Enabled {
+		if n := expr.Next(time.Now()); !n.IsZero() {
+			sc.NextRunAt = n.UnixMilli()
+		}
+	} else {
+		sc.NextRunAt = 0
+	}
+	raw, _ := json.Marshal(sc)
+	_, err = s.db.Exec(`INSERT INTO runbook_schedule (id, runbook_id, schedule_json, created_at) VALUES (?,?,?,?)
+		ON CONFLICT(id) DO UPDATE SET schedule_json = excluded.schedule_json, runbook_id = excluded.runbook_id`,
+		sc.ID, sc.RunbookID, string(raw), sc.CreatedAt)
+	return sc, err
+}
+
+// DeleteSchedule removes a schedule.
+func (s *Store) DeleteSchedule(id string) error {
+	_, err := s.db.Exec(`DELETE FROM runbook_schedule WHERE id = ?`, id)
+	return err
+}
+
+// saveScheduleRaw persists a schedule without touching NextRunAt — used by the
+// scheduler after a fire to record the result and the recomputed next time.
+func (s *Store) saveScheduleRaw(sc RunSchedule) error {
+	raw, _ := json.Marshal(sc)
+	_, err := s.db.Exec(`UPDATE runbook_schedule SET schedule_json = ? WHERE id = ?`, string(raw), sc.ID)
 	return err
 }
 

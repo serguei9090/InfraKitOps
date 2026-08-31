@@ -149,7 +149,7 @@ func TestEngineRunBash(t *testing.T) {
 
 	ch := make(chan sse.Message, 64)
 	done := make(chan int64, 1)
-	go func() { done <- eng.Run(context.Background(), rb, 0, map[string]string{"MSG": "there"}, false, ch) }()
+	go func() { done <- eng.Run(context.Background(), rb, 0, map[string]string{"MSG": "there"}, false, "local", ch) }()
 	runID := <-done
 	close(ch)
 

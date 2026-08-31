@@ -654,10 +654,30 @@ in `ExecutorKind`/`EXECUTOR_KINDS`/`EXECUTOR_LABEL`, `step.python` on
 deps. 3 new backend tests. Verified in-browser: python step run → `uv run` →
 `py-exec-ok 3.13.3`.
 
+**R4b — Scheduled / cron runs. DONE 2026-08-31.** `orchestrator/cron.go` —
+self-contained 5-field parser (`*`, `a`, `a-b`, `a-b/n`, `*/n`, lists; Vixie
+dom-or-dow union; `@hourly/@daily/@weekly/@monthly/@yearly` macros) with
+`Next()`. `RunSchedule{cron, enabled, version, args, nextRunAt, lastRunAt,
+lastStatus, lastRunId}` in a `runbook_schedule` table (JSON blob; cascade-
+deleted with the runbook). `orchestrator/scheduler.go` — polls every 30s,
+fires enabled schedules whose `NextRunAt` is due, **published runbooks only**,
+`triggeredBy="schedule"`, advances `NextRunAt` before running to prevent
+double-fire, re-anchors on boot (a schedule that came due during downtime runs
+once, promptly). `Engine.Run` gained a `triggeredBy` param. Endpoints
+`/runbook-schedules` (GET/POST) + `/{id}` (PUT/DELETE); scheduler started in
+`main.go` when the engine exists. Frontend: `core/runbook/cron.ts` (mirror
+parser — validate + preview next runs, local zone, framework-free, 5 tests),
+`RunSchedule` model, client CRUD, `runbookStore` `schedules` slice, new
+**Schedules** nav section + `SchedulesView` (runbook picker, cron field with
+presets + live "next 3 runs", per-arg inputs, enable Switch, last-run status),
+History rows tagged `scheduled`. Verified in-browser: create → edit (cron
+persists) → scheduler fired `* * * * *` → run #6 `ok` `triggeredBy=schedule`,
+NextRunAt advanced → delete.
+
 **Still deferred:** **AI Assistant** (script generation — reuses the Prompt
-Library P5 model-connection layer) · scheduled/cron runs · OS-keyring-sealed
-vault master key (desktop) · multi-user approvals + immutable audit log ·
-file-type run parameters · run output artifacts.
+Library P5 model-connection layer) · OS-keyring-sealed vault master key
+(desktop) · multi-user approvals + immutable audit log · file-type run
+parameters · run output artifacts.
 
 (Ansible / kubectl / Terraform are **not** here — see §3.3.)
 

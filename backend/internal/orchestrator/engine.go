@@ -179,8 +179,9 @@ func (e *Engine) BuildPreview(rb *Runbook, version int, values map[string]string
 }
 
 // Run executes a runbook, streaming events. Blocks until the run finishes or
-// ctx is cancelled. Returns the run id (0 for a dry run).
-func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[string]string, dryRun bool, out chan<- sse.Message) int64 {
+// ctx is cancelled. Returns the run id (0 for a dry run). `triggeredBy` is
+// recorded on the run row ("local" for a user run, "schedule" for a cron fire).
+func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[string]string, dryRun bool, triggeredBy string, out chan<- sse.Message) int64 {
 	preview, spec, ver, err := e.BuildPreview(rb, version, values)
 	if err != nil {
 		out <- sse.Message{Event: "error", Data: map[string]string{"error": err.Error()}}
@@ -231,9 +232,12 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 		return e.Secrets.ResolveByName(name)
 	}
 
+	if triggeredBy == "" {
+		triggeredBy = "local"
+	}
 	run := &Run{
 		RunbookID: rb.ID, RunbookVersion: ver, Status: StatusRunning, DryRun: false,
-		TriggeredBy: "local", StartedAt: time.Now().UnixMilli(),
+		TriggeredBy: triggeredBy, StartedAt: time.Now().UnixMilli(),
 		Args: redactArgValues(spec, values), Steps: []RunStep{},
 	}
 	runID, _ := e.Store.InsertRun(run)

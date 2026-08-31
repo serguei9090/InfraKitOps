@@ -175,6 +175,23 @@ type SSHNode struct {
 	CreatedAt  int64    `json:"createdAt"`
 }
 
+// RunSchedule fires a runbook on a cron expression (R4b). Only published
+// runbooks are run on a schedule.
+type RunSchedule struct {
+	ID         string            `json:"id"`
+	RunbookID  string            `json:"runbookId"`
+	Cron       string            `json:"cron"`
+	Enabled    bool              `json:"enabled"`
+	Version    int               `json:"version"` // 0 = latest published
+	Args       map[string]string `json:"args"`
+	NextRunAt  int64             `json:"nextRunAt"`
+	LastRunAt  int64             `json:"lastRunAt"`
+	LastStatus string            `json:"lastStatus,omitempty"`
+	LastRunID  int64             `json:"lastRunId,omitempty"`
+	LastError  string            `json:"lastError,omitempty"`
+	CreatedAt  int64             `json:"createdAt"`
+}
+
 // RunStatus values.
 const (
 	StatusRunning = "running"

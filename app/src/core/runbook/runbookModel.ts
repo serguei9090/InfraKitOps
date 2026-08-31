@@ -121,6 +121,21 @@ export interface VaultStatus {
   secretCount: number
 }
 
+export interface RunSchedule {
+  id: string
+  runbookId: string
+  cron: string
+  enabled: boolean
+  version: number
+  args: Record<string, string>
+  nextRunAt: number
+  lastRunAt: number
+  lastStatus?: string
+  lastRunId?: number
+  lastError?: string
+  createdAt: number
+}
+
 // --- run / preview ---------------------------------------------------------
 
 export type RunStatus = 'running' | 'ok' | 'failed' | 'partial'

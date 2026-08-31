@@ -45,6 +45,9 @@ export function HistoryView() {
                 <span className="font-medium">{nameOf(run.runbookId)}</span>
                 <span className="text-xs text-muted-foreground">v{run.runbookVersion}</span>
                 {run.dryRun && <span className="text-[10px] text-muted-foreground">dry run</span>}
+                {run.triggeredBy === 'schedule' && (
+                  <span className="rounded bg-primary/10 px-1.5 text-[10px] text-primary">scheduled</span>
+                )}
                 <div className="flex-1" />
                 <span className="text-xs text-muted-foreground">
                   {new Date(run.startedAt).toLocaleString()}

@@ -12,6 +12,7 @@ import type {
   Runbook,
   RunbookSpec,
   RunbookVersion,
+  RunSchedule,
   SshNode,
   VaultSecretMeta,
   VaultStatus,
@@ -152,6 +153,23 @@ export const libraryExport = (opts: { dir: string; gitCommit?: boolean; gitPush?
   backendRequest<{ report: string }>('POST', '/library/export', opts)
 export const libraryImport = (dir: string) =>
   backendRequest<{ imported: number }>('POST', '/library/import', { dir })
+
+// --- schedules ---------------------------------------------------
+
+const normSchedule = (s: RunSchedule): RunSchedule => ({ ...s, args: s.args ?? {} })
+
+export const listSchedules = () =>
+  backendGet<{ schedules: RunSchedule[] | null }>('/runbook-schedules').then((r) =>
+    arr(r.schedules).map(normSchedule),
+  )
+export const putSchedule = (s: Partial<RunSchedule>) =>
+  backendRequest<{ schedule: RunSchedule }>(
+    s.id ? 'PUT' : 'POST',
+    s.id ? `/runbook-schedules/${s.id}` : '/runbook-schedules',
+    s,
+  ).then((r) => normSchedule(r.schedule))
+export const deleteSchedule = (id: string) =>
+  backendRequest<unknown>('DELETE', `/runbook-schedules/${id}`)
 
 // --- vault --------------------------------------------------------
 
