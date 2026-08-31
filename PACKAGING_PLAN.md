@@ -26,16 +26,18 @@ residue, plus a **static web bundle** that deploys as-is. Linux is best-effort.
 - `lib.rs` — spawns sidecar on setup, random 64-hex token, `--parent-pid`,
   `--idle-timeout 45s`, `backend_endpoint` command, kills on exit.
 
-## 2. Known gaps / bugs to fix first (P7a)
+## 2. Known gaps / bugs to fix first (P7a) — **DONE 2026-09-01** (bar icons)
 
-| # | Problem | Fix |
-|---|---------|-----|
-| 1 | `tauri.conf.json` `beforeDevCommand`/`beforeBuildCommand` say `npm run …` — repo is **bun** | `bun run dev` / `bun run build` |
-| 2 | Version drift: `package.json` `0.0.0`, `tauri.conf.json` `0.1.0`, `Cargo.toml` `0.1.0` | single source of truth — set all three to `0.1.0`; add a `bun run version <x>` script that writes all three |
-| 3 | `Cargo.toml` `description = "A Tauri App"`, `name = "app"` | real description; `name = "infrakit-studio"` (binary rename ripples to `target/` paths only) |
-| 4 | Icons are the **default Tauri logo** (`icon.icns` is Tauri's) | generate real brand icons from one 1024² source via `bun tauri icon <src>` |
-| 5 | Default window `800×600` — app shell is designed wider | `1280×832` default, `minWidth 960` |
-| 6 | `security.csp: null` (dev-permissive) | set a real CSP for the bundled app — `default-src 'self'; connect-src 'self' http://127.0.0.1:* ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'` (tighten against what the app actually loads) |
+| # | Problem | Status |
+|---|---------|--------|
+| 1 | `tauri.conf.json` `beforeDevCommand`/`beforeBuildCommand` say `npm run …` — repo is **bun** | ✅ → `bun run dev` / `bun run build` |
+| 2 | Version drift: `package.json` `0.0.0`, `tauri.conf.json` `0.1.0`, `Cargo.toml` `0.1.0` | ✅ all three `0.1.0`; new `bun run set-version <x>` (`app/scripts/set-version.ts`) writes all three, no-arg = drift check (exit 1 on mismatch — wire into CI in P7h) |
+| 3 | `Cargo.toml` `description = "A Tauri App"`, `authors = ["you"]` | ✅ real description + author. **`name = "app"` left as-is** — renaming ripples through `[lib] name`, `target/`, and is cosmetic; skip. `license = ""` still open (no `LICENSE` file in repo — needs a project decision). |
+| 4 | Icons are the **default Tauri logo** (`icon.icns` is Tauri's) | ⏳ **open** — needs a 1024² brand source PNG, then `bun tauri icon <src>`. Tracked as P7a-icons. |
+| 5 | Default window `800×600` — app shell is designed wider | ✅ `1280×832`, `minWidth 960`, `minHeight 600` |
+| 6 | `security.csp: null` (dev-permissive) | ✅ set: `default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:*; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'`. **Only applies to the packaged build — must be re-verified in P7e** (a too-tight CSP shows as a white screen / blocked requests; `connect-src` covers the sidecar's random `127.0.0.1` port + dev). |
+
+`cargo check` + `bun run build`/`test`/`lint` green after the change.
 
 ## 3. Decisions to lock (open questions)
 
@@ -49,10 +51,11 @@ residue, plus a **static web bundle** that deploys as-is. Linux is best-effort.
 
 ## 4. Phases
 
-### P7a — Config hygiene
-Fix every row in §2. `cargo check` + `bun run build` still green. One commit.
-**DoD**: `bun tauri build --no-bundle` compiles the app + Rust with the new
-config; icons render in the dev window.
+### P7a — Config hygiene — **DONE 2026-09-01** (commit pending), except:
+- **P7a-icons** (open): generate brand icons from a 1024² source.
+- **license string** in `Cargo.toml` / NSIS license page — needs a project
+  licence decision + a `LICENSE` file.
+- CSP correctness is only provable in P7e (packaged run).
 
 ### P7b — Sidecar build wired into `tauri build`
 - Add `bun run build:sidecar` (calls `backend/build-sidecar.ps1` on Windows,

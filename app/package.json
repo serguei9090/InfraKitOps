@@ -1,7 +1,7 @@
 {
   "name": "infrakit-studio",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
+    "set-version": "bun scripts/set-version.ts",
     "check:links": "bun scripts/check-resource-links.ts",
     "import:stars": "bun scripts/import-github-stars.ts"
   },
