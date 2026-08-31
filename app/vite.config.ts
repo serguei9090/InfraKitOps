@@ -17,6 +17,21 @@ const viteConfig = defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
+  build: {
+    // pdf-lib (~205 kB gzip) is a deliberate lazy chunk — don't warn on it.
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // Keep the framework in a stable chunk so a tool-screen change doesn't
+        // bust it; the per-route chunks come from `lazy:` in routes.tsx.
+        manualChunks(id) {
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) {
+            return 'vendor-react'
+          }
+        },
+      },
+    },
+  },
   // Tauri expects a fixed, predictable port — see https://v2.tauri.app/start/frontend/vite/
   server: {
     port: 1420,

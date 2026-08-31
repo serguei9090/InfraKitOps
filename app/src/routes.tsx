@@ -2,122 +2,18 @@ import { createBrowserRouter } from 'react-router-dom'
 import { AppShellScaffold } from './adapters/ui/shell/AppShellScaffold'
 import { HomeDashboardScreen } from './adapters/ui/shell/HomeDashboardScreen'
 import { ModuleToolsScreen } from './adapters/ui/shell/ModuleToolsScreen'
+import { RouteFallback } from './adapters/ui/shell/RouteFallback'
 
-// Wave 1 — Tuning + Config
-import { CephPgScreen } from './adapters/ui/tools/CephPgScreen'
-import { LinuxSysctlScreen } from './adapters/ui/tools/LinuxSysctlScreen'
-import { DbMemorySizerScreen } from './adapters/ui/tools/DbMemorySizerScreen'
-import { LoadBalancerSizerScreen } from './adapters/ui/tools/LoadBalancerSizerScreen'
-import { ConnectionPoolSizerScreen } from './adapters/ui/tools/ConnectionPoolSizerScreen'
-import { K8sCapacitySizerScreen } from './adapters/ui/tools/K8sCapacitySizerScreen'
-import { SloErrorBudgetScreen } from './adapters/ui/tools/SloErrorBudgetScreen'
-import { AvailabilityCalculatorScreen } from './adapters/ui/tools/AvailabilityCalculatorScreen'
-import { StorageIopsSizerScreen } from './adapters/ui/tools/StorageIopsSizerScreen'
-import { CapacityRunwayScreen } from './adapters/ui/tools/CapacityRunwayScreen'
-import { CloudRightSizeScreen } from './adapters/ui/tools/CloudRightSizeScreen'
-import { CacheSizerScreen } from './adapters/ui/tools/CacheSizerScreen'
-import { KafkaSizerScreen } from './adapters/ui/tools/KafkaSizerScreen'
-import { RetryBudgetScreen } from './adapters/ui/tools/RetryBudgetScreen'
-import { EtcdSizerScreen } from './adapters/ui/tools/EtcdSizerScreen'
-import { ZabbixSizerScreen } from './adapters/ui/tools/ZabbixSizerScreen'
-import { FirewallCommandBuilderScreen } from './adapters/ui/tools/FirewallCommandBuilderScreen'
-import { SshConfigBuilderScreen } from './adapters/ui/tools/SshConfigBuilderScreen'
-import { SysctlConfigBuilderScreen } from './adapters/ui/tools/SysctlConfigBuilderScreen'
-import { FirewallRuleBuilderScreen } from './adapters/ui/tools/FirewallRuleBuilderScreen'
-import { DockerRunConverterScreen } from './adapters/ui/tools/DockerRunConverterScreen'
-import { CrontabBuilderScreen } from './adapters/ui/tools/CrontabBuilderScreen'
-import { ChmodCalculatorScreen } from './adapters/ui/tools/ChmodCalculatorScreen'
-import { RdpFileBuilderScreen } from './adapters/ui/tools/RdpFileBuilderScreen'
-import { DatabaseConfigBuilderScreen } from './adapters/ui/tools/DatabaseConfigBuilderScreen'
-
-// Wave 2 — Utilities + Knowledge Hub
-import { SshKeygenScreen } from './adapters/ui/tools/SshKeygenScreen'
-import { HashCalculatorScreen } from './adapters/ui/tools/HashCalculatorScreen'
-import { BcryptScreen } from './adapters/ui/tools/BcryptScreen'
-import { X509InspectorScreen } from './adapters/ui/tools/X509InspectorScreen'
-import { JwtParserScreen } from './adapters/ui/tools/JwtParserScreen'
-import { HtpasswdGeneratorScreen } from './adapters/ui/tools/HtpasswdGeneratorScreen'
-import { SubnetCalculatorScreen } from './adapters/ui/tools/SubnetCalculatorScreen'
-import { MacAddressScreen } from './adapters/ui/tools/MacAddressScreen'
-import { IpRangeScreen } from './adapters/ui/tools/IpRangeScreen'
-import { RegexTesterScreen } from './adapters/ui/tools/RegexTesterScreen'
-import { IdGeneratorScreen } from './adapters/ui/tools/IdGeneratorScreen'
-import { PasswordGeneratorScreen } from './adapters/ui/tools/PasswordGeneratorScreen'
-import { ConvertersScreen } from './adapters/ui/tools/ConvertersScreen'
-import { FormattersScreen } from './adapters/ui/tools/FormattersScreen'
-import { TextDiffScreen } from './adapters/ui/tools/TextDiffScreen'
-import { JsonpathEvaluatorScreen } from './adapters/ui/tools/JsonpathEvaluatorScreen'
-import { StructuredTreeViewerScreen } from './adapters/ui/tools/StructuredTreeViewerScreen'
-import { JsonToCsvScreen } from './adapters/ui/tools/JsonToCsvScreen'
-import { GzipConverterScreen } from './adapters/ui/tools/GzipConverterScreen'
-import { Base64FileScreen } from './adapters/ui/tools/Base64FileScreen'
-import { TextTransformerScreen } from './adapters/ui/tools/TextTransformerScreen'
-import { CheatsheetsScreen } from './adapters/ui/tools/CheatsheetsScreen'
-import { DocumentationScreen } from './adapters/ui/tools/DocumentationScreen'
-import { ReferenceListsScreen } from './adapters/ui/tools/ReferenceListsScreen'
-import { StudyPracticeScreen } from './adapters/ui/tools/StudyPracticeScreen'
-
-// Knowledge Hub — AI & Automation group
-import { AiCatalogsScreen } from './adapters/ui/tools/AiCatalogsScreen'
-import { McpServersScreen } from './adapters/ui/tools/McpServersScreen'
-import { AiFrameworksScreen } from './adapters/ui/tools/AiFrameworksScreen'
-import { AiSoftwareScreen } from './adapters/ui/tools/AiSoftwareScreen'
-import { AiSkillsScreen } from './adapters/ui/tools/AiSkillsScreen'
-import { AutomationScreen } from './adapters/ui/tools/AutomationScreen'
-import { AiModelsScreen } from './adapters/ui/tools/AiModelsScreen'
-import { DevServicesScreen } from './adapters/ui/tools/DevServicesScreen'
-
-// Phase 4 — Office & Media
-import { ColorToolsScreen } from './adapters/ui/tools/ColorToolsScreen'
-import { PdfSplitMergeScreen } from './adapters/ui/tools/PdfSplitMergeScreen'
-import { PdfInspectorScreen } from './adapters/ui/tools/PdfInspectorScreen'
-import { ImageConverterScreen } from './adapters/ui/tools/ImageConverterScreen'
-import { ExifViewerScreen } from './adapters/ui/tools/ExifViewerScreen'
-import { QrCodeScreen } from './adapters/ui/tools/QrCodeScreen'
-import { QrReaderScreen } from './adapters/ui/tools/QrReaderScreen'
-
-// Phase 5 — FormFlow Dynamic Builder
-import { FormFlowBuilderScreen } from './adapters/ui/tools/FormFlowBuilderScreen'
-
-// Prompt Library
-import { PromptLibraryScreen } from './adapters/ui/tools/PromptLibraryScreen'
-
-// Runbooks
-import { RunbookScreen } from './adapters/ui/tools/RunbookScreen'
-import { RunbookEditorScreen } from './adapters/ui/tools/RunbookEditorScreen'
-
-// AI Hub
-import { AiScreen } from './adapters/ui/tools/AiScreen'
-
-// Settings
-import { SettingsScreen } from './adapters/ui/settings/SettingsScreen'
-
-// Configuration Builders — Zabbix / Fail2ban
-import { ZabbixConfigBuilderScreen } from './adapters/ui/tools/ZabbixConfigBuilderScreen'
-import { Fail2banConfigBuilderScreen } from './adapters/ui/tools/Fail2banConfigBuilderScreen'
-import { WebServerConfigBuilderScreen } from './adapters/ui/tools/WebServerConfigBuilderScreen'
-
-// Network Toolkit (N1+)
-import { SntpLookupScreen } from './adapters/ui/tools/SntpLookupScreen'
-import { PortScannerScreen } from './adapters/ui/tools/PortScannerScreen'
-import { PingMonitorScreen } from './adapters/ui/tools/PingMonitorScreen'
-import { TracerouteScreen } from './adapters/ui/tools/TracerouteScreen'
-import { NetworkScannerScreen } from './adapters/ui/tools/NetworkScannerScreen'
-import { SnmpScreen } from './adapters/ui/tools/SnmpScreen'
-import { NeighborTableScreen } from './adapters/ui/tools/NeighborTableScreen'
-import { HostsFileEditorScreen } from './adapters/ui/tools/HostsFileEditorScreen'
-import { FirewallViewerScreen } from './adapters/ui/tools/FirewallViewerScreen'
-import { Iperf3Screen } from './adapters/ui/tools/Iperf3Screen'
-import { WhoisScreen } from './adapters/ui/tools/WhoisScreen'
-import { DnsLookupScreen } from './adapters/ui/tools/DnsLookupScreen'
-import { IpGeolocationScreen } from './adapters/ui/tools/IpGeolocationScreen'
-import { ConnectionsScreen } from './adapters/ui/tools/ConnectionsScreen'
-import { WakeOnLanScreen } from './adapters/ui/tools/WakeOnLanScreen'
+// Every `/tools/*` and `/settings*` screen is code-split via `lazy:` — see
+// CODE_SPLITTING_PLAN.md. Only the shell + first-paint routes are eager.
+// React Router holds the previous screen mounted until the chunk resolves, so
+// client navigations don't flash; `RouteFallback` covers a cold deep-link.
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppShellScaffold />,
+    HydrateFallback: RouteFallback,
     children: [
       { index: true, element: <HomeDashboardScreen /> },
       { path: 'modules/:moduleId', element: <ModuleToolsScreen /> },
@@ -125,110 +21,110 @@ export const router = createBrowserRouter([
       // ported (Phase 3+) — see CLAUDE.md's "Adding a new tool" section.
 
       // Wave 1 — Tuning + Config
-      { path: 'tools/ceph-pg', element: <CephPgScreen /> },
-      { path: 'tools/linux-sysctl', element: <LinuxSysctlScreen /> },
-      { path: 'tools/db-memory-sizer', element: <DbMemorySizerScreen /> },
-      { path: 'tools/load-balancer-sizer', element: <LoadBalancerSizerScreen /> },
-      { path: 'tools/connection-pool-sizer', element: <ConnectionPoolSizerScreen /> },
-      { path: 'tools/k8s-capacity-sizer', element: <K8sCapacitySizerScreen /> },
-      { path: 'tools/slo-error-budget', element: <SloErrorBudgetScreen /> },
-      { path: 'tools/availability-calculator', element: <AvailabilityCalculatorScreen /> },
-      { path: 'tools/storage-iops-sizer', element: <StorageIopsSizerScreen /> },
-      { path: 'tools/capacity-runway', element: <CapacityRunwayScreen /> },
-      { path: 'tools/cloud-right-size', element: <CloudRightSizeScreen /> },
-      { path: 'tools/cache-sizer', element: <CacheSizerScreen /> },
-      { path: 'tools/kafka-sizer', element: <KafkaSizerScreen /> },
-      { path: 'tools/retry-budget', element: <RetryBudgetScreen /> },
-      { path: 'tools/etcd-sizer', element: <EtcdSizerScreen /> },
-      { path: 'tools/zabbix-sizer', element: <ZabbixSizerScreen /> },
-      { path: 'tools/firewall-command-builder', element: <FirewallCommandBuilderScreen /> },
-      { path: 'tools/ssh-config-builder', element: <SshConfigBuilderScreen /> },
-      { path: 'tools/sysctl-config-builder', element: <SysctlConfigBuilderScreen /> },
-      { path: 'tools/firewall-rule-builder', element: <FirewallRuleBuilderScreen /> },
-      { path: 'tools/docker-run-converter', element: <DockerRunConverterScreen /> },
-      { path: 'tools/crontab-builder', element: <CrontabBuilderScreen /> },
-      { path: 'tools/chmod-calculator', element: <ChmodCalculatorScreen /> },
-      { path: 'tools/rdp-file-builder', element: <RdpFileBuilderScreen /> },
-      { path: 'tools/database-config-builder', element: <DatabaseConfigBuilderScreen /> },
+      { path: 'tools/ceph-pg', lazy: () => import('./adapters/ui/tools/CephPgScreen').then((m) => ({ Component: m.CephPgScreen })) },
+      { path: 'tools/linux-sysctl', lazy: () => import('./adapters/ui/tools/LinuxSysctlScreen').then((m) => ({ Component: m.LinuxSysctlScreen })) },
+      { path: 'tools/db-memory-sizer', lazy: () => import('./adapters/ui/tools/DbMemorySizerScreen').then((m) => ({ Component: m.DbMemorySizerScreen })) },
+      { path: 'tools/load-balancer-sizer', lazy: () => import('./adapters/ui/tools/LoadBalancerSizerScreen').then((m) => ({ Component: m.LoadBalancerSizerScreen })) },
+      { path: 'tools/connection-pool-sizer', lazy: () => import('./adapters/ui/tools/ConnectionPoolSizerScreen').then((m) => ({ Component: m.ConnectionPoolSizerScreen })) },
+      { path: 'tools/k8s-capacity-sizer', lazy: () => import('./adapters/ui/tools/K8sCapacitySizerScreen').then((m) => ({ Component: m.K8sCapacitySizerScreen })) },
+      { path: 'tools/slo-error-budget', lazy: () => import('./adapters/ui/tools/SloErrorBudgetScreen').then((m) => ({ Component: m.SloErrorBudgetScreen })) },
+      { path: 'tools/availability-calculator', lazy: () => import('./adapters/ui/tools/AvailabilityCalculatorScreen').then((m) => ({ Component: m.AvailabilityCalculatorScreen })) },
+      { path: 'tools/storage-iops-sizer', lazy: () => import('./adapters/ui/tools/StorageIopsSizerScreen').then((m) => ({ Component: m.StorageIopsSizerScreen })) },
+      { path: 'tools/capacity-runway', lazy: () => import('./adapters/ui/tools/CapacityRunwayScreen').then((m) => ({ Component: m.CapacityRunwayScreen })) },
+      { path: 'tools/cloud-right-size', lazy: () => import('./adapters/ui/tools/CloudRightSizeScreen').then((m) => ({ Component: m.CloudRightSizeScreen })) },
+      { path: 'tools/cache-sizer', lazy: () => import('./adapters/ui/tools/CacheSizerScreen').then((m) => ({ Component: m.CacheSizerScreen })) },
+      { path: 'tools/kafka-sizer', lazy: () => import('./adapters/ui/tools/KafkaSizerScreen').then((m) => ({ Component: m.KafkaSizerScreen })) },
+      { path: 'tools/retry-budget', lazy: () => import('./adapters/ui/tools/RetryBudgetScreen').then((m) => ({ Component: m.RetryBudgetScreen })) },
+      { path: 'tools/etcd-sizer', lazy: () => import('./adapters/ui/tools/EtcdSizerScreen').then((m) => ({ Component: m.EtcdSizerScreen })) },
+      { path: 'tools/zabbix-sizer', lazy: () => import('./adapters/ui/tools/ZabbixSizerScreen').then((m) => ({ Component: m.ZabbixSizerScreen })) },
+      { path: 'tools/firewall-command-builder', lazy: () => import('./adapters/ui/tools/FirewallCommandBuilderScreen').then((m) => ({ Component: m.FirewallCommandBuilderScreen })) },
+      { path: 'tools/ssh-config-builder', lazy: () => import('./adapters/ui/tools/SshConfigBuilderScreen').then((m) => ({ Component: m.SshConfigBuilderScreen })) },
+      { path: 'tools/sysctl-config-builder', lazy: () => import('./adapters/ui/tools/SysctlConfigBuilderScreen').then((m) => ({ Component: m.SysctlConfigBuilderScreen })) },
+      { path: 'tools/firewall-rule-builder', lazy: () => import('./adapters/ui/tools/FirewallRuleBuilderScreen').then((m) => ({ Component: m.FirewallRuleBuilderScreen })) },
+      { path: 'tools/docker-run-converter', lazy: () => import('./adapters/ui/tools/DockerRunConverterScreen').then((m) => ({ Component: m.DockerRunConverterScreen })) },
+      { path: 'tools/crontab-builder', lazy: () => import('./adapters/ui/tools/CrontabBuilderScreen').then((m) => ({ Component: m.CrontabBuilderScreen })) },
+      { path: 'tools/chmod-calculator', lazy: () => import('./adapters/ui/tools/ChmodCalculatorScreen').then((m) => ({ Component: m.ChmodCalculatorScreen })) },
+      { path: 'tools/rdp-file-builder', lazy: () => import('./adapters/ui/tools/RdpFileBuilderScreen').then((m) => ({ Component: m.RdpFileBuilderScreen })) },
+      { path: 'tools/database-config-builder', lazy: () => import('./adapters/ui/tools/DatabaseConfigBuilderScreen').then((m) => ({ Component: m.DatabaseConfigBuilderScreen })) },
 
       // Wave 2 — Utilities + Knowledge Hub
-      { path: 'tools/ssh-keygen', element: <SshKeygenScreen /> },
-      { path: 'tools/hash', element: <HashCalculatorScreen /> },
-      { path: 'tools/bcrypt', element: <BcryptScreen /> },
-      { path: 'tools/x509-inspector', element: <X509InspectorScreen /> },
-      { path: 'tools/jwt-parser', element: <JwtParserScreen /> },
-      { path: 'tools/htpasswd-generator', element: <HtpasswdGeneratorScreen /> },
-      { path: 'tools/subnet-calculator', element: <SubnetCalculatorScreen /> },
-      { path: 'tools/mac-address', element: <MacAddressScreen /> },
-      { path: 'tools/ip-range', element: <IpRangeScreen /> },
-      { path: 'tools/regex-tester', element: <RegexTesterScreen /> },
-      { path: 'tools/id-generator', element: <IdGeneratorScreen /> },
-      { path: 'tools/password-generator', element: <PasswordGeneratorScreen /> },
-      { path: 'tools/converters', element: <ConvertersScreen /> },
-      { path: 'tools/formatters', element: <FormattersScreen /> },
-      { path: 'tools/text-diff', element: <TextDiffScreen /> },
-      { path: 'tools/jsonpath-evaluator', element: <JsonpathEvaluatorScreen /> },
-      { path: 'tools/structured-tree-viewer', element: <StructuredTreeViewerScreen /> },
-      { path: 'tools/json-to-csv', element: <JsonToCsvScreen /> },
-      { path: 'tools/gzip-converter', element: <GzipConverterScreen /> },
-      { path: 'tools/base64-file', element: <Base64FileScreen /> },
-      { path: 'tools/text-transformer', element: <TextTransformerScreen /> },
-      { path: 'tools/cheatsheets', element: <CheatsheetsScreen /> },
-      { path: 'tools/documentation', element: <DocumentationScreen /> },
-      { path: 'tools/reference-lists', element: <ReferenceListsScreen /> },
-      { path: 'tools/study-practice', element: <StudyPracticeScreen /> },
-      { path: 'tools/ai-catalogs', element: <AiCatalogsScreen /> },
-      { path: 'tools/mcp-servers', element: <McpServersScreen /> },
-      { path: 'tools/ai-frameworks', element: <AiFrameworksScreen /> },
-      { path: 'tools/ai-software', element: <AiSoftwareScreen /> },
-      { path: 'tools/ai-skills', element: <AiSkillsScreen /> },
-      { path: 'tools/automation', element: <AutomationScreen /> },
-      { path: 'tools/ai-models', element: <AiModelsScreen /> },
-      { path: 'tools/dev-services', element: <DevServicesScreen /> },
+      { path: 'tools/ssh-keygen', lazy: () => import('./adapters/ui/tools/SshKeygenScreen').then((m) => ({ Component: m.SshKeygenScreen })) },
+      { path: 'tools/hash', lazy: () => import('./adapters/ui/tools/HashCalculatorScreen').then((m) => ({ Component: m.HashCalculatorScreen })) },
+      { path: 'tools/bcrypt', lazy: () => import('./adapters/ui/tools/BcryptScreen').then((m) => ({ Component: m.BcryptScreen })) },
+      { path: 'tools/x509-inspector', lazy: () => import('./adapters/ui/tools/X509InspectorScreen').then((m) => ({ Component: m.X509InspectorScreen })) },
+      { path: 'tools/jwt-parser', lazy: () => import('./adapters/ui/tools/JwtParserScreen').then((m) => ({ Component: m.JwtParserScreen })) },
+      { path: 'tools/htpasswd-generator', lazy: () => import('./adapters/ui/tools/HtpasswdGeneratorScreen').then((m) => ({ Component: m.HtpasswdGeneratorScreen })) },
+      { path: 'tools/subnet-calculator', lazy: () => import('./adapters/ui/tools/SubnetCalculatorScreen').then((m) => ({ Component: m.SubnetCalculatorScreen })) },
+      { path: 'tools/mac-address', lazy: () => import('./adapters/ui/tools/MacAddressScreen').then((m) => ({ Component: m.MacAddressScreen })) },
+      { path: 'tools/ip-range', lazy: () => import('./adapters/ui/tools/IpRangeScreen').then((m) => ({ Component: m.IpRangeScreen })) },
+      { path: 'tools/regex-tester', lazy: () => import('./adapters/ui/tools/RegexTesterScreen').then((m) => ({ Component: m.RegexTesterScreen })) },
+      { path: 'tools/id-generator', lazy: () => import('./adapters/ui/tools/IdGeneratorScreen').then((m) => ({ Component: m.IdGeneratorScreen })) },
+      { path: 'tools/password-generator', lazy: () => import('./adapters/ui/tools/PasswordGeneratorScreen').then((m) => ({ Component: m.PasswordGeneratorScreen })) },
+      { path: 'tools/converters', lazy: () => import('./adapters/ui/tools/ConvertersScreen').then((m) => ({ Component: m.ConvertersScreen })) },
+      { path: 'tools/formatters', lazy: () => import('./adapters/ui/tools/FormattersScreen').then((m) => ({ Component: m.FormattersScreen })) },
+      { path: 'tools/text-diff', lazy: () => import('./adapters/ui/tools/TextDiffScreen').then((m) => ({ Component: m.TextDiffScreen })) },
+      { path: 'tools/jsonpath-evaluator', lazy: () => import('./adapters/ui/tools/JsonpathEvaluatorScreen').then((m) => ({ Component: m.JsonpathEvaluatorScreen })) },
+      { path: 'tools/structured-tree-viewer', lazy: () => import('./adapters/ui/tools/StructuredTreeViewerScreen').then((m) => ({ Component: m.StructuredTreeViewerScreen })) },
+      { path: 'tools/json-to-csv', lazy: () => import('./adapters/ui/tools/JsonToCsvScreen').then((m) => ({ Component: m.JsonToCsvScreen })) },
+      { path: 'tools/gzip-converter', lazy: () => import('./adapters/ui/tools/GzipConverterScreen').then((m) => ({ Component: m.GzipConverterScreen })) },
+      { path: 'tools/base64-file', lazy: () => import('./adapters/ui/tools/Base64FileScreen').then((m) => ({ Component: m.Base64FileScreen })) },
+      { path: 'tools/text-transformer', lazy: () => import('./adapters/ui/tools/TextTransformerScreen').then((m) => ({ Component: m.TextTransformerScreen })) },
+      { path: 'tools/cheatsheets', lazy: () => import('./adapters/ui/tools/CheatsheetsScreen').then((m) => ({ Component: m.CheatsheetsScreen })) },
+      { path: 'tools/documentation', lazy: () => import('./adapters/ui/tools/DocumentationScreen').then((m) => ({ Component: m.DocumentationScreen })) },
+      { path: 'tools/reference-lists', lazy: () => import('./adapters/ui/tools/ReferenceListsScreen').then((m) => ({ Component: m.ReferenceListsScreen })) },
+      { path: 'tools/study-practice', lazy: () => import('./adapters/ui/tools/StudyPracticeScreen').then((m) => ({ Component: m.StudyPracticeScreen })) },
+      { path: 'tools/ai-catalogs', lazy: () => import('./adapters/ui/tools/AiCatalogsScreen').then((m) => ({ Component: m.AiCatalogsScreen })) },
+      { path: 'tools/mcp-servers', lazy: () => import('./adapters/ui/tools/McpServersScreen').then((m) => ({ Component: m.McpServersScreen })) },
+      { path: 'tools/ai-frameworks', lazy: () => import('./adapters/ui/tools/AiFrameworksScreen').then((m) => ({ Component: m.AiFrameworksScreen })) },
+      { path: 'tools/ai-software', lazy: () => import('./adapters/ui/tools/AiSoftwareScreen').then((m) => ({ Component: m.AiSoftwareScreen })) },
+      { path: 'tools/ai-skills', lazy: () => import('./adapters/ui/tools/AiSkillsScreen').then((m) => ({ Component: m.AiSkillsScreen })) },
+      { path: 'tools/automation', lazy: () => import('./adapters/ui/tools/AutomationScreen').then((m) => ({ Component: m.AutomationScreen })) },
+      { path: 'tools/ai-models', lazy: () => import('./adapters/ui/tools/AiModelsScreen').then((m) => ({ Component: m.AiModelsScreen })) },
+      { path: 'tools/dev-services', lazy: () => import('./adapters/ui/tools/DevServicesScreen').then((m) => ({ Component: m.DevServicesScreen })) },
 
       // Phase 4 — Office & Media
-      { path: 'tools/color-tools', element: <ColorToolsScreen /> },
-      { path: 'tools/pdf-split-merge', element: <PdfSplitMergeScreen /> },
-      { path: 'tools/pdf-inspector', element: <PdfInspectorScreen /> },
-      { path: 'tools/image-converter', element: <ImageConverterScreen /> },
-      { path: 'tools/exif-viewer', element: <ExifViewerScreen /> },
-      { path: 'tools/qr-code', element: <QrCodeScreen /> },
-      { path: 'tools/qr-reader', element: <QrReaderScreen /> },
+      { path: 'tools/color-tools', lazy: () => import('./adapters/ui/tools/ColorToolsScreen').then((m) => ({ Component: m.ColorToolsScreen })) },
+      { path: 'tools/pdf-split-merge', lazy: () => import('./adapters/ui/tools/PdfSplitMergeScreen').then((m) => ({ Component: m.PdfSplitMergeScreen })) },
+      { path: 'tools/pdf-inspector', lazy: () => import('./adapters/ui/tools/PdfInspectorScreen').then((m) => ({ Component: m.PdfInspectorScreen })) },
+      { path: 'tools/image-converter', lazy: () => import('./adapters/ui/tools/ImageConverterScreen').then((m) => ({ Component: m.ImageConverterScreen })) },
+      { path: 'tools/exif-viewer', lazy: () => import('./adapters/ui/tools/ExifViewerScreen').then((m) => ({ Component: m.ExifViewerScreen })) },
+      { path: 'tools/qr-code', lazy: () => import('./adapters/ui/tools/QrCodeScreen').then((m) => ({ Component: m.QrCodeScreen })) },
+      { path: 'tools/qr-reader', lazy: () => import('./adapters/ui/tools/QrReaderScreen').then((m) => ({ Component: m.QrReaderScreen })) },
 
       // Phase 5 — FormFlow Dynamic Builder
-      { path: 'tools/formflow-builder', element: <FormFlowBuilderScreen /> },
+      { path: 'tools/formflow-builder', lazy: () => import('./adapters/ui/tools/FormFlowBuilderScreen').then((m) => ({ Component: m.FormFlowBuilderScreen })) },
 
       // Prompt Library
-      { path: 'tools/prompt-library', element: <PromptLibraryScreen /> },
+      { path: 'tools/prompt-library', lazy: () => import('./adapters/ui/tools/PromptLibraryScreen').then((m) => ({ Component: m.PromptLibraryScreen })) },
 
       // Runbooks
-      { path: 'tools/runbook', element: <RunbookScreen /> },
-      { path: 'tools/runbook/edit/:id', element: <RunbookEditorScreen /> },
-      { path: 'tools/ai', element: <AiScreen /> },
-      { path: 'settings', element: <SettingsScreen /> },
-      { path: 'settings/:section', element: <SettingsScreen /> },
+      { path: 'tools/runbook', lazy: () => import('./adapters/ui/tools/RunbookScreen').then((m) => ({ Component: m.RunbookScreen })) },
+      { path: 'tools/runbook/edit/:id', lazy: () => import('./adapters/ui/tools/RunbookEditorScreen').then((m) => ({ Component: m.RunbookEditorScreen })) },
+      { path: 'tools/ai', lazy: () => import('./adapters/ui/tools/AiScreen').then((m) => ({ Component: m.AiScreen })) },
+      { path: 'settings', lazy: () => import('./adapters/ui/settings/SettingsScreen').then((m) => ({ Component: m.SettingsScreen })) },
+      { path: 'settings/:section', lazy: () => import('./adapters/ui/settings/SettingsScreen').then((m) => ({ Component: m.SettingsScreen })) },
 
       // Configuration Builders — Zabbix / Fail2ban
-      { path: 'tools/zabbix-config-builder', element: <ZabbixConfigBuilderScreen /> },
-      { path: 'tools/fail2ban-config-builder', element: <Fail2banConfigBuilderScreen /> },
-      { path: 'tools/web-server-config-builder', element: <WebServerConfigBuilderScreen /> },
+      { path: 'tools/zabbix-config-builder', lazy: () => import('./adapters/ui/tools/ZabbixConfigBuilderScreen').then((m) => ({ Component: m.ZabbixConfigBuilderScreen })) },
+      { path: 'tools/fail2ban-config-builder', lazy: () => import('./adapters/ui/tools/Fail2banConfigBuilderScreen').then((m) => ({ Component: m.Fail2banConfigBuilderScreen })) },
+      { path: 'tools/web-server-config-builder', lazy: () => import('./adapters/ui/tools/WebServerConfigBuilderScreen').then((m) => ({ Component: m.WebServerConfigBuilderScreen })) },
 
       // Network Toolkit
-      { path: 'tools/sntp', element: <SntpLookupScreen /> },
-      { path: 'tools/whois', element: <WhoisScreen /> },
-      { path: 'tools/dns-lookup', element: <DnsLookupScreen /> },
-      { path: 'tools/ip-geolocation', element: <IpGeolocationScreen /> },
-      { path: 'tools/connections', element: <ConnectionsScreen /> },
-      { path: 'tools/wake-on-lan', element: <WakeOnLanScreen /> },
-      { path: 'tools/port-scanner', element: <PortScannerScreen /> },
-      { path: 'tools/ping-monitor', element: <PingMonitorScreen /> },
-      { path: 'tools/traceroute', element: <TracerouteScreen /> },
-      { path: 'tools/network-scanner', element: <NetworkScannerScreen /> },
-      { path: 'tools/snmp', element: <SnmpScreen /> },
-      { path: 'tools/neighbor-table', element: <NeighborTableScreen /> },
-      { path: 'tools/hosts-editor', element: <HostsFileEditorScreen /> },
-      { path: 'tools/firewall-viewer', element: <FirewallViewerScreen /> },
-      { path: 'tools/iperf3', element: <Iperf3Screen /> },
+      { path: 'tools/sntp', lazy: () => import('./adapters/ui/tools/SntpLookupScreen').then((m) => ({ Component: m.SntpLookupScreen })) },
+      { path: 'tools/whois', lazy: () => import('./adapters/ui/tools/WhoisScreen').then((m) => ({ Component: m.WhoisScreen })) },
+      { path: 'tools/dns-lookup', lazy: () => import('./adapters/ui/tools/DnsLookupScreen').then((m) => ({ Component: m.DnsLookupScreen })) },
+      { path: 'tools/ip-geolocation', lazy: () => import('./adapters/ui/tools/IpGeolocationScreen').then((m) => ({ Component: m.IpGeolocationScreen })) },
+      { path: 'tools/connections', lazy: () => import('./adapters/ui/tools/ConnectionsScreen').then((m) => ({ Component: m.ConnectionsScreen })) },
+      { path: 'tools/wake-on-lan', lazy: () => import('./adapters/ui/tools/WakeOnLanScreen').then((m) => ({ Component: m.WakeOnLanScreen })) },
+      { path: 'tools/port-scanner', lazy: () => import('./adapters/ui/tools/PortScannerScreen').then((m) => ({ Component: m.PortScannerScreen })) },
+      { path: 'tools/ping-monitor', lazy: () => import('./adapters/ui/tools/PingMonitorScreen').then((m) => ({ Component: m.PingMonitorScreen })) },
+      { path: 'tools/traceroute', lazy: () => import('./adapters/ui/tools/TracerouteScreen').then((m) => ({ Component: m.TracerouteScreen })) },
+      { path: 'tools/network-scanner', lazy: () => import('./adapters/ui/tools/NetworkScannerScreen').then((m) => ({ Component: m.NetworkScannerScreen })) },
+      { path: 'tools/snmp', lazy: () => import('./adapters/ui/tools/SnmpScreen').then((m) => ({ Component: m.SnmpScreen })) },
+      { path: 'tools/neighbor-table', lazy: () => import('./adapters/ui/tools/NeighborTableScreen').then((m) => ({ Component: m.NeighborTableScreen })) },
+      { path: 'tools/hosts-editor', lazy: () => import('./adapters/ui/tools/HostsFileEditorScreen').then((m) => ({ Component: m.HostsFileEditorScreen })) },
+      { path: 'tools/firewall-viewer', lazy: () => import('./adapters/ui/tools/FirewallViewerScreen').then((m) => ({ Component: m.FirewallViewerScreen })) },
+      { path: 'tools/iperf3', lazy: () => import('./adapters/ui/tools/Iperf3Screen').then((m) => ({ Component: m.Iperf3Screen })) },
     ],
   },
 ])

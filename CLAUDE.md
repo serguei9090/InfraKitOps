@@ -104,7 +104,9 @@ with zero file conflicts):
    catalog — Fail2ban jails — pass bespoke form fields to `GeneratorScaffold`
    instead.)
 3. Register: one entry in `src/adapters/ui/shell/moduleTaxonomy.ts` + one route in
-   `src/routes.tsx`.
+   `src/routes.tsx` — use the `lazy:` form like every other tool route
+   (`{ path: 'tools/x', lazy: () => import('...').then((m) => ({ Component: m.XScreen })) }`),
+   not an eager `element:` import.
 
 All paths in this section and the table above are relative to `app/` (see Commands).
 
@@ -158,9 +160,11 @@ App in `app/`:
   generate→decode round trip through actual `File`/`DataTransfer` upload
   simulation, and a full FormFlow round trip (parse → retype a field to a dynamic
   array loop → add/edit items with confirmed per-index isolation → save → reload →
-  byte-for-byte restore → delete). Known follow-up: the production bundle is
-  ~820KB gzipped now — route-based code-splitting (`React.lazy`) is worth doing
-  before Phase 7 packaging, more pressing now than when first flagged.
+  byte-for-byte restore → delete). Bundle: **route-split done 2026-09-01**
+  (`CODE_SPLITTING_PLAN.md` CS0+CS1) — every `/tools/*` + `/settings*` route is
+  `lazy:` in `routes.tsx`, entry chunk 989KB → **47KB gzip** (+ a stable
+  `vendor-react` 90KB gzip). `manualChunks` in `vite.config.ts` is
+  **function-form only** under rolldown-vite.
 - `npm run build` (web) and `cargo check` (desktop shell) both verified early on. **Not
   yet verified**: `npm run tauri dev` opening an actual native window — that launches a
   GUI process this environment can't observe; run it yourself once to confirm.

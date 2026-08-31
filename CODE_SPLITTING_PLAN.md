@@ -1,9 +1,21 @@
 # Code-splitting & bundle budget
 
-Status: **proposal, not started (2026-09-01).** Flagged repeatedly since
-`MIGRATION_PLAN.md` Phase 3 ("route-based code-splitting via `React.lazy` is
-worth doing before Phase 7 packaging"). Deferred long enough that the bundle
-has grown.
+Status: **CS0 + CS1 done 2026-09-01** (commit `<cs1>`) — CS2 mostly fell out of
+CS1 for free. CS3/CS4 remain. Flagged repeatedly since `MIGRATION_PLAN.md`
+Phase 3.
+
+**Result (2026-09-01 `bun run build`):**
+```
+index-*.js         144 kB │ gzip:  47 kB   ← entry (was 989 kB gzip)
+vendor-react-*.js  282 kB │ gzip:  90 kB   ← stable framework chunk
+--> first-load ≈ 140 kB gzip  (target was ≤ 350)
+```
+Every `/tools/*` + `/settings*` screen is now its own chunk; Rolldown
+auto-hoisted shared heavy libs into their own chunks too (`pdfInspector`
+205 kB gzip, `X509InspectorScreen`/jsrsasign 83 kB, `QrReaderScreen` 52 kB,
+`js-yaml`, `crypto-js`, `fxp`, `bcryptjs` — all lazy). `bun run test` (1307) +
+`lint` green; browser-verified: cold deep-link to `/tools/x509-inspector`
+renders, client nav Data-Converter→Runbooks works, zero console errors.
 
 ## 1. Baseline (2026-09-01, `bun run build`)
 
@@ -42,28 +54,38 @@ chunk; heavy libs only in the chunk that uses them.
 
 ## 4. Phases
 
-### CS0 — Vendor / manualChunks split + measure
-- `vite.config` `build.rollupOptions.output.manualChunks` (or Rolldown's
-  `advancedChunks`) — pull `react`, `react-dom`, `react-router` into a stable
-  `vendor-react` chunk; `@base-ui/react` + `lucide-react` into `vendor-ui`.
-- Add `bun run build -- --report` note / `rollup-plugin-visualizer` (dev-only
-  dep) to get a treemap; record the top 15 modules here.
-**DoD**: no behaviour change; documented breakdown. One commit.
+### CS0 — Vendor chunk — **DONE**
+- `vite.config.ts` `build.rollupOptions.output.manualChunks` — **function
+  form only** (rolldown-vite types `manualChunks` as `ManualChunksFunction`,
+  the object form is a TS error): match `node_modules/(react|react-dom|
+  react-router|react-router-dom|scheduler)/` → `vendor-react`.
+- `chunkSizeWarningLimit: 600` (pdf-lib is a deliberate lazy chunk).
+- Skipped the visualizer dep — the build's own size table was enough.
 
-### CS1 — Route-level lazy (the main win)
-- Convert every `/tools/*` and `/settings*` route in `routes.tsx` to
-  `{ path, lazy: () => import('./adapters/ui/tools/XxxScreen').then(m => ({ Component: m.XxxScreen })) }`.
-- Keep eager: `AppShellScaffold`, `HomeDashboardScreen`, `ModuleToolsScreen`
-  (index + first-paint routes).
-- Add `<RouteFallback>` via the router's `HydrateFallback` / a wrapper.
-- Codemod: the import list + the element array are 1:1 — script it, don't
-  hand-edit 90 lines.
-**DoD**: build shows ~90 `tools/*` chunks; entry chunk drops below ~500 kB
-gzip; click-through of 10 varied tools works with the fallback flashing only on
-cold nav; fresh-tab zero console errors. One commit.
+### CS1 — Route-level lazy — **DONE (the main win)**
+- Every `/tools/*` + `/settings*` route in `routes.tsx` →
+  `lazy: () => import('...').then((m) => ({ Component: m.XxxScreen }))`.
+  Done with a one-off codemod (`scratchpad/split-routes.mjs`, not committed).
+- Eager kept: `AppShellScaffold`, `HomeDashboardScreen`, `ModuleToolsScreen`.
+- `adapters/ui/shell/RouteFallback.tsx` — `RouteFallback` (root
+  `HydrateFallback`, cold deep-link skeleton) + `RoutePendingBar` (thin top
+  bar via `useNavigation()`, mounted in `AppShellScaffold`'s `<main>`). RR
+  holds the previous screen during a client nav, so no fallback flash there.
+- Entry 989 → **47 kB gzip**; ~110 route chunks.
 
-### CS2 — Heavy-lib isolation
-Verify (via the CS0 treemap) each lands in its screen's chunk, not the entry:
+### CS2 — Heavy-lib isolation — **mostly automatic**
+Rolldown already hoisted every shared heavy lib into its own chunk once the
+routes were split (`pdfInspector`, `X509InspectorScreen`/jsrsasign,
+`QrReaderScreen`, `ExifViewerScreen`, `js-yaml`, `crypto-js`, `fxp`/
+fast-xml-parser, `bcryptjs`, `cheatsheetContent`). Remaining optional work:
+
+| Lib | Only used by | Note |
+|-----|-------------|------|
+| `jsrsasign` | `X509InspectorScreen`, `JwtParserScreen` | 83 kB gzip — check whether `@noble/*` (already a dep) can replace it |
+| `pdf-lib` | `PdfSplitMergeScreen`, `PdfInspectorScreen` | 205 kB gzip, unavoidable for pdf-lib; fine as a lazy chunk |
+| `diff` | `TextDiffScreen`, prompt/runbook compare | small, low priority |
+
+Original CS2 table (verify each lands in its screen's chunk, not the entry):
 
 | Lib | Only used by |
 |-----|-------------|
@@ -99,9 +121,9 @@ lazy chunk. One commit.
 
 ## 5. Risks
 
-- **Rolldown vs Rollup option names** — the repo is on `vite v8` /
-  Rolldown (`build.rolldownOptions`). `manualChunks` may be `advancedChunks`.
-  Check the installed version's docs in CS0.
+- ~~**Rolldown vs Rollup option names**~~ — resolved in CS0: `manualChunks`
+  works but **function form only** (object form is a TS error under
+  rolldown-vite).
 - **`lazy:` + error boundaries** — a chunk that 404s (stale deploy) needs a
   retry/refresh boundary. Add one in CS1.
 - **Shared `src/core` graph** — over-splitting core can create waterfalls.

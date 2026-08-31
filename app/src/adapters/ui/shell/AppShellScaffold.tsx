@@ -1,6 +1,7 @@
 import { MoonStar, Search, SunMedium } from 'lucide-react'
 import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
+import { RoutePendingBar } from './RouteFallback'
 import { Input } from '@/components/ui/input'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSearchQueryStore } from '@/stores/searchQueryStore'
@@ -57,7 +58,8 @@ export function AppShellScaffold() {
         <div className="flex flex-1 overflow-hidden">
           <AppSidebar />
           <div className="w-px shrink-0 bg-border/60" />
-          <main className="flex-1 overflow-auto">
+          <main className="relative flex-1 overflow-auto">
+            <RoutePendingBar />
             <Outlet />
           </main>
         </div>
