@@ -1,8 +1,8 @@
 # Code-splitting & bundle budget
 
-Status: **CS0 + CS1 + CS4 done 2026-09-01** — CS2 mostly fell out of CS1 for
-free; **CS3 (prefetch) is the only piece left**. Flagged repeatedly since
-`MIGRATION_PLAN.md` Phase 3.
+Status: **CS0–CS4 done 2026-09-01** (CS2 mostly fell out of CS1 for free).
+Only leftover: swap `jsrsasign` for `@noble/*` (CS2 note). Flagged repeatedly
+since `MIGRATION_PLAN.md` Phase 3.
 
 **Result (2026-09-01 `bun run build`):**
 ```
@@ -106,12 +106,20 @@ Original CS2 table (verify each lands in its screen's chunk, not the entry):
 **DoD**: entry chunk ≤ ~350 kB gzip; each heavy lib appears in exactly one
 lazy chunk. One commit.
 
-### CS3 — Prefetch polish (optional)
-- On `mouseenter` / `focus` of a rail icon or a tool card, fire the route's
-  `import()` so the chunk is warm before the click.
-- `<Link>`-level: a tiny `usePrefetchRoute(path)` hook keyed off the same
-  `routes.tsx` map.
-**DoD**: no measurable delay on rail navigation after a hover. One commit.
+### CS3 — Prefetch polish — **DONE 2026-09-01** (commit `<cs3>`)
+- `adapters/ui/shell/prefetchRoute.ts` — `prefetchRoute(pathname)`:
+  `matchRoutes(router.routes, pathname)` → calls each matched route's `lazy()`
+  so the chunk is warm in the module cache before the click. `warmed` Set
+  dedups; `@/routes` imported dynamically to dodge the routes⇢shell⇢sidebar
+  cycle; `/` and empty are skipped.
+- Wired to `onMouseEnter` + `onFocus` on: rail module icons + Settings
+  (`RailIcon` gained `onPrefetch?`), the tool-list-pane rows (`ToolListPane`),
+  and the "All Tools" `ToolCard`s (`ModuleSectionView`).
+- First-load 176 → 181 kB gz (Rolldown re-chunked `appError`/`errorStore`/
+  `errorIcon` into their own <2 kB chunks at the new dynamic-import boundary —
+  still well under budget).
+**DoD**: hover a rail icon, then click — screen is already mounted, no
+`RoutePendingBar`. Verified in-browser (nav + zero console errors).
 
 ### CS4 — CI budget guard — **DONE 2026-09-01** (commit `<cs4>`)
 - `app/scripts/check-bundle-size.ts` (`bun run check:bundle`) — sums the

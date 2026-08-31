@@ -9,6 +9,7 @@ import { createSchemaRepository } from '@/adapters/storage/schemaRepository'
 import { useModuleVisibilityStore, visibleModulesInOrder } from '@/stores/moduleVisibilityStore'
 import { useSearchQueryStore } from '@/stores/searchQueryStore'
 import { moduleContainingRoute, moduleRailRoute, type ModuleDef } from './moduleTaxonomy'
+import { prefetchRoute } from './prefetchRoute'
 
 const schemaRepository = createSchemaRepository()
 const FORMFLOW_BUILDER_ROUTE = '/tools/formflow-builder'
@@ -92,6 +93,7 @@ function ModuleRail({ modules, activeModuleId }: { modules: ModuleDef[]; activeM
             expanded={expanded}
             selected={module.id === activeModuleId}
             onClick={() => navigate(moduleRailRoute(module))}
+            onPrefetch={() => prefetchRoute(moduleRailRoute(module))}
           />
         ))}
       </div>
@@ -101,6 +103,7 @@ function ModuleRail({ modules, activeModuleId }: { modules: ModuleDef[]; activeM
         expanded={expanded}
         selected={pathname.startsWith('/settings')}
         onClick={() => navigate('/settings')}
+        onPrefetch={() => prefetchRoute('/settings')}
       />
     </nav>
   )
@@ -112,12 +115,14 @@ function RailIcon({
   selected = false,
   expanded,
   onClick,
+  onPrefetch,
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
   selected?: boolean
   expanded: boolean
   onClick: () => void
+  onPrefetch?: () => void
 }) {
   const base = cn(
     'flex items-center rounded-[10px] transition-colors',
@@ -136,14 +141,27 @@ function RailIcon({
 
   if (expanded) {
     return (
-      <button type="button" aria-label={label} onClick={onClick} className={base}>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        onMouseEnter={onPrefetch}
+        onFocus={onPrefetch}
+        className={base}
+      >
         {content}
       </button>
     )
   }
   return (
     <Tooltip>
-      <TooltipTrigger aria-label={label} onClick={onClick} className={base}>
+      <TooltipTrigger
+        aria-label={label}
+        onClick={onClick}
+        onMouseEnter={onPrefetch}
+        onFocus={onPrefetch}
+        className={base}
+      >
         {content}
       </TooltipTrigger>
       <TooltipContent side="right">{label}</TooltipContent>
@@ -194,6 +212,8 @@ function ToolListPane({ module, currentPath }: { module: ModuleDef; currentPath:
                 type="button"
                 disabled={!enabled}
                 onClick={() => tool.route && navigate(tool.route)}
+                onMouseEnter={() => tool.route && prefetchRoute(tool.route)}
+                onFocus={() => tool.route && prefetchRoute(tool.route)}
                 className={cn(
                   'flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-sm',
                   selected && 'bg-primary/15 text-foreground font-medium',

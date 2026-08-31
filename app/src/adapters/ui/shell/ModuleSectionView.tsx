@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { ModuleDef, ToolEntry } from './moduleTaxonomy'
+import { prefetchRoute } from './prefetchRoute'
 
 interface ModuleSectionViewProps {
   module: ModuleDef
@@ -62,6 +63,8 @@ function ToolCard({ tool }: { tool: ToolEntry }) {
       type="button"
       disabled={!enabled}
       onClick={() => tool.route && navigate(tool.route)}
+      onMouseEnter={() => tool.route && prefetchRoute(tool.route)}
+      onFocus={() => tool.route && prefetchRoute(tool.route)}
       className={cn(
         'group flex flex-col items-start rounded-2xl border border-border/60 bg-card p-[18px] text-left transition-all duration-150',
         enabled
