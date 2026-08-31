@@ -117,6 +117,23 @@ script text — no explanation, no fences.
 
 {{input}}`,
 		},
+		{
+			ID:          "runbook.assistant",
+			Title:       "Runbook assistant",
+			Description: "Chat about the current runbook — understand it, debug it, improve it.",
+			OutputShape: OutputText,
+			InputLabel:  "Ask about this runbook",
+			Temperature: f64(0.3),
+			SystemTemplate: `You are an assistant for InfraKit Studio Runbooks — reusable, versioned,
+multi-step command runbooks (shell / SSH / HTTP / Python steps, {{VAR}} args,
+{{secret:NAME}} refs). Help the operator understand, debug, and improve the
+runbook below. Be concise and practical. When you suggest a script, keep it
+copy-pasteable.
+
+--- RUNBOOK (JSON) ---
+{{context.runbook}}
+--- END ---`,
+		},
 	}
 }
 

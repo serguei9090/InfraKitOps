@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, Eye, Play, Plus, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Download, Eye, Play, Plus, Save, Sparkles, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
@@ -19,6 +19,8 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
+import { AiPanel } from '@/adapters/ui/ai/AiPanel'
 import { downloadBlob } from '@/lib/downloadFile'
 import { useBackendStore } from '@/stores/backendStore'
 import { useRunbookStore } from '@/stores/runbookStore'
@@ -62,6 +64,7 @@ export function RunbookEditorScreen() {
   const [compareSel, setCompareSel] = useState<number[]>([])
   const [compareOpen, setCompareOpen] = useState(false)
   const [runOpen, setRunOpen] = useState(false)
+  const [genOpen, setGenOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -319,14 +322,43 @@ export function RunbookEditorScreen() {
               </DndContext>
             )}
             {!readOnly && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="self-start"
-                onClick={() => setSpec({ ...spec, steps: [...spec.steps, emptyStep()] })}
-              >
-                <Plus className="size-3.5" /> Step
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSpec({ ...spec, steps: [...spec.steps, emptyStep()] })}
+                >
+                  <Plus className="size-3.5" /> Step
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(genOpen && 'bg-primary/15 text-primary')}
+                  onClick={() => setGenOpen((v) => !v)}
+                >
+                  <Sparkles className="size-3.5" /> Generate step
+                </Button>
+              </div>
+            )}
+            {genOpen && !readOnly && (
+              <AiPanel
+                taskId="runbook.gen-step"
+                context={{
+                  executor: spec.steps.at(-1)?.executor ?? 'bash',
+                  priorSteps: spec.steps.map((s, i) => `${i + 1}. ${s.name || s.script.slice(0, 60)}`).join('\n'),
+                }}
+                onAcceptJson={(v) => {
+                  const o = v as { name?: string; script?: string }
+                  if (!o?.script) return
+                  const step = emptyStep(spec.steps.at(-1)?.executor ?? 'bash')
+                  setSpec({
+                    ...spec,
+                    steps: [...spec.steps, { ...step, name: o.name ?? 'Generated step', script: o.script }],
+                  })
+                  setGenOpen(false)
+                }}
+                onClose={() => setGenOpen(false)}
+              />
             )}
           </div>
         </div>

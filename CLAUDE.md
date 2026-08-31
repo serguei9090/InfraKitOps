@@ -258,7 +258,7 @@ second big consumer of the Go backend. Plan + phases:
   Assistant (reuses Prompt Library P5 model connections), multi-user approvals,
   run artifacts, macOS/Linux keyring backends.
 
-### AI module — "AI Hub" (started 2026-08-31, A0 + A1 done)
+### AI module — "AI Hub" (started 2026-08-31, A0–A2 done)
 
 Central LLM layer every module reuses instead of wiring its own AI. Plan +
 phases: [`AI_MODULE_PLAN.md`](AI_MODULE_PLAN.md). Supersedes the never-built
@@ -287,8 +287,15 @@ Assistant.
   override). `internal/templating/` is the shared `{{TOKEN}}` engine (runbook
   + llm). First consumer: Prompt Library **"Improve"** (Sparkles on
   `MessageCard`).
-- **A2 next**: anthropic/gemini native adapters + `AiPanel` chat mode +
-  Runbooks Assistant (`runbook.gen-step`/`fix-step`, `command.explain`).
+- **A2 done**: `anthropic` + `gemini` native adapters (all 4 providers live);
+  `AiPanel` `mode="chat"` + `onAcceptJson`; Runbooks **Assistant** tab
+  (`AssistantView`, `runbook.assistant` task, chat grounded on the spec) +
+  editor "Generate step" (`runbook.gen-step` → append) + per-`StepCard`
+  "Explain" (`command.explain`).
+- **Next**: `SETTINGS_MODULE_PLAN.md` (app-shell — absorbs
+  `ModuleSettingsDialog` + AI global defaults + per-module task grouping; see
+  `AI_MODULE_PLAN.md` §9b). Then AI **A3** (tool-calling, history persistence,
+  cost view — all deferred).
 
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 

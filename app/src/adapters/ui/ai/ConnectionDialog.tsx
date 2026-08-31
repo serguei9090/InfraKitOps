@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { testConnection } from '@/adapters/backend/llmClient'
 import { useLlmStore } from '@/stores/llmStore'
 import {
-  A0_PROVIDERS,
+  ALL_PROVIDERS,
   PROVIDER_DEFAULT_URL,
   PROVIDER_KEYLESS_OK,
   PROVIDER_LABEL,
@@ -82,10 +82,10 @@ export function ConnectionDialog({ draft, onClose }: Props) {
                 }
               >
                 <SelectTrigger size="sm">
-                  <SelectValue />
+                  <SelectValue>{(v) => PROVIDER_LABEL[v as ProviderKind] ?? v}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {A0_PROVIDERS.map((p) => (
+                  {ALL_PROVIDERS.map((p) => (
                     <SelectItem key={p} value={p}>
                       {PROVIDER_LABEL[p]}
                     </SelectItem>

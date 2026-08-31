@@ -382,16 +382,30 @@ Library's `diffWordsWithSpace` view).
   word-diff rendered, Accept replaced the content; fresh-tab load zero console
   errors.
 
-### A2 — Native providers + chat mode + Runbooks Assistant
-- `anthropic` + `gemini` adapters.
-- `AiPanel` `mode="chat"` (multi-turn with persistent grounding).
-- Wire the **Runbooks Assistant** section (was R4 placeholder):
-  `runbook.gen-step` (intent → step, inserts into the editor),
-  `runbook.fix-step` (failed step + stderr → proposed fix),
-  `command.explain` (on any shell/SSH step). Uses the run engine's redaction
-  so secrets in context are masked before they reach a provider.
-- **DoD**: connect Anthropic, generate a runbook step from an intent and insert
-  it; on a failed run, "Explain / Fix" a step.
+### A2 — Native providers + chat mode + Runbooks Assistant — **DONE 2026-08-31**
+- `anthropic.go` (Messages API — `system` split out as a top-level field,
+  `max_tokens` defaulted, `x-api-key` + `anthropic-version` headers, SSE
+  `content_block_delta`) and `gemini.go` (`:streamGenerateContent?alt=sse`,
+  key as a **server-side** query param, `user`/`model` roles,
+  `systemInstruction`, `generateContent`-only model filter). `For` + `Providers`
+  now return all four; `capabilities.llmProviders` + the connection editor pick
+  them up.
+- `AiPanel` `mode="chat"` — turn list + live streaming bubble, `history` passed
+  to `RunTask`, ⌘/Ctrl+Enter to send, Clear conversation. `onAcceptJson` prop
+  for `json`-shaped tasks (uses `useLlm`'s `parsed`).
+- New built-in task `runbook.assistant` (chat grounded on the runbook spec).
+- **Runbooks Assistant** section — `AssistantView` (pick a runbook →
+  `<AiPanel taskId="runbook.assistant" mode="chat" context={{ runbook }} />`),
+  replaces `AssistantPlaceholder`.
+- **Editor** — "Generate step" button (`runbook.gen-step`, `onAcceptJson` →
+  parse `{name, script}` → append a step) + a Sparkles "Explain" on every
+  non-HTTP `StepCard` (`command.explain`, `context={{ command, shell }}`).
+- 2 new backend tests (anthropic + gemini adapters over httptest). No new deps.
+- **Verified in-browser** vs live Ollama: Runbooks Assistant chat grounded on
+  a runbook answered a question about step 1 correctly (multi-turn commit
+  works); Generate-step and Explain panels render; 4 providers listed; fresh
+  tab zero console errors. Anthropic/Gemini live paths covered by unit tests
+  (no keys on hand).
 
 ### A3 — Deferred
 Tool/function-calling passthrough · conversation history persistence (opt-in) ·

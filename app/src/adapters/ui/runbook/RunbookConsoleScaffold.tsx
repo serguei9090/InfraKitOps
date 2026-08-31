@@ -12,7 +12,7 @@ import { HistoryView } from './HistoryView'
 import { SshNodesView } from './SshNodesView'
 import { PackagesView } from './PackagesView'
 import { SchedulesView } from './SchedulesView'
-import { AssistantPlaceholder } from './AssistantPlaceholder'
+import { AssistantView } from './AssistantView'
 import { VaultDialog } from './VaultDialog'
 import { LibrarySyncDialog } from './LibrarySyncDialog'
 import { RunPanel } from './RunPanel'
@@ -121,7 +121,7 @@ export function RunbookConsoleScaffold() {
         {section === 'schedules' && <SchedulesView />}
         {section === 'nodes' && <SshNodesView />}
         {section === 'packages' && <PackagesView />}
-        {section === 'assistant' && <AssistantPlaceholder />}
+        {section === 'assistant' && <AssistantView />}
       </div>
 
       <div className="flex h-8 shrink-0 items-center gap-3 border-t border-border/60 bg-card px-4 text-xs text-muted-foreground">

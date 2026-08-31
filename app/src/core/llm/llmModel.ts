@@ -12,8 +12,9 @@ export const PROVIDER_LABEL: Record<ProviderKind, string> = {
   gemini: 'Gemini',
 }
 
-/** Providers implemented in A0; the backend confirms via `llmProviders`. */
-export const A0_PROVIDERS: ProviderKind[] = ['ollama', 'openai-compatible']
+/** Every provider kind the backend can serve; it confirms the live set via
+ *  `capabilities.llmProviders`. */
+export const ALL_PROVIDERS: ProviderKind[] = ['ollama', 'openai-compatible', 'anthropic', 'gemini']
 
 export const PROVIDER_DEFAULT_URL: Record<ProviderKind, string> = {
   ollama: 'http://localhost:11434',

@@ -1,6 +1,7 @@
-import { ChevronDown, ChevronUp, GripVertical, Trash2 } from 'lucide-react'
-import type { CSSProperties, HTMLAttributes } from 'react'
+import { ChevronDown, ChevronUp, GripVertical, Sparkles, Trash2 } from 'lucide-react'
+import { useState, type CSSProperties, type HTMLAttributes } from 'react'
 import { Button } from '@/components/ui/button'
+import { AiPanel } from '@/adapters/ui/ai/AiPanel'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -31,6 +32,8 @@ interface Props {
 }
 
 export function StepCard({ step, index, count, readOnly, runnable, drag, onChange, onMove, onDelete }: Props) {
+  const [explain, setExplain] = useState(false)
+  const canExplain = step.executor !== 'http'
   return (
     <div
       ref={drag?.setNodeRef}
@@ -75,6 +78,18 @@ export function StepCard({ step, index, count, readOnly, runnable, drag, onChang
             ))}
           </SelectContent>
         </Select>
+        {canExplain && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Explain this command with AI"
+            title="Explain this command with AI"
+            className={cn(explain && 'bg-primary/15 text-primary')}
+            onClick={() => setExplain((v) => !v)}
+          >
+            <Sparkles className="size-3.5" />
+          </Button>
+        )}
         <Button variant="ghost" size="icon-xs" aria-label="Move up" disabled={index === 0} onClick={() => onMove(-1)}>
           <ChevronUp className="size-3.5" />
         </Button>
@@ -152,6 +167,16 @@ export function StepCard({ step, index, count, readOnly, runnable, drag, onChang
           s
         </label>
       </div>
+
+      {explain && canExplain && (
+        <div className="border-t border-border/60 p-2">
+          <AiPanel
+            taskId="command.explain"
+            context={{ command: step.script, shell: step.executor === 'ssh' ? 'ssh / bash' : step.executor }}
+            onClose={() => setExplain(false)}
+          />
+        </div>
+      )}
     </div>
   )
 }

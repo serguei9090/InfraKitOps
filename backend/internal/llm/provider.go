@@ -40,15 +40,19 @@ func For(k ProviderKind) Provider {
 		return ollamaProvider{}
 	case ProviderOpenAICompatible:
 		return openAICompatibleProvider{}
+	case ProviderAnthropic:
+		return anthropicProvider{}
+	case ProviderGemini:
+		return geminiProvider{}
 	default:
-		return nil // anthropic / gemini land in A2
+		return nil
 	}
 }
 
 // Providers lists the provider kinds this build supports, for the capability
 // payload and the connection editor.
 func Providers() []ProviderKind {
-	return []ProviderKind{ProviderOllama, ProviderOpenAICompatible}
+	return []ProviderKind{ProviderOllama, ProviderOpenAICompatible, ProviderAnthropic, ProviderGemini}
 }
 
 // baseURL resolves a connection's endpoint, trimming a trailing slash.
