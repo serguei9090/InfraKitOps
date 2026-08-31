@@ -1,4 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
+import { classify } from '@/core/errors/appError'
 
 /**
  * Talks to the `infrakit-backend` network sidecar (desktop) or a standalone
@@ -52,6 +53,28 @@ export class BackendUnavailableError extends Error {
   }
 }
 
+/** Read a non-2xx response's `{ error, code, hint }` body and throw an AppError. */
+async function throwHttpError(res: Response, path: string): Promise<never> {
+  let body: unknown = { error: `backend ${path}: ${res.status} ${res.statusText}` }
+  try {
+    const j = (await res.json()) as { error?: string; code?: string; hint?: string }
+    if (j && (j.error || j.code)) body = j
+  } catch {
+    /* keep the status-line fallback */
+  }
+  throw classify(body)
+}
+
+/** Wrap `fetch` so a transport failure ("Failed to fetch") becomes an AppError. */
+async function doFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') throw e
+    throw classify(e)
+  }
+}
+
 export interface HealthInfo {
   status: string
   version: string
@@ -80,11 +103,11 @@ export interface CapabilitiesInfo {
 export async function backendGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   const conn = await resolveConnection()
   if (!conn.available) throw new BackendUnavailableError()
-  const res = await fetch(`${conn.endpoint}/api/v1${path}`, {
+  const res = await doFetch(`${conn.endpoint}/api/v1${path}`, {
     headers: authHeaders(conn.token),
     signal,
   })
-  if (!res.ok) throw new Error(`backend ${path}: ${res.status} ${res.statusText}`)
+  if (!res.ok) return throwHttpError(res, path)
   return (await res.json()) as T
 }
 
@@ -97,7 +120,7 @@ export async function backendRequest<T>(
 ): Promise<T> {
   const conn = await resolveConnection()
   if (!conn.available) throw new BackendUnavailableError()
-  const res = await fetch(`${conn.endpoint}/api/v1${path}`, {
+  const res = await doFetch(`${conn.endpoint}/api/v1${path}`, {
     method,
     headers: {
       ...authHeaders(conn.token),
@@ -106,7 +129,7 @@ export async function backendRequest<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
     signal,
   })
-  if (!res.ok) throw new Error(`backend ${path}: ${res.status} ${res.statusText}`)
+  if (!res.ok) return throwHttpError(res, path)
   return (await res.json()) as T
 }
 
@@ -119,22 +142,13 @@ export function backendPost<T>(path: string, body: unknown, signal?: AbortSignal
 export async function backendUpload<T>(path: string, form: FormData, signal?: AbortSignal): Promise<T> {
   const conn = await resolveConnection()
   if (!conn.available) throw new BackendUnavailableError()
-  const res = await fetch(`${conn.endpoint}/api/v1${path}`, {
+  const res = await doFetch(`${conn.endpoint}/api/v1${path}`, {
     method: 'POST',
     headers: authHeaders(conn.token),
     body: form,
     signal,
   })
-  if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`
-    try {
-      const j = (await res.json()) as { error?: string }
-      if (j.error) msg = j.error
-    } catch {
-      /* keep status text */
-    }
-    throw new Error(msg)
-  }
+  if (!res.ok) await throwHttpError(res, path)
   return (await res.json()) as T
 }
 
@@ -149,22 +163,13 @@ export async function backendUploadForBlob(
 ): Promise<{ blob: Blob; headers: Headers }> {
   const conn = await resolveConnection()
   if (!conn.available) throw new BackendUnavailableError()
-  const res = await fetch(`${conn.endpoint}/api/v1${path}`, {
+  const res = await doFetch(`${conn.endpoint}/api/v1${path}`, {
     method: 'POST',
     headers: authHeaders(conn.token),
     body: form,
     signal,
   })
-  if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`
-    try {
-      const j = (await res.json()) as { error?: string }
-      if (j.error) msg = j.error
-    } catch {
-      /* keep status text */
-    }
-    throw new Error(msg)
-  }
+  if (!res.ok) await throwHttpError(res, path)
   return { blob: await res.blob(), headers: res.headers }
 }
 

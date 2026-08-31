@@ -193,13 +193,30 @@ clear(): void
 
 ## 6. Phasing
 
-### E0 — Plumbing
-- `internal/apierr` (types, constructors, `Write`, `Classify*`) — used nowhere
-  yet. `core/errors/appError.ts` + `classify` + tests. `errorStore`.
-  `<ErrorToaster/>` in the shell. `<InlineError/>`.
-- `backendClient` throws `AppError`; `backendGet` reads the body.
-- **DoD**: force a 404 / a dead endpoint from any module → a classified toast
-  with the right title + hint. `classify` unit tests cover every branch.
+### E0 — Plumbing — **DONE 2026-08-31**
+- `internal/apierr` — `Error{code,message,hint,status}`, 11 constructors,
+  `Write`, `ClassifyHTTP`/`ClassifyNet`. 3 tests. Used nowhere yet.
+- `core/errors/appError.ts` — `AppError` interface + `AppErr` class (extends
+  `Error`, so `e instanceof Error ? e.message` call sites keep working until
+  they move to `report()`), `classify(raw, source)`, `isAborted`, `isSticky`.
+  8 tests covering every branch.
+- `stores/errorStore.ts` — queue, `report(raw, source)` (classify, drop
+  `aborted`, dedup same code+detail within 4s, cap 8), `dismiss`, `clear`;
+  `reportError()` for non-hook call sites.
+- `adapters/ui/errors/` — `<ErrorToaster/>` (mounted in `AppShellScaffold`,
+  bottom-right stack, per-code icon, hint, Details disclosure; `auth_failed` /
+  `internal` / `backend_down` are sticky, the rest auto-dismiss at 6s),
+  `<InlineError error onRetry/>` over shadcn `Alert`, `<ErrorIcon code/>`,
+  `installErrorHandlers()` (a `window` `unhandledrejection` catch-all →
+  `reportError`, wired in `main.tsx`).
+- `backendClient` — `doFetch` wraps `fetch` (transport error → `AppErr`),
+  `throwHttpError` reads the `{error,code,hint}` body; every non-2xx and every
+  transport failure now throws an `AppErr`. **Also fixes the review bug**:
+  `backendGet` used to ignore the JSON body.
+- **Verified in-browser**: an uncaught `backendGet` 404 popped a classified
+  toast; `report({code:'auth_failed'})` → "Authentication failed — check the
+  API key" with the key icon; a `TypeError('Failed to fetch')` → "Service not
+  reachable". Fresh tab zero console errors. Green: build + 1307 tests + lint.
 
 ### E1 — LLM path (highest value — "wrong key / endpoint down")
 - `apierr` in the 4 LLM adapters + the `/llm/*` endpoints; `stream` error

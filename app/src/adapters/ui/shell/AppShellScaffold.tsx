@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSearchQueryStore } from '@/stores/searchQueryStore'
 import { useThemeStore } from '@/stores/themeStore'
+import { ErrorToaster } from '@/adapters/ui/errors/ErrorToaster'
 import { AppSidebar } from './AppSidebar'
 
 /**
@@ -61,6 +62,7 @@ export function AppShellScaffold() {
           </main>
         </div>
       </div>
+      <ErrorToaster />
     </TooltipProvider>
   )
 }
