@@ -220,7 +220,7 @@ diagnostics only. Plan + roadmap: [`NETWORK_MODULE_PLAN.md`](NETWORK_MODULE_PLAN
 - CI: `.github/workflows/backend.yml` (vet/test + cross-compile). `bun run tauri dev`
   opening a real window still needs a manual pass — same caveat as the rest of the app.
 
-### Runbooks module (started 2026-08-31, R0 done)
+### Runbooks module (started 2026-08-31, R0–R4 done bar the AI Assistant)
 
 **Runbooks** (`moduleTaxonomy.ts` id `runbook`, route `/tools/runbook`) is a
 **backend-mandatory** module for reusable multi-step command runbooks — the
@@ -240,15 +240,23 @@ second big consumer of the Go backend. Plan + phases:
   single-tool shell module.
 - **No dedicated Ansible / kubectl executor** — run them as plain commands in a
   shell/SSH step (§3.3). Ansible + kubectl get their own modules later.
-- **R0–R3 done.** R1 = full-page editor, args auto-detect + per-arg validation,
-  versioning (`runbookDiff`), publish gate. R2 = **SSH** executor (`x/crypto/ssh`,
-  host-key pinning) + **HTTP** executor (status + dot-path asserts, chains via
-  `{{steps.N.stdout}}`) + `SshNodesView` + `SecretPicker`. R3 = `internal/packages`
-  (detect + install-command per manager + streamed install) + `orchestrator/sync.go`
-  (library export/import as `<slug>.runbook.json` files + optional git) +
-  single-runbook JSON export/import + ⌘S/⌘↵. **R4 deferred**: Python-uv executor,
-  AI Assistant (reuses Prompt Library P5 model connections), scheduled runs, dnd
-  step reorder, responsive.
+- **R0–R4 done** (except the AI Assistant). R1 = full-page editor, args
+  auto-detect + per-arg validation, versioning (`runbookDiff`), publish gate.
+  R2 = **SSH** executor (`x/crypto/ssh`, host-key pinning) + **HTTP** executor
+  (status + dot-path asserts, chains via `{{steps.N.stdout}}`) + `SshNodesView`
+  + `SecretPicker`. R3 = `internal/packages` (detect + install-command per
+  manager + streamed install) + `orchestrator/sync.go` (library export/import
+  as `<slug>.runbook.json` files + optional git) + single-runbook JSON
+  export/import + ⌘S/⌘↵. **R4**: R4a Python-via-`uv` executor
+  (`executor/python.go`, 6th kind, gated on `uv` on PATH); R4b scheduled/cron
+  runs (`orchestrator/{cron,scheduler}.go` — self-contained 5-field parser +
+  30s poll, published-only, `triggeredBy="schedule"`; `Schedules` nav section
+  + `core/runbook/cron.ts`); R4c dnd step reorder (`@dnd-kit`, up/down buttons
+  kept as fallback) + responsive editor grid; R4d opt-in OS-keyring vault key
+  (`vault/keyring_windows.go` → Windows Credential Manager via advapi32, no new
+  dep; auto-unlocks the vault after a backend restart). **Still deferred**: AI
+  Assistant (reuses Prompt Library P5 model connections), multi-user approvals,
+  run artifacts, macOS/Linux keyring backends.
 
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 

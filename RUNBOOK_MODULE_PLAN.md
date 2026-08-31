@@ -685,10 +685,26 @@ Verified in-browser: grips render, `reorderSteps` reorders (via the up/down
 path — synthetic dnd drag events are unreliable to script, same caveat as the
 other dnd work), draft autosaves, discard restores.
 
+**R4d — OS-keyring vault key. DONE 2026-08-31.** Opt-in "remember the vault key
+on this device" so the vault auto-unlocks after a backend restart.
+`vault/keyring_windows.go` calls the Windows Credential Manager directly
+(advapi32 `CredWrite`/`CredRead`/`CredDelete` — **no new Go dependency**);
+`keyring_other.go` is a `!windows` stub reporting unsupported. The 32-byte AES
+key is the blob (Credential Manager encrypts it at rest, scoped to the Windows
+user). `Vault.Remember/Forget/UnlockWithKeyring`; `Open()` auto-unlocks from
+the keyring when an entry exists and still verifies against the vault's
+sentinel (a stale entry is dropped). `Status` gains `keyringAvailable` +
+`keyringRemembered`. Endpoints `/vault/{unlock-keyring,remember,forget}`.
+Frontend: `VaultDialog` shows a "Remember on this device" checkbox when
+unlocked and an "Unlock with device keyring" button when locked & remembered;
+`ImportBytes` drops any stale remembered key. 1 new test — the full
+Remember → Lock → UnlockWithKeyring → re-Open-auto-unlock → Forget cycle,
+run against the real Credential Manager on Windows (skips elsewhere).
+
 **Still deferred:** **AI Assistant** (script generation — reuses the Prompt
-Library P5 model-connection layer) · OS-keyring-sealed vault master key
-(desktop) · multi-user approvals + immutable audit log · file-type run
-parameters · run output artifacts.
+Library P5 model-connection layer) · multi-user approvals + immutable audit
+log · file-type run parameters · run output artifacts · macOS/Linux keyring
+backends.
 
 (Ansible / kubectl / Terraform are **not** here — see §3.3.)
 

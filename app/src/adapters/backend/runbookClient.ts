@@ -178,6 +178,9 @@ export const vaultInit = (masterPassword: string) =>
   backendRequest<VaultStatus>('POST', '/vault/init', { masterPassword })
 export const vaultUnlock = (masterPassword: string) =>
   backendRequest<VaultStatus>('POST', '/vault/unlock', { masterPassword })
+export const vaultUnlockKeyring = () => backendRequest<VaultStatus>('POST', '/vault/unlock-keyring')
+export const vaultRemember = () => backendRequest<VaultStatus>('POST', '/vault/remember')
+export const vaultForget = () => backendRequest<VaultStatus>('POST', '/vault/forget')
 export const vaultLock = () => backendRequest<VaultStatus>('POST', '/vault/lock')
 export const listSecrets = () =>
   backendGet<{ secrets: VaultSecretMeta[] | null }>('/vault/secrets').then((r) => arr(r.secrets))

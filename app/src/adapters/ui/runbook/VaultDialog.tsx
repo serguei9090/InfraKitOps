@@ -15,6 +15,9 @@ export function VaultDialog() {
   const error = useVaultStore((s) => s.error)
   const init = useVaultStore((s) => s.init)
   const unlock = useVaultStore((s) => s.unlock)
+  const unlockWithKeyring = useVaultStore((s) => s.unlockWithKeyring)
+  const remember = useVaultStore((s) => s.remember)
+  const forget = useVaultStore((s) => s.forget)
   const lock = useVaultStore((s) => s.lock)
   const putSecret = useVaultStore((s) => s.putSecret)
   const deleteSecret = useVaultStore((s) => s.deleteSecret)
@@ -73,6 +76,11 @@ export function VaultDialog() {
             <Button type="submit" disabled={!pw}>
               Unlock
             </Button>
+            {status?.keyringRemembered && (
+              <Button type="button" variant="outline" onClick={() => void unlockWithKeyring()}>
+                <KeyRound className="size-4" /> Unlock with device keyring
+              </Button>
+            )}
           </form>
         ) : (
           <>
@@ -90,6 +98,18 @@ export function VaultDialog() {
                 </Button>
               </div>
             </div>
+
+            {status?.keyringAvailable && (
+              <label className="flex items-center gap-2 rounded-md bg-accent/30 px-2 py-1.5 text-xs">
+                <input
+                  type="checkbox"
+                  className="size-3.5 accent-primary"
+                  checked={status.keyringRemembered}
+                  onChange={(e) => void (e.target.checked ? remember() : forget())}
+                />
+                Remember the key on this device (auto-unlock after a restart, via the OS keyring)
+              </label>
+            )}
 
             {adding && (
               <form

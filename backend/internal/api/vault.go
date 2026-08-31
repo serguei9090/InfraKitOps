@@ -36,6 +36,8 @@ func vaultErr(w http.ResponseWriter, err error) {
 		WriteJSON(w, http.StatusConflict, map[string]string{"error": "vault already initialised"})
 	case errors.Is(err, vault.ErrNoSecret):
 		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "no such secret"})
+	case errors.Is(err, vault.ErrNoKeyring):
+		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "this device has no remembered vault key"})
 	default:
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
@@ -79,6 +81,42 @@ func (h *VaultHandlers) Lock(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	h.Vault.Lock()
+	WriteJSON(w, http.StatusOK, h.Vault.Status())
+}
+
+// UnlockKeyring unlocks the vault from the OS-keyring-remembered key (R4d).
+func (h *VaultHandlers) UnlockKeyring(w http.ResponseWriter, _ *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	if err := h.Vault.UnlockWithKeyring(); err != nil {
+		vaultErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, h.Vault.Status())
+}
+
+// Remember stores the current key in the OS keyring.
+func (h *VaultHandlers) Remember(w http.ResponseWriter, _ *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	if err := h.Vault.Remember(); err != nil {
+		vaultErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, h.Vault.Status())
+}
+
+// Forget removes the remembered key from the OS keyring.
+func (h *VaultHandlers) Forget(w http.ResponseWriter, _ *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	if err := h.Vault.Forget(); err != nil {
+		vaultErr(w, err)
+		return
+	}
 	WriteJSON(w, http.StatusOK, h.Vault.Status())
 }
 

@@ -29,6 +29,10 @@ var (
 	ErrBadPassword    = errors.New("wrong master password")
 	ErrExists         = errors.New("vault already initialised")
 	ErrNoSecret       = errors.New("no such secret")
+	ErrNoKeyring      = errors.New("this device has no remembered vault key")
+
+	errKeyringUnsupported = errors.New("OS keyring not supported on this platform")
+	errKeyringMissing     = errors.New("keyring entry not found")
 )
 
 // SecretKind categorises a secret for the UI.
@@ -89,12 +93,14 @@ var sentinel = []byte("infrakit-vault-v1")
 
 // Status is the lightweight state the UI polls.
 type Status struct {
-	Initialised    bool  `json:"initialised"`
-	Unlocked       bool  `json:"unlocked"`
-	AutoLockInSec  int   `json:"autoLockInSec"`
-	SecretCount    int   `json:"secretCount"`
-	AutoLockTotal  int   `json:"autoLockTotalSec"`
-	LastActivityMs int64 `json:"-"`
+	Initialised       bool  `json:"initialised"`
+	Unlocked          bool  `json:"unlocked"`
+	AutoLockInSec     int   `json:"autoLockInSec"`
+	SecretCount       int   `json:"secretCount"`
+	AutoLockTotal     int   `json:"autoLockTotalSec"`
+	KeyringAvailable  bool  `json:"keyringAvailable"`
+	KeyringRemembered bool  `json:"keyringRemembered"`
+	LastActivityMs    int64 `json:"-"`
 }
 
 // Vault is safe for concurrent use.
@@ -121,7 +127,17 @@ func Open(path string, autoLock time.Duration) (*Vault, error) {
 	if err := json.Unmarshal(b, &v.env); err != nil {
 		return nil, fmt.Errorf("parse vault file: %w", err)
 	}
+	// If the user asked this device to remember the key, unlock without a
+	// password — this is the whole point of R4d (survive a backend restart).
+	if v.initialised() {
+		_ = v.UnlockWithKeyring()
+	}
 	return v, nil
+}
+
+// keyringTarget is the Credential Manager entry name for this vault file.
+func (v *Vault) keyringTarget() string {
+	return "InfraKitStudio/vault/" + filepath.Base(v.path)
 }
 
 func (v *Vault) initialised() bool { return v.env.V != 0 }
@@ -139,10 +155,16 @@ func (v *Vault) Status() Status {
 	defer v.mu.Unlock()
 	v.maybeAutoLock()
 	st := Status{
-		Initialised:   v.initialised(),
-		Unlocked:      v.key != nil,
-		AutoLockTotal: int(v.autoLock.Seconds()),
-		SecretCount:   len(v.env.Secrets),
+		Initialised:      v.initialised(),
+		Unlocked:         v.key != nil,
+		AutoLockTotal:    int(v.autoLock.Seconds()),
+		SecretCount:      len(v.env.Secrets),
+		KeyringAvailable: keyringSupported,
+	}
+	if keyringSupported {
+		if _, err := keyringGet(v.keyringTarget()); err == nil {
+			st.KeyringRemembered = true
+		}
 	}
 	if v.key != nil && v.autoLock > 0 {
 		remain := v.autoLock - time.Since(v.lastActivity)
@@ -209,6 +231,62 @@ func (v *Vault) Lock() {
 	defer v.mu.Unlock()
 	zero(v.key)
 	v.key = nil
+}
+
+// Remember stores the current key in the OS keyring so the vault auto-unlocks
+// after a backend restart (R4d). Requires an unlocked vault.
+func (v *Vault) Remember() error {
+	if !keyringSupported {
+		return errKeyringUnsupported
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.maybeAutoLock()
+	if v.key == nil {
+		return ErrLocked
+	}
+	stored := make([]byte, len(v.key))
+	copy(stored, v.key)
+	return keyringSet(v.keyringTarget(), stored)
+}
+
+// Forget removes the remembered key from the OS keyring. The vault stays in
+// whatever lock state it was in.
+func (v *Vault) Forget() error {
+	if !keyringSupported {
+		return errKeyringUnsupported
+	}
+	return keyringDelete(v.keyringTarget())
+}
+
+// UnlockWithKeyring unlocks using the key remembered in the OS keyring, with no
+// master password. Returns ErrNoKeyring if this device has no remembered key
+// (or it no longer matches the vault).
+func (v *Vault) UnlockWithKeyring() error {
+	if !keyringSupported {
+		return errKeyringUnsupported
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if !v.initialised() {
+		return ErrNotInitialised
+	}
+	if v.key != nil {
+		return nil
+	}
+	blob, err := keyringGet(v.keyringTarget())
+	if err != nil || len(blob) != 32 {
+		return ErrNoKeyring
+	}
+	plain, err := open(blob, v.env.Verifier)
+	if err != nil || subtle.ConstantTimeCompare(plain, sentinel) != 1 {
+		zero(blob)
+		_ = keyringDelete(v.keyringTarget()) // stale entry — drop it
+		return ErrNoKeyring
+	}
+	v.key = blob
+	v.lastActivity = time.Now()
+	return nil
 }
 
 // Touch resets the idle timer (called on any vault access from a request).
@@ -355,6 +433,10 @@ func (v *Vault) ImportBytes(data []byte, masterPassword string) error {
 	zero(v.key)
 	v.key = nil
 	v.env = incoming
+	// The imported vault has a different key — any remembered one is now stale.
+	if keyringSupported {
+		_ = keyringDelete(v.keyringTarget())
+	}
 	return v.persist()
 }
 

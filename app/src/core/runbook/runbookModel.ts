@@ -119,6 +119,8 @@ export interface VaultStatus {
   autoLockInSec: number
   autoLockTotalSec: number
   secretCount: number
+  keyringAvailable: boolean
+  keyringRemembered: boolean
 }
 
 export interface RunSchedule {

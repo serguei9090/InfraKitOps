@@ -17,6 +17,9 @@ interface VaultStore {
   refresh: () => Promise<void>
   init: (masterPassword: string) => Promise<boolean>
   unlock: (masterPassword: string) => Promise<boolean>
+  unlockWithKeyring: () => Promise<boolean>
+  remember: () => Promise<void>
+  forget: () => Promise<void>
   lock: () => Promise<void>
   refreshSecrets: () => Promise<void>
   putSecret: (s: { id?: string; name: string; kind: string; notes?: string; value: string }) => Promise<void>
@@ -64,6 +67,34 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     } catch (e) {
       set({ error: msg(e) })
       return false
+    }
+  },
+
+  unlockWithKeyring: async () => {
+    try {
+      const status = await api.vaultUnlockKeyring()
+      set({ status, error: null })
+      await get().refreshSecrets()
+      return true
+    } catch (e) {
+      set({ error: msg(e) })
+      return false
+    }
+  },
+
+  remember: async () => {
+    try {
+      set({ status: await api.vaultRemember(), error: null })
+    } catch (e) {
+      set({ error: msg(e) })
+    }
+  },
+
+  forget: async () => {
+    try {
+      set({ status: await api.vaultForget(), error: null })
+    } catch (e) {
+      set({ error: msg(e) })
     }
   },
 
