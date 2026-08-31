@@ -407,11 +407,84 @@ Library's `diffWordsWithSpace` view).
   tab zero console errors. Anthropic/Gemini live paths covered by unit tests
   (no keys on hand).
 
-### A3 — Deferred
-Tool/function-calling passthrough · conversation history persistence (opt-in) ·
-token/cost aggregation view · embeddings endpoint (if a module needs RAG) ·
-Anthropic prompt-caching hints · per-connection rate limiting · streaming
-cancel polish.
+### A3 — Advanced capabilities — **planned, not started (2026-09-01)**
+
+Each sub-phase is independently useful; **A3b (history) is the one with the
+clearest user pull**, do it first unless a module concretely needs tools.
+
+#### A3a — Tool / function-calling passthrough
+- `internal/llm/model.go` — `ChatRequest.Tools []ToolSpec` (name, description,
+  JSON-schema params) + `ChatMessage` gains `ToolCalls` / `ToolCallID` /
+  `role: "tool"`. `Delta` gains `ToolCallDelta`.
+- Per-adapter wire mapping (all 4 already have the request/response shapes
+  documented in §4): OpenAI `tools`/`tool_calls`, Anthropic `tools` +
+  `tool_use`/`tool_result` blocks, Gemini `functionDeclarations` /
+  `functionCall`, Ollama `tools` (newer models only — degrade gracefully:
+  `Provider.SupportsTools()` gate).
+- **No agent loop in the engine.** The engine streams tool-call deltas to the
+  caller; the *caller* (a module) executes the tool and sends the result back
+  as a follow-up turn. Keeps the engine thin (§6.5 rationale — no SDK).
+- First consumer: a Runbooks "assistant can propose running a step" flow, or
+  Network "assistant can call a diagnostic tool" — pick when building.
+**DoD**: a unit test drives a 2-turn tool exchange against a mock provider for
+each adapter; one real module wires one tool. Commits: 1–2.
+
+#### A3b — Conversation history persistence (opt-in)
+- `llm.db` — `llm_conversation` (id, title, taskId?, connId, createdAt,
+  updatedAt) + `llm_message` (conversationId, idx, role, content, tokens?).
+- `Engine` stays stateless; a new `llm.History` store is written to by the
+  **API layer** after a stream completes, only when the request carried
+  `?save=1` (or a per-connection "always save" setting).
+- Endpoints: `GET /llm/conversations`, `GET /llm/conversations/{id}`,
+  `DELETE …`, `PATCH …` (rename/pin).
+- Frontend: `llmStore` gains a `conversations` list; Playground gets a
+  left rail of saved chats + a "save this conversation" toggle. `AiPanel`
+  `mode="chat"` unaffected (still ephemeral unless a host opts in).
+- **Privacy**: off by default (prompts carry sensitive context — §7 of this
+  plan). The toggle is per-conversation; a global default lives in Settings
+  → AI (S-follow-up).
+**DoD**: save a Playground chat → reload → it restores with full turn history;
+delete works; an unsaved chat leaves no rows. Commits: 2 (backend, frontend).
+
+#### A3c — Token / cost aggregation view
+- `Usage{promptTokens, completionTokens}` already comes back per stream.
+  Persist a lightweight `llm_usage` row per call (connId, taskId?, model,
+  tokens, at) — independent of A3b (no message content, just counts).
+- `internal/llm` — a static `ModelPricing` table (USD per 1M in/out, hand-
+  maintained, `openai-compatible` + ollama = free/unknown).
+- Endpoint `GET /llm/usage?since=…&groupBy=day|model|task`.
+- Frontend: a "Usage" section in AI Hub (or Settings → AI) — a small bar
+  chart (reuse the network module's chart primitives) + a table.
+**DoD**: run 5 task calls → the view shows 5, grouped by model, with a cost
+estimate for priced models and "—" for local. Commits: 2.
+
+#### A3d — Embeddings endpoint (only if a module needs RAG)
+- `Provider.Embed(ctx, model, inputs) ([][]float32, error)` — OpenAI
+  `/embeddings`, Ollama `/api/embed`, Gemini `:embedContent`. Anthropic has
+  no first-party embeddings → return `apierr.Validation("provider has no
+  embeddings")`.
+- `POST /llm/embed` (connId, model, inputs).
+- **No vector store in this layer** — a consuming module owns its index
+  (e.g. a future "search my runbooks" feature). Ship the endpoint only when
+  that consumer is real.
+**DoD**: `/llm/embed` returns a vector of the right dimension for one provider.
+Commit: 1. **Gated on a concrete consumer — do not build speculatively.**
+
+#### A3e — Reliability polish
+- Anthropic `cache_control` hints on the system block for long task templates
+  (cheap latency/cost win on repeated task runs).
+- Per-connection concurrency cap (mirror `orchestrator.Engine.SetMaxConcurrent`)
+  — a semaphore in the `Engine` keyed by connId.
+- Streaming cancel: confirm `RunTask`/`Chat` fully release the upstream HTTP
+  body on client abort (E1 added `sendOrDone`; audit the provider side).
+**DoD**: a load test of 20 concurrent task runs against one connection
+respects the cap; abort mid-stream closes the upstream connection (verified in
+`preview_logs` / a leak test). Commit: 1.
+
+#### Still deferred after A3
+Multi-provider fallback/routing policy · a real agent-framework SDK (§6.5 — only
+if agentic loops become central) · fine-tune / batch APIs · image/audio
+modalities.
 
 ---
 

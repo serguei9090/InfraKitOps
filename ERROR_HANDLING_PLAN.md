@@ -256,10 +256,68 @@ clear(): void
 - Browser-verified: wrong master password → "Authentication failed / Enter
   the vault's master password / wrong master password". Green.
 
-### E3 — Deferred
-Retry-from-toast (needs an action registry) · an error-history drawer ·
-migrate the remaining ~70 endpoints · message wording pass / i18n ·
-per-source rate-limit on toasts.
+### E3 — Polish & full coverage — **planned, not started (2026-09-01)**
+
+Phased so each part is independently shippable. Do in order; E3a/E3b are the
+user-visible wins, E3c is the grind.
+
+#### E3a — Retry-from-toast
+- `errorStore` entry gains an optional `retry?: () => void | Promise<void>`.
+- `reportError(raw, source, { retry })` — callers that have a re-runnable
+  action pass it (`llmStore.putConnection`, `runbookStore.putNode`, …).
+- `<ErrorToaster>` renders a **Retry** button when `retry` is set and
+  `preset.retryable`; on click it calls `retry()`, dismisses, and re-reports
+  on a second failure (with a "retried" marker so the dedup window doesn't
+  swallow it).
+- No global action registry — the closure travels with the report. Simpler
+  than the "action registry" originally sketched.
+**DoD**: kill the backend, edit an AI connection → toast → start backend →
+Retry → succeeds. One commit.
+
+#### E3b — Error-history drawer
+- `errorStore` already caps at 8 live; add a separate `history` ring (cap 50,
+  not auto-dismissed, survives `clear()`).
+- A drawer opened from a small indicator in `AppShellScaffold` (badge = count
+  since last open). Rows: icon · title · source · relative time · Details
+  expander. "Clear history" + "Copy all" (for bug reports).
+- Reuses `<ErrorIcon>` / the toast row markup.
+**DoD**: three different failures land in the drawer with correct sources;
+survives navigation. One commit.
+
+#### E3c — Migrate the remaining endpoints
+~70 handlers still return a bare `{error: string}` string. Batch by area, one
+commit per batch, each verified against its module's UI:
+1. Network read tools (`dns`, `whois`, `sntp`, `ipgeo`, `portscan`,
+   `traceroute`, `ping`, `netscan`, `snmp`, `neighbor`, `connections`,
+   `wol`, `x509fetch`, `iperf`) — mostly `ClassifyNet` / `ClassifyHTTP` at the
+   `cmdtool` / dial boundary.
+2. Utility power-mode endpoints (`/ssh-keygen`, `/pdf/*`, `/config/validate`,
+   `/qr/decode`) — `apierr.Validation` on bad input, `Internal` on tool crash.
+3. Runbook library sync (`/library/export`, `/library/import`) — currently
+   left plain because they carry `report`/`imported` fields; wrap the error
+   case only.
+4. History endpoints (`/history*`).
+- Add a lint/grep check to `backend.yml`: `grep -rn 'map\[string\]string{"error"' internal/api` should only match an allowlist.
+**DoD**: the grep check passes; a spot-check of one endpoint per batch shows a
+coded response. Commits: 4.
+
+#### E3d — Wording & i18n scaffold
+- One pass over every `apierr` message + every `PRESETS` string for voice
+  (imperative hint, no jargon, no stack-trace leakage).
+- Extract `PRESETS` titles/hints into a single `errorStrings.ts` map so a
+  future i18n layer has one file to translate. No actual i18n runtime yet.
+**DoD**: review diff; strings centralised. One commit.
+
+#### E3e — Per-source toast rate-limit
+- `errorStore.report` — if a source fires > 3 errors in 5 s, collapse into one
+  "Multiple errors from {source}" toast that opens the drawer.
+- Guards against a retry loop or a dead backend spamming the corner.
+**DoD**: a `setInterval` firing a failing request every 200 ms produces one
+collapsed toast, not 25. One commit.
+
+#### Still out of scope after E3
+Cross-device error sync · server-side error telemetry / Sentry-style
+aggregation · localised runtime (E3d only scaffolds it).
 
 ---
 

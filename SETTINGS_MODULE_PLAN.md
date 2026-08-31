@@ -219,10 +219,65 @@ deleted.
   errors. Green: build + 1299 tests + lint (1 new accepted set-state-in-
   effect); go vet + go test ./... .
 
-### S3 — Deferred
-Export / import **all** settings as one JSON · a keyboard-shortcut editor ·
-per-module "reset this section" · settings search · sync settings across
-devices (needs the account layer).
+### S3 — Convenience & completeness — **planned, not started (2026-09-01)**
+
+Small, mostly-frontend. Order below is by value; each is one commit.
+
+#### S3a — Per-section reset
+- Each `SettingsSectionDef` gains an optional `onReset?: () => Promise<void>`
+  + `resetLabel`. `SettingsScaffold` renders a "Reset {section} to defaults"
+  in the section footer with a confirm.
+- General → re-seed theme/rail/module-order; AI → `DELETE` all custom
+  `llm_task` overrides + clear `llm_settings`; Runbooks → `PUT` the `DEFAULTS`
+  blob; Network → the existing `useNetworkSettingsStore` reset.
+**DoD**: reset AI → every task shows its builtin prompt again; other sections
+untouched.
+
+#### S3b — Export / import all settings
+- `core/settings/settingsIo.ts` (framework-free) — a versioned envelope
+  `{ version, exportedAt, local: {...}, backend: {...} }`.
+- Export: read every local store + `GET /llm/settings` + `GET
+  /runbook-settings` + custom `llm_task` rows → one JSON download.
+- Import: validate `version`, show a diff-ish summary ("theme, 4 module
+  positions, 2 AI prompts, Runbooks retention"), apply on confirm — local
+  stores directly, backend via the existing `PUT` endpoints.
+- Secrets (`vault.enc`) are **never** in this file — it already has its own
+  export (`/vault/export`). Connection API keys live in the vault → not
+  exported here either; connections export as metadata only.
+**DoD**: export on machine A, import on a fresh profile → theme + module
+layout + AI prompts + Runbooks numbers all match; no secret material in the
+file (grep the export in the test).
+
+#### S3c — Settings search
+- Build a static index at module load from the `SETTINGS_SECTIONS` registry —
+  each section contributes `{ label, keywords[] }` (and ideally per-field
+  labels).
+- A search box above the left menu filters the menu + deep-links to
+  `/settings/{section}` (and, stretch, scrolls to / highlights the field via
+  an anchor).
+**DoD**: typing "concurrency" jumps to Runbooks; "prompt" surfaces AI.
+
+#### S3d — Keyboard-shortcut editor
+- Today ⌘S / ⌘↵ are hard-coded in Prompt Library + Runbooks editors.
+- `core/shortcuts/` — a registry of `{ id, label, defaultCombo, scope }` +
+  a `useShortcut(id, handler)` hook reading overrides from a local store.
+- A **General → Shortcuts** subsection: list, click-to-rebind, reset.
+- Migrate the existing hard-coded handlers to `useShortcut`.
+**DoD**: rebind "Save" to ⌘⇧S in the editor, it works, survives reload;
+conflict detection warns on a dup combo.
+
+#### S3e — Cross-device sync — **stays deferred**
+Needs the account / auth layer that doesn't exist. When it does: the S3b
+envelope is the payload; sync = push/pull it to a user endpoint with
+last-write-wins + a manual conflict view.
+
+#### S3f — Web-build backend endpoint override
+Noted at §… (the `VITE_BACKEND_URL` field is build-time-baked today). A
+Settings → Backend field (web build only) writing to `localStorage`, read by
+`backendClient`/`sseClient` `resolve()` before the env fallback. Pairs with
+`PACKAGING_PLAN.md` P7f.
+**DoD**: set a URL in the field on the static build → tools connect without a
+rebuild.
 
 ---
 

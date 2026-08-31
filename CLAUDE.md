@@ -347,8 +347,32 @@ module. Plan: [`ERROR_HANDLING_PLAN.md`](ERROR_HANDLING_PLAN.md).
   mutation failures (or renders `<InlineError>` where a pane owns the error).
 - **Covered so far**: all `/llm/*` + the 4 provider adapters (E1), `/vault/*`,
   `/runbooks/*` run/nodes/schedules/publish, `/hosts` + `/firewall/change`
-  (E2). **E3 deferred**: retry-from-toast, error-history drawer, the other
-  ~70 endpoints, wording/i18n pass.
+  (E2). **E3 planned** (`ERROR_HANDLING_PLAN.md` §E3): E3a retry-from-toast,
+  E3b error-history drawer, E3c migrate the other ~70 endpoints, E3d
+  wording/i18n scaffold, E3e per-source rate-limit.
+
+### Next-work plans (written 2026-09-01, none started)
+
+Five phased plans queued; order TBD:
+
+- **[`PACKAGING_PLAN.md`](PACKAGING_PLAN.md)** — Phase 7. Config hygiene
+  (npm→bun in `tauri.conf.json`, version drift, default-Tauri icons, CSP) →
+  sidecar build wired into `tauri build` → capability least-privilege audit →
+  NSIS installer → manual install/launch/uninstall gate → web static deploy →
+  Linux best-effort → release CI.
+- **[`CODE_SPLITTING_PLAN.md`](CODE_SPLITTING_PLAN.md)** — entry chunk is
+  989 KB gzip (one eager chunk). CS0 vendor split + treemap → CS1 router
+  `lazy:` per `/tools/*` route → CS2 heavy-lib isolation (`pdf-lib`,
+  `jsrsasign`, …) → CS3 hover-prefetch → CS4 CI budget guard. Target ≤ 350 KB
+  gzip first-load.
+- **`AI_MODULE_PLAN.md` §A3** — A3a tool/function-calling passthrough (no
+  agent loop in the engine), A3b opt-in conversation history (`llm_conversation`
+  /`llm_message`), A3c token/cost aggregation, A3d embeddings (gated on a
+  consumer), A3e reliability polish.
+- **`SETTINGS_MODULE_PLAN.md` §S3** — S3a per-section reset, S3b export/import
+  all settings (no secrets), S3c settings search, S3d keyboard-shortcut
+  editor, S3e cross-device sync (deferred — needs account layer), S3f
+  web-build backend endpoint override.
 
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 
