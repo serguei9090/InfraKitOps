@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/vault"
 )
 
@@ -27,19 +28,21 @@ func (h *VaultHandlers) guard(w http.ResponseWriter) bool {
 func vaultErr(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, vault.ErrLocked):
-		WriteJSON(w, http.StatusForbidden, map[string]string{"error": "vault is locked"})
+		apierr.Write(w, apierr.Locked("the vault is locked"))
 	case errors.Is(err, vault.ErrBadPassword):
-		WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "wrong master password"})
+		e := apierr.Auth("wrong master password")
+		e.Hint = "Enter the vault's master password."
+		apierr.Write(w, e)
 	case errors.Is(err, vault.ErrNotInitialised):
-		WriteJSON(w, http.StatusConflict, map[string]string{"error": "vault not initialised"})
+		apierr.Write(w, apierr.Validation("the vault is not set up yet"))
 	case errors.Is(err, vault.ErrExists):
-		WriteJSON(w, http.StatusConflict, map[string]string{"error": "vault already initialised"})
+		apierr.Write(w, apierr.Conflict("the vault is already set up"))
 	case errors.Is(err, vault.ErrNoSecret):
-		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "no such secret"})
+		apierr.Write(w, apierr.NotFound("no such secret"))
 	case errors.Is(err, vault.ErrNoKeyring):
-		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "this device has no remembered vault key"})
+		apierr.Write(w, apierr.NotFound("this device has no remembered vault key"))
 	default:
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 	}
 }
 
@@ -138,7 +141,7 @@ func (h *VaultHandlers) PutSecret(w http.ResponseWriter, r *http.Request) {
 		Value string `json:"value"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	kind := vault.SecretKind(b.Kind)
@@ -187,7 +190,7 @@ func (h *VaultHandlers) Import(w http.ResponseWriter, r *http.Request) {
 		File           json.RawMessage `json:"file"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<20)).Decode(&b); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if err := h.Vault.ImportBytes(b.File, b.MasterPassword); err != nil {

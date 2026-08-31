@@ -1,6 +1,7 @@
 import { CheckCircle2, Loader2, X, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useRunbookStore } from '@/stores/runbookStore'
+import { InlineError } from '@/adapters/ui/errors/InlineError'
 import { cn } from '@/lib/utils'
 
 /**
@@ -45,7 +46,10 @@ export function RunPanel() {
       </div>
 
       <div className="max-h-[calc(55vh-3rem)] overflow-y-auto p-3">
-        {live.error && live.steps.length === 0 && (
+        {live.steps.length === 0 && live.errorObj && (
+          <InlineError error={live.errorObj} />
+        )}
+        {live.steps.length === 0 && !live.errorObj && live.error && (
           <p className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-sm text-destructive">
             {live.error}
           </p>

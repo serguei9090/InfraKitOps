@@ -6,12 +6,16 @@
 import { create } from 'zustand'
 import * as api from '@/adapters/backend/runbookClient'
 import type { VaultSecretMeta, VaultStatus } from '@/core/runbook/runbookModel'
+import { classify } from '@/core/errors/appError'
+import type { AppError } from '@/core/errors/appError'
+
+const SRC = 'Vault'
 
 interface VaultStore {
   status: VaultStatus | null
   secrets: VaultSecretMeta[]
-  /** null = fine; string = last error to show. */
-  error: string | null
+  /** null = fine; classified error to show inline in the Vault dialog. */
+  error: AppError | null
   loaded: boolean
 
   refresh: () => Promise<void>
@@ -26,8 +30,8 @@ interface VaultStore {
   deleteSecret: (id: string) => Promise<void>
 }
 
-function msg(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
+function err(e: unknown): AppError {
+  return classify(e, SRC)
 }
 
 export const useVaultStore = create<VaultStore>((set, get) => ({
@@ -43,7 +47,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
       if (status.unlocked) await get().refreshSecrets()
       else set({ secrets: [] })
     } catch (e) {
-      set({ status: null, loaded: true, error: msg(e) })
+      set({ status: null, loaded: true, error: err(e) })
     }
   },
 
@@ -53,7 +57,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
       set({ status, error: null })
       return true
     } catch (e) {
-      set({ error: msg(e) })
+      set({ error: err(e) })
       return false
     }
   },
@@ -65,7 +69,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
       await get().refreshSecrets()
       return true
     } catch (e) {
-      set({ error: msg(e) })
+      set({ error: err(e) })
       return false
     }
   },
@@ -77,7 +81,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
       await get().refreshSecrets()
       return true
     } catch (e) {
-      set({ error: msg(e) })
+      set({ error: err(e) })
       return false
     }
   },
@@ -86,7 +90,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     try {
       set({ status: await api.vaultRemember(), error: null })
     } catch (e) {
-      set({ error: msg(e) })
+      set({ error: err(e) })
     }
   },
 
@@ -94,7 +98,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     try {
       set({ status: await api.vaultForget(), error: null })
     } catch (e) {
-      set({ error: msg(e) })
+      set({ error: err(e) })
     }
   },
 
@@ -103,7 +107,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
       const status = await api.vaultLock()
       set({ status, secrets: [], error: null })
     } catch (e) {
-      set({ error: msg(e) })
+      set({ error: err(e) })
     }
   },
 
@@ -111,17 +115,27 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     try {
       set({ secrets: await api.listSecrets(), error: null })
     } catch (e) {
-      set({ error: msg(e) })
+      set({ error: err(e) })
     }
   },
 
   putSecret: async (s) => {
-    await api.putSecret(s)
-    await get().refreshSecrets()
+    try {
+      await api.putSecret(s)
+      set({ error: null })
+      await get().refreshSecrets()
+    } catch (e) {
+      set({ error: err(e) })
+    }
   },
 
   deleteSecret: async (id) => {
-    await api.deleteSecret(id)
-    await get().refreshSecrets()
+    try {
+      await api.deleteSecret(id)
+      set({ error: null })
+      await get().refreshSecrets()
+    } catch (e) {
+      set({ error: err(e) })
+    }
   },
 }))

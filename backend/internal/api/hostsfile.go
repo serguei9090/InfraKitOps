@@ -6,15 +6,28 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/tools/hostsfile"
 )
+
+// elevationErr is the shared "this needs administrator rights" reply — a
+// permission-coded error plus the `needsElevation` flag the UI already reads.
+func elevationErr(w http.ResponseWriter, err error) {
+	e := apierr.Permission(err.Error())
+	e.Hint = "Restart the app as an administrator to make this change."
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(e.Status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"code": e.Code, "error": e.Message, "hint": e.Hint, "needsElevation": true,
+	})
+}
 
 // HostsGet: GET /hosts — parse the system hosts file. resultShape "table".
 func HostsGet(w http.ResponseWriter, _ *http.Request) {
 	f, err := hostsfile.Parse()
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}
 	backups, _ := hostsfile.Backups()
@@ -40,15 +53,15 @@ type hostsApplyRequest struct {
 func HostsApply(w http.ResponseWriter, r *http.Request) {
 	var req hostsApplyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if err := hostsfile.Apply(req.Lines); err != nil {
 		if errors.Is(err, hostsfile.ErrNeedsElevation) {
-			WriteJSON(w, http.StatusForbidden, map[string]any{"error": err.Error(), "needsElevation": true})
+			elevationErr(w, err)
 			return
 		}
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -58,10 +71,10 @@ func HostsApply(w http.ResponseWriter, r *http.Request) {
 func HostsRestore(w http.ResponseWriter, _ *http.Request) {
 	if err := hostsfile.RestoreLatest(); err != nil {
 		if errors.Is(err, hostsfile.ErrNeedsElevation) {
-			WriteJSON(w, http.StatusForbidden, map[string]any{"error": err.Error(), "needsElevation": true})
+			elevationErr(w, err)
 			return
 		}
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})

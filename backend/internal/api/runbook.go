@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/executor"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/packages"
@@ -57,10 +58,10 @@ func (h *RunbookHandlers) guard(w http.ResponseWriter) bool {
 
 func writeStoreErr(w http.ResponseWriter, err error) {
 	if errors.Is(err, orchestrator.ErrNotFound) {
-		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		apierr.Write(w, apierr.NotFound("not found"))
 		return
 	}
-	WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+	apierr.Write(w, apierr.Validation(err.Error()))
 }
 
 // ListRunbooks: GET /runbooks
@@ -85,7 +86,7 @@ func (h *RunbookHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		Spec orchestrator.Spec `json:"spec"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if body.Spec.Name == "" {
@@ -121,7 +122,7 @@ func (h *RunbookHandlers) SaveDraft(w http.ResponseWriter, r *http.Request) {
 		Spec orchestrator.Spec `json:"spec"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if err := h.Store.SaveDraft(chi.URLParam(r, "id"), body.Spec); err != nil {
@@ -274,7 +275,9 @@ func (h *RunbookHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 
 	// Published gate: a non-author (no ?author=1) may only run a published runbook.
 	if !rb.Published && q.Get("author") != "1" && !dryRun {
-		sse.Reject(w, "this runbook is a draft — publish it before running")
+		sse.RejectCoded(w, string(apierr.CodePermission),
+			"this runbook is a draft — publish it before running",
+			"Publish the runbook, or run it as its author from the editor.")
 		return
 	}
 
@@ -340,7 +343,7 @@ func (h *RunbookHandlers) PutNode(w http.ResponseWriter, r *http.Request) {
 	}
 	var n orchestrator.SSHNode
 	if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if id := chi.URLParam(r, "id"); id != "" {
@@ -380,7 +383,7 @@ func (h *RunbookHandlers) TestNode(w http.ResponseWriter, r *http.Request) {
 	if n.AuthSecret != "" && h.Engine != nil && h.Engine.Secrets != nil {
 		v, serr := h.Engine.Secrets.Resolve(n.AuthSecret)
 		if serr != nil {
-			WriteJSON(w, http.StatusForbidden, map[string]string{"error": "cannot read the node's auth secret — is the vault unlocked?"})
+			apierr.Write(w, apierr.Locked("can't read the node's auth secret — the vault is locked"))
 			return
 		}
 		if n.AuthKind == "key" {
@@ -425,7 +428,7 @@ func (h *RunbookHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	var body map[string]string
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	for k, v := range body {
@@ -497,7 +500,7 @@ func (h *RunbookHandlers) LibraryExport(w http.ResponseWriter, r *http.Request) 
 		GitPush   bool   `json:"gitPush"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	report, err := h.Store.ExportLibrary(r.Context(), b.Dir, b.GitCommit, b.GitPush)
@@ -517,7 +520,7 @@ func (h *RunbookHandlers) LibraryImport(w http.ResponseWriter, r *http.Request) 
 		Dir string `json:"dir"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	n, err := h.Store.ImportLibrary(b.Dir)
@@ -550,7 +553,7 @@ func (h *RunbookHandlers) PutSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	var sc orchestrator.RunSchedule
 	if err := json.NewDecoder(r.Body).Decode(&sc); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if id := chi.URLParam(r, "id"); id != "" {
@@ -558,7 +561,7 @@ func (h *RunbookHandlers) PutSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	saved, err := h.Store.PutSchedule(sc)
 	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"schedule": saved})

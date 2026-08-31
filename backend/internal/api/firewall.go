@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/elevate"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/fwspec"
@@ -18,7 +19,7 @@ func FirewallView(w http.ResponseWriter, _ *http.Request) {
 	started := time.Now()
 	result, err := firewall.List()
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}
 	env := envelope.Envelope{
@@ -49,12 +50,12 @@ type fwChangeRequest struct {
 func FirewallChange(w http.ResponseWriter, r *http.Request) {
 	var req fwChangeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	change := fwspec.Change{Op: fwspec.ChangeOp(req.Op), Rule: req.Rule}
 	if _, err := fwspec.NetshArgs(change); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 
@@ -67,12 +68,17 @@ func FirewallChange(w http.ResponseWriter, r *http.Request) {
 	if err := firewall.Apply(change); err != nil {
 		switch {
 		case errors.Is(err, firewall.ErrWriteUnsupported):
-			WriteJSON(w, http.StatusNotImplemented, map[string]string{"error": err.Error()})
+			e := apierr.Validation(err.Error())
+			e.Hint = "Firewall writes are Windows-only in this release."
+			apierr.Write(w, e)
 		case errors.Is(err, elevate.ErrHelperMissing):
-			WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
-				"error": "the elevated helper is not installed next to the backend — firewall edits need it"})
+			e := apierr.Internal("the elevated helper is not installed next to the backend — firewall edits need it")
+			e.Hint = "Reinstall the app so infrakit-helper sits next to the backend binary."
+			apierr.Write(w, e)
 		default:
-			WriteJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			e := apierr.Validation(err.Error())
+			e.Hint = "The firewall rule change was rejected — check the rule fields."
+			apierr.Write(w, e)
 		}
 		return
 	}

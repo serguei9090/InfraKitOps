@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useVaultStore } from '@/stores/vaultStore'
+import { InlineError } from '@/adapters/ui/errors/InlineError'
 
 const KINDS = ['password', 'api-key', 'token', 'ssh-key', 'kubeconfig', 'certificate', 'other']
 
@@ -44,7 +45,7 @@ export function VaultDialog() {
           <DialogTitle>Vault</DialogTitle>
         </DialogHeader>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <InlineError error={error} />}
 
         {!initialised ? (
           <form

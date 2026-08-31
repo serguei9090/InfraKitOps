@@ -46,12 +46,24 @@ func New(w http.ResponseWriter) (*Writer, error) {
 // discovered before the stream proper begins. Falls back to a plain 400 if the
 // stream can't be opened.
 func Reject(w http.ResponseWriter, msg string) {
+	RejectCoded(w, "", msg, "")
+}
+
+// RejectCoded is Reject with a classification code + hint (see internal/apierr).
+func RejectCoded(w http.ResponseWriter, code, msg, hint string) {
 	sw, err := New(w)
 	if err != nil {
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
-	_ = sw.send(Message{Event: "error", Data: map[string]string{"error": msg}})
+	d := map[string]string{"error": msg}
+	if code != "" {
+		d["code"] = code
+	}
+	if hint != "" {
+		d["hint"] = hint
+	}
+	_ = sw.send(Message{Event: "error", Data: d})
 }
 
 // Pump drains msgs, writing each as an SSE event, until the channel closes or

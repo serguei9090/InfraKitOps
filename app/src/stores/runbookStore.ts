@@ -12,6 +12,11 @@ import {
   type RunStep,
   type SshNode,
 } from '@/core/runbook/runbookModel'
+import { classify } from '@/core/errors/appError'
+import type { AppError } from '@/core/errors/appError'
+import { reportError } from '@/stores/errorStore'
+
+const SRC = 'Runbooks'
 
 export type Section = 'library' | 'history' | 'schedules' | 'nodes' | 'packages' | 'assistant'
 
@@ -24,6 +29,8 @@ export interface LiveRun {
   /** free-flowing stdout/stderr lines as they arrive, per step index */
   log: { stepIndex: number; stream: 'stdout' | 'stderr'; text: string }[]
   error?: string
+  /** classified form of `error`, for <InlineError> in the run panel */
+  errorObj?: AppError
   abort: () => void
 }
 
@@ -88,13 +95,21 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
   },
 
   putNode: async (n) => {
-    await api.putNode(n)
-    await get().refreshNodes()
+    try {
+      await api.putNode(n)
+      await get().refreshNodes()
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 
   deleteNode: async (id) => {
-    await api.deleteNode(id)
-    await get().refreshNodes()
+    try {
+      await api.deleteNode(id)
+      await get().refreshNodes()
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 
   refreshSchedules: async () => {
@@ -106,13 +121,21 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
   },
 
   putSchedule: async (s) => {
-    await api.putSchedule(s)
-    await get().refreshSchedules()
+    try {
+      await api.putSchedule(s)
+      await get().refreshSchedules()
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 
   deleteSchedule: async (id) => {
-    await api.deleteSchedule(id)
-    await get().refreshSchedules()
+    try {
+      await api.deleteSchedule(id)
+      await get().refreshSchedules()
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 
   createBlank: async () => {
@@ -123,19 +146,27 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
       await get().refresh()
       return rb
     } catch (e) {
-      set({ error: msg(e) })
+      reportError(e, SRC)
       return null
     }
   },
 
   remove: async (id) => {
-    await api.deleteRunbook(id)
-    await get().refresh()
+    try {
+      await api.deleteRunbook(id)
+      await get().refresh()
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 
   setPublished: async (id, published) => {
-    await api.setPublished(id, published)
-    await get().refresh()
+    try {
+      await api.setPublished(id, published)
+      await get().refresh()
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 
   startRun: (runbookId, opts) => {
@@ -198,11 +229,16 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
             case 'preview':
               // dry-run payload; the RunPanel reads it off `live` if needed
               break
-            case 'error':
+            case 'error': {
+              const ae = classify(
+                { error: d.error, code: d.code, hint: d.hint },
+                SRC,
+              )
               next.status = 'error'
-              next.error =
-                (d.error as string) ?? 'run failed'
+              next.error = ae.detail || ae.title
+              next.errorObj = ae
               break
+            }
           }
           return { live: next }
         })
@@ -216,8 +252,13 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
           return s
         })
       },
-      onError: (err) => {
-        set((s) => (s.live ? { live: { ...s.live, status: 'error', error: err.message } } : s))
+      onError: (rawErr) => {
+        const ae = classify(rawErr, SRC)
+        set((s) =>
+          s.live
+            ? { live: { ...s.live, status: 'error', error: ae.detail || ae.title, errorObj: ae } }
+            : s,
+        )
       },
     })
     live.abort = abort
