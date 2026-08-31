@@ -640,11 +640,24 @@ Prompt Library).
   to a git repo, change a file, import it back; round-trip a single runbook JSON.
 </details>
 
-### R4 — Deferred (each independently schedulable)
-Python-via-`uv` executor · **AI Assistant** (script generation — reuses the
-Prompt Library P5 model-connection layer) · scheduled/cron runs ·
-OS-keyring-sealed vault master key (desktop) · multi-user approvals + immutable
-audit log · file-type run parameters · run output artifacts.
+### R4 — Deferred bundle (each independently schedulable)
+
+**R4a — Python-via-`uv` executor. DONE 2026-08-31.** 6th executor kind
+`python`. `executor/python.go` runs the script through `uv run --no-project
+--quiet [--python <v>] [--with <dep>]… -` (stdin) — ephemeral env, no global
+Python. `PythonTarget{Version, Deps}` on `executor.Step`; `PythonStep
+{Dependencies, PyVersion}` on `orchestrator.StepSpec`; engine renders `{{VAR}}`
+into each dep string. Gated on `uv` on PATH (`uvAvailable()` → `For()` +
+`AvailableKinds()` + the `runbookExecutors` capability). Frontend: `'python'`
+in `ExecutorKind`/`EXECUTOR_KINDS`/`EXECUTOR_LABEL`, `step.python` on
+`StepSpec`, `PythonStepForm` (script + deps + version), token-scan includes
+deps. 3 new backend tests. Verified in-browser: python step run → `uv run` →
+`py-exec-ok 3.13.3`.
+
+**Still deferred:** **AI Assistant** (script generation — reuses the Prompt
+Library P5 model-connection layer) · scheduled/cron runs · OS-keyring-sealed
+vault master key (desktop) · multi-user approvals + immutable audit log ·
+file-type run parameters · run output artifacts.
 
 (Ansible / kubectl / Terraform are **not** here — see §3.3.)
 

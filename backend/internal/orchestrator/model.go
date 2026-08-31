@@ -42,8 +42,16 @@ type StepSpec struct {
 	ContinueOnError bool          `json:"continueOnError"`
 	RunIf           string        `json:"runIf,omitempty"` // "" | "always" | "prev-success" | "prev-failure"
 
-	SSH  *SSHStep  `json:"ssh,omitempty"`  // R2
-	HTTP *HTTPStep `json:"http,omitempty"` // R2
+	SSH    *SSHStep    `json:"ssh,omitempty"`    // R2
+	HTTP   *HTTPStep   `json:"http,omitempty"`   // R2
+	Python *PythonStep `json:"python,omitempty"` // R4
+}
+
+// PythonStep — R4. Extra config for a `python` executor step; the script itself
+// stays in StepSpec.Script.
+type PythonStep struct {
+	Dependencies []string `json:"dependencies,omitempty"`
+	PyVersion    string   `json:"pyVersion,omitempty"`
 }
 
 // SSHStep — R2.

@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { EXECUTOR_KINDS, EXECUTOR_LABEL, type ExecutorKind, type StepSpec } from '@/core/runbook/runbookModel'
 import { SshStepForm } from './SshStepForm'
 import { HttpStepForm } from './HttpStepForm'
+import { PythonStepForm } from './PythonStepForm'
 
 interface Props {
   step: StepSpec
@@ -42,7 +43,7 @@ export function StepCard({ step, index, count, readOnly, runnable, onChange, onM
             {EXECUTOR_KINDS.map((k) => (
               <SelectItem key={k} value={k} disabled={runnable[k] === false}>
                 {EXECUTOR_LABEL[k]}
-                {runnable[k] === false ? ' — R2' : ''}
+                {runnable[k] === false ? ' — unavailable' : ''}
               </SelectItem>
             ))}
           </SelectContent>
@@ -75,6 +76,8 @@ export function StepCard({ step, index, count, readOnly, runnable, onChange, onM
         <SshStepForm step={step} readOnly={readOnly} onChange={onChange} />
       ) : step.executor === 'http' ? (
         <HttpStepForm step={step} onChange={onChange} />
+      ) : step.executor === 'python' ? (
+        <PythonStepForm step={step} readOnly={readOnly} onChange={onChange} />
       ) : (
         <Textarea
           value={step.script}

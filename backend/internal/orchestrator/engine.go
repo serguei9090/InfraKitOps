@@ -442,6 +442,24 @@ func (e *Engine) buildExecutorStep(
 		}
 		return executor.Step{Kind: executor.KindHTTP, HTTP: req}, req.URL, nil
 
+	case executor.KindPython:
+		step := executor.Step{Kind: executor.KindPython, Script: rendered}
+		target := "python"
+		if st.Python != nil {
+			deps := make([]string, 0, len(st.Python.Dependencies))
+			for _, d := range st.Python.Dependencies {
+				rd, _ := Render(d, rv)
+				if rd = strings.TrimSpace(rd); rd != "" {
+					deps = append(deps, rd)
+				}
+			}
+			step.Python = &executor.PythonTarget{Version: strings.TrimSpace(st.Python.PyVersion), Deps: deps}
+			if step.Python.Version != "" {
+				target = "python " + step.Python.Version
+			}
+		}
+		return step, target, nil
+
 	default:
 		return executor.Step{Kind: st.Executor, Script: rendered}, "", nil
 	}

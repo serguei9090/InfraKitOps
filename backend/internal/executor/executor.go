@@ -19,6 +19,7 @@ const (
 	KindBash       Kind = "bash"
 	KindSSH        Kind = "ssh"
 	KindHTTP       Kind = "http"
+	KindPython     Kind = "python"
 )
 
 // Step is the resolved unit an executor runs: the script already has every
@@ -31,6 +32,15 @@ type Step struct {
 	SSH *SSHTarget
 	// HTTP holds the request for http steps (R2 — nil for R0/R1).
 	HTTP *HTTPRequest
+	// Python holds the interpreter/deps for python steps (R4 — nil otherwise).
+	Python *PythonTarget
+}
+
+// PythonTarget — R4. The script runs via `uv run` in an ephemeral environment,
+// so no global Python install is required.
+type PythonTarget struct {
+	Version string   // e.g. "3.12"; "" lets uv pick
+	Deps    []string // PEP 508 requirement strings, each passed as `--with`
 }
 
 // SSHTarget — populated in R2.
@@ -93,6 +103,11 @@ func For(k Kind) Executor {
 		return sshExecutor{}
 	case KindHTTP:
 		return httpExecutor{}
+	case KindPython:
+		if !uvAvailable() {
+			return nil
+		}
+		return pythonExecutor{}
 	default:
 		return nil
 	}
@@ -102,9 +117,10 @@ func For(k Kind) Executor {
 // `runbook.executors` capability so the UI greys out the rest.
 func AvailableKinds() map[Kind]bool {
 	m := map[Kind]bool{
-		KindBash: true,
-		KindSSH:  true, // pure-Go client, always available
-		KindHTTP: true,
+		KindBash:   true,
+		KindSSH:    true, // pure-Go client, always available
+		KindHTTP:   true,
+		KindPython: uvAvailable(), // needs `uv` on PATH
 	}
 	if runtime.GOOS == "windows" {
 		m[KindPowerShell] = true

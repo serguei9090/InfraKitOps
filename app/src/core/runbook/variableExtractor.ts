@@ -16,6 +16,7 @@ export function stepTokenText(step: StepSpec): string {
     for (const h of step.http.headers ?? []) parts.push(h.v)
   }
   if (step.ssh?.inlineHost) parts.push(step.ssh.inlineHost)
+  for (const d of step.python?.dependencies ?? []) parts.push(d)
   return parts.join('\n')
 }
 

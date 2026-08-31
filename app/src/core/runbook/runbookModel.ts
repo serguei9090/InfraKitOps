@@ -4,10 +4,10 @@
  * See RUNBOOK_MODULE_PLAN.md §4.
  */
 
-export type ExecutorKind = 'powershell' | 'cmd' | 'bash' | 'ssh' | 'http'
-// (R4 adds 'python'. No 'ansible' / 'kubectl' — those are plain commands.)
+export type ExecutorKind = 'powershell' | 'cmd' | 'bash' | 'ssh' | 'http' | 'python'
+// (No 'ansible' / 'kubectl' — those are plain commands in a shell/SSH step.)
 
-export const EXECUTOR_KINDS: readonly ExecutorKind[] = ['powershell', 'cmd', 'bash', 'ssh', 'http']
+export const EXECUTOR_KINDS: readonly ExecutorKind[] = ['powershell', 'cmd', 'bash', 'ssh', 'http', 'python']
 
 export const EXECUTOR_LABEL: Record<ExecutorKind, string> = {
   powershell: 'PowerShell',
@@ -15,6 +15,7 @@ export const EXECUTOR_LABEL: Record<ExecutorKind, string> = {
   bash: 'Bash / sh',
   ssh: 'SSH',
   http: 'HTTP / API',
+  python: 'Python (uv)',
 }
 
 export type ArgType = 'string' | 'number' | 'enum' | 'boolean' | 'secret' | 'node' | 'multiline'
@@ -55,6 +56,10 @@ export interface StepSpec {
     body?: string
     auth?: { kind: 'bearer' | 'basic'; secretId: string }
     expectStatus?: number[]
+  }
+  python?: {
+    dependencies?: string[]
+    pyVersion?: string
   }
 }
 
@@ -227,6 +232,7 @@ export function reconcileArgs(spec: RunbookSpec): ArgSpec[] {
       step.http?.body ?? '',
       ...(step.http?.headers ?? []).map((h) => h.v),
       step.ssh?.inlineHost ?? '',
+      ...(step.python?.dependencies ?? []),
     ].join('\n')
     for (const m of text.matchAll(TOKEN_RE)) {
       const name = m[1]
