@@ -4,24 +4,23 @@
  * screen mounted until the next route's `lazy:` resolves, so pre-firing the
  * import on hover removes the visible wait on the click.
  *
- * `@/routes` is imported dynamically (it's already in the entry chunk, so this
- * resolves from cache) to stay clear of the routes ⇢ shell ⇢ sidebar import
- * cycle.
+ * The `routes ⇢ shell ⇢ sidebar ⇢ prefetchRoute ⇢ routes` import cycle is
+ * safe here: `router` is only dereferenced inside `prefetchRoute`, long after
+ * every module in the cycle has finished evaluating (ESM live bindings).
  */
 import { matchRoutes } from 'react-router-dom'
+import { router } from '@/routes'
 
 const warmed = new Set<string>()
 
 export function prefetchRoute(pathname: string): void {
   if (!pathname || pathname === '/' || warmed.has(pathname)) return
   warmed.add(pathname)
-  void import('@/routes').then(({ router }) => {
-    const matches = matchRoutes(router.routes, pathname) ?? []
-    for (const { route } of matches) {
-      const lazy = (route as { lazy?: unknown }).lazy
-      if (typeof lazy === 'function') {
-        void (lazy as () => Promise<unknown>)()
-      }
+  const matches = matchRoutes(router.routes, pathname) ?? []
+  for (const { route } of matches) {
+    const lazy = (route as { lazy?: unknown }).lazy
+    if (typeof lazy === 'function') {
+      void (lazy as () => Promise<unknown>)()
     }
-  })
+  }
 }
