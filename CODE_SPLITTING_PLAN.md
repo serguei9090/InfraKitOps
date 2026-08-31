@@ -1,8 +1,8 @@
 # Code-splitting & bundle budget
 
-Status: **CS0 + CS1 done 2026-09-01** (commit `<cs1>`) — CS2 mostly fell out of
-CS1 for free. CS3/CS4 remain. Flagged repeatedly since `MIGRATION_PLAN.md`
-Phase 3.
+Status: **CS0 + CS1 + CS4 done 2026-09-01** — CS2 mostly fell out of CS1 for
+free; **CS3 (prefetch) is the only piece left**. Flagged repeatedly since
+`MIGRATION_PLAN.md` Phase 3.
 
 **Result (2026-09-01 `bun run build`):**
 ```
@@ -113,11 +113,16 @@ lazy chunk. One commit.
   `routes.tsx` map.
 **DoD**: no measurable delay on rail navigation after a hover. One commit.
 
-### CS4 — CI budget guard
-- Post-build script: read `dist/assets/*.js` sizes, gzip the entry chunk,
-  fail if > budget (start at the CS2 number + 15 % headroom).
-- Wire into `frontend.yml` (or `backend.yml`'s sibling).
-**DoD**: a deliberate fat import fails CI. One commit.
+### CS4 — CI budget guard — **DONE 2026-09-01** (commit `<cs4>`)
+- `app/scripts/check-bundle-size.ts` (`bun run check:bundle`) — sums the
+  gzip size of the entry `<script>` + every `<link rel="modulepreload">` in
+  `dist/index.html` (the true first-paint set; route chunks excluded).
+  `BUDGET_GZIP_KB = 260`; current first-load **176 kB gz** (~48 % headroom).
+- New **`.github/workflows/frontend.yml`** — was missing entirely: runs
+  `lint` + `test` + `build` + `check:bundle` + `set-version` (drift check) on
+  every `app/**` change. First frontend CI in the repo.
+**DoD**: a heavy import that leaks into the shell path pushes first-load over
+260 kB → `check:bundle` exits 1 → CI red.
 
 ## 5. Risks
 

@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "set-version": "bun scripts/set-version.ts",
+    "check:bundle": "bun scripts/check-bundle-size.ts",
     "check:links": "bun scripts/check-resource-links.ts",
     "import:stars": "bun scripts/import-github-stars.ts"
   },

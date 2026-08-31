@@ -434,8 +434,13 @@ bun run tauri dev         # Tauri desktop dev (wraps the same Vite dev server)
 bun run build              # static web build (tsc -b && vite build)
 bun run tauri build        # desktop installer (MSI/NSIS via Tauri bundler)
 bun run test                # Vitest, core logic unit tests
+bun run check:bundle        # CS4 first-load gzip budget guard (after build)
+bun run set-version <x>     # write the version into all 3 files (no arg = drift check)
 bunx shadcn@latest add <x>  # add a shadcn/ui component
 ```
+
+CI: `.github/workflows/frontend.yml` (lint + test + build + `check:bundle` +
+version-drift, on `app/**`), `backend.yml`, `links.yml`.
 
 Backend (run from `backend/`):
 
