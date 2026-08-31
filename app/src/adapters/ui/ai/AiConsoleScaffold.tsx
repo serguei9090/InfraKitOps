@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { MessagesSquare, Plug } from 'lucide-react'
+import { MessagesSquare, Plug, Wand2 } from 'lucide-react'
 import { useBackendStore } from '@/stores/backendStore'
 import { useLlmStore, type Section } from '@/stores/llmStore'
 import { useVaultStore } from '@/stores/vaultStore'
@@ -8,10 +8,12 @@ import { BackendUnavailable } from '@/adapters/ui/network/BackendUnavailable'
 import { VaultDialog } from '@/adapters/ui/runbook/VaultDialog'
 import { ConnectionsView } from './ConnectionsView'
 import { PlaygroundView } from './PlaygroundView'
+import { TasksView } from './TasksView'
 
 const NAV: { id: Section; label: string; icon: typeof Plug }[] = [
   { id: 'playground', label: 'Playground', icon: MessagesSquare },
   { id: 'connections', label: 'Connections', icon: Plug },
+  { id: 'tasks', label: 'Tasks', icon: Wand2 },
 ]
 
 /**
@@ -28,6 +30,7 @@ export function AiConsoleScaffold() {
   const section = useLlmStore((s) => s.section)
   const setSection = useLlmStore((s) => s.setSection)
   const refresh = useLlmStore((s) => s.refresh)
+  const refreshTasks = useLlmStore((s) => s.refreshTasks)
   const connections = useLlmStore((s) => s.connections)
   const refreshVault = useVaultStore((s) => s.refresh)
 
@@ -38,9 +41,10 @@ export function AiConsoleScaffold() {
   useEffect(() => {
     if (status === 'available') {
       void refresh()
+      void refreshTasks()
       void refreshVault()
     }
-  }, [status, refresh, refreshVault])
+  }, [status, refresh, refreshTasks, refreshVault])
 
   if (status === 'unavailable' || status === 'connecting' || status === 'unknown') {
     return (
@@ -81,6 +85,7 @@ export function AiConsoleScaffold() {
       <div className="min-h-0 flex-1 overflow-auto">
         {section === 'playground' && <PlaygroundView />}
         {section === 'connections' && <ConnectionsView />}
+        {section === 'tasks' && <TasksView />}
       </div>
 
       <div className="flex h-8 shrink-0 items-center gap-3 border-t border-border/60 bg-card px-4 text-xs text-muted-foreground">

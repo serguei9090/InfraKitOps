@@ -1,9 +1,10 @@
-import { ChevronDown, ChevronUp, Copy, Check, GripVertical, Trash2, CopyPlus } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy, Check, GripVertical, Sparkles, Trash2, CopyPlus } from 'lucide-react'
 import { useState, type CSSProperties, type HTMLAttributes } from 'react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { ROLES, type Message, type Role } from '@/core/prompt/promptModel'
+import { AiPanel } from '@/adapters/ui/ai/AiPanel'
 import { cn } from '@/lib/utils'
 
 export interface MessageDragProps {
@@ -20,6 +21,7 @@ interface MessageCardProps {
   index: number
   count: number
   readOnly?: boolean
+  promptName?: string
   drag?: MessageDragProps
   onChange: (patch: Partial<Pick<Message, 'role' | 'content'>>) => void
   onMove: (dir: -1 | 1) => void
@@ -32,6 +34,7 @@ export function MessageCard({
   index,
   count,
   readOnly,
+  promptName,
   drag,
   onChange,
   onMove,
@@ -39,6 +42,7 @@ export function MessageCard({
   onDelete,
 }: MessageCardProps) {
   const [copied, setCopied] = useState(false)
+  const [improving, setImproving] = useState(false)
 
   async function copyRaw() {
     await navigator.clipboard.writeText(message.content)
@@ -97,6 +101,16 @@ export function MessageCard({
             <Button
               variant="ghost"
               size="icon-xs"
+              aria-label="Improve with AI"
+              title="Improve this message with AI"
+              className={cn(improving && 'bg-primary/15 text-primary')}
+              onClick={() => setImproving((v) => !v)}
+            >
+              <Sparkles className="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
               aria-label="Move up"
               disabled={index === 0}
               onClick={() => onMove(-1)}
@@ -144,6 +158,17 @@ export function MessageCard({
           readOnly && 'text-muted-foreground',
         )}
       />
+      {improving && !readOnly && (
+        <div className="border-t border-border/60 p-2">
+          <AiPanel
+            taskId="prompt.improve"
+            context={{ text: message.content, promptName: promptName ?? '' }}
+            diffKey="text"
+            onAccept={(text) => onChange({ content: text })}
+            onClose={() => setImproving(false)}
+          />
+        </div>
+      )}
     </div>
   )
 }

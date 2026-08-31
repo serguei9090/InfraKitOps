@@ -6,7 +6,7 @@
  */
 import { backendGet, backendRequest } from './backendClient'
 import { openStream, type StreamHandlers } from './sseClient'
-import type { ChatMessage, LlmConnection, LlmModel } from '@/core/llm/llmModel'
+import type { ChatMessage, LlmConnection, LlmModel, LlmTask } from '@/core/llm/llmModel'
 
 const arr = <T,>(v: T[] | null | undefined): T[] => v ?? []
 
@@ -58,4 +58,37 @@ export function openChatStream(opts: ChatStreamOpts, handlers: StreamHandlers): 
   if (opts.temperature != null) params.temperature = String(opts.temperature)
   if (opts.maxTokens != null) params.maxTokens = String(opts.maxTokens)
   return openStream('/llm/chat/stream', params, handlers)
+}
+
+// --- tasks -------------------------------------------------------
+
+export const listTasks = () =>
+  backendGet<{ tasks: LlmTask[] | null }>('/llm/tasks').then((r) => arr(r.tasks))
+
+export const putTask = (t: Partial<LlmTask>) =>
+  backendRequest<{ task: LlmTask }>(
+    t.id ? 'PUT' : 'POST',
+    t.id ? `/llm/tasks/${t.id}` : '/llm/tasks',
+    t,
+  ).then((r) => r.task)
+
+export const deleteTask = (id: string) => backendRequest<unknown>('DELETE', `/llm/tasks/${id}`)
+
+export interface TaskRunOpts {
+  taskId: string
+  connId: string
+  model?: string
+  context?: Record<string, string>
+  input?: string
+  history?: ChatMessage[]
+}
+
+/** Open a grounded task run. Returns an abort function. */
+export function openTaskStream(opts: TaskRunOpts, handlers: StreamHandlers): () => void {
+  const params: Record<string, string> = { connId: opts.connId }
+  if (opts.model) params.model = opts.model
+  if (opts.input) params.input = opts.input
+  if (opts.context) params.context = JSON.stringify(opts.context)
+  if (opts.history?.length) params.history = JSON.stringify(opts.history)
+  return openStream(`/llm/tasks/${opts.taskId}/run/stream`, params, handlers)
 }

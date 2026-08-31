@@ -118,6 +118,95 @@ func (h *LLMHandlers) Models(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{"models": models})
 }
 
+// --- tasks --------------------------------------------------------
+
+// ListTasks: GET /llm/tasks
+func (h *LLMHandlers) ListTasks(w http.ResponseWriter, _ *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	tasks, err := h.Store.ListTasks()
+	if err != nil {
+		llmErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"tasks": tasks})
+}
+
+// PutTask: POST /llm/tasks  or  PUT /llm/tasks/{id}
+func (h *LLMHandlers) PutTask(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var t llm.Task
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if id := chi.URLParam(r, "id"); id != "" {
+		t.ID = id
+	}
+	saved, err := h.Store.PutTask(t)
+	if err != nil {
+		llmErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"task": saved})
+}
+
+// DeleteTask: DELETE /llm/tasks/{id}
+func (h *LLMHandlers) DeleteTask(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	if err := h.Store.DeleteTask(chi.URLParam(r, "id")); err != nil {
+		llmErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// TaskRunStream: GET /llm/tasks/{id}/run/stream?connId=&model=&context=<json>&input=&history=<json>
+func (h *LLMHandlers) TaskRunStream(w http.ResponseWriter, r *http.Request) {
+	if !h.ok() {
+		sse.Reject(w, "llm layer unavailable")
+		return
+	}
+	q := r.URL.Query()
+	connID := q.Get("connId")
+	if connID == "" {
+		sse.Reject(w, "connId is required")
+		return
+	}
+	vars := map[string]string{}
+	if raw := q.Get("context"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &vars); err != nil {
+			sse.Reject(w, "bad context json")
+			return
+		}
+	}
+	var history []llm.ChatMessage
+	if raw := q.Get("history"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &history); err != nil {
+			sse.Reject(w, "bad history json")
+			return
+		}
+	}
+
+	sw, err := sse.New(w)
+	if err != nil {
+		return
+	}
+	ch := make(chan sse.Message, 128)
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	go func() {
+		h.Engine.RunTask(ctx, chi.URLParam(r, "id"), connID, q.Get("model"), vars, q.Get("input"), history, ch)
+		close(ch)
+	}()
+	sw.Pump(ctx, ch)
+}
+
 // ChatStream: GET /llm/chat/stream?connId=&model=&messages=<url-encoded json>&temperature=
 func (h *LLMHandlers) ChatStream(w http.ResponseWriter, r *http.Request) {
 	if !h.ok() {

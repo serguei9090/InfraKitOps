@@ -2,26 +2,15 @@ package orchestrator
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
-)
 
-// varRe matches {{ NAME }} where NAME is [A-Za-z0-9_.:] (allows secret:FOO and
-// steps.1.stdout).
-var varRe = regexp.MustCompile(`\{\{\s*([A-Za-z0-9_.:]+)\s*\}\}`)
+	"github.com/infrakit/backend/internal/templating"
+)
 
 // ExtractVars returns every {{TOKEN}} in the text, first-appearance order,
 // de-duplicated.
 func ExtractVars(text string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, m := range varRe.FindAllStringSubmatch(text, -1) {
-		if !seen[m[1]] {
-			seen[m[1]] = true
-			out = append(out, m[1])
-		}
-	}
-	return out
+	return templating.ExtractVars(text)
 }
 
 // ExtractSpecArgs returns the user-facing arg tokens across every step script:
@@ -55,26 +44,23 @@ type Values struct {
 // (so the caller can redact them from the output).
 func Render(script string, v Values) (string, map[string]bool) {
 	secrets := map[string]bool{}
-	out := varRe.ReplaceAllStringFunc(script, func(match string) string {
-		name := varRe.FindStringSubmatch(match)[1]
+	out := templating.Substitute(script, func(name string) (string, bool) {
 		switch {
 		case strings.HasPrefix(name, "secret:"):
 			if v.ResolveSecret == nil {
-				return match
+				return "", false
 			}
 			val, err := v.ResolveSecret(strings.TrimPrefix(name, "secret:"))
 			if err != nil {
-				return match
+				return "", false
 			}
 			secrets[strings.TrimPrefix(name, "secret:")] = true
-			return val
+			return val, true
 		case strings.HasPrefix(name, "steps."):
-			return resolveStepRef(name, v.Steps)
+			return resolveStepRef(name, v.Steps), true
 		default:
-			if val, ok := v.Args[name]; ok {
-				return val
-			}
-			return match
+			val, ok := v.Args[name]
+			return val, ok
 		}
 	})
 	return out, secrets

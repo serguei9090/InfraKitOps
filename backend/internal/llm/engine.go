@@ -2,7 +2,9 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -87,9 +89,37 @@ func (e *Engine) Models(ctx context.Context, id string, force bool) ([]Model, er
 	return e.TestConnection(ctx, id)
 }
 
-// Chat streams a completion from the connection to `out`. `out` is closed by
-// the caller. Returns the token usage.
+// Chat streams a raw completion (playground). `out` is closed by the caller.
 func (e *Engine) Chat(ctx context.Context, connID string, req ChatRequest, out chan<- sse.Message) {
+	e.stream(ctx, connID, req, OutputText, out)
+}
+
+// RunTask renders a grounded task and streams the completion. `context` is the
+// caller's grounding map ({{context.*}}), `input` the user's instruction,
+// `history` prior turns (for chat mode). See AI_MODULE_PLAN.md §6.2.
+func (e *Engine) RunTask(
+	ctx context.Context, taskID, connID, model string,
+	vars map[string]string, input string, history []ChatMessage,
+	out chan<- sse.Message,
+) {
+	task, err := e.Store.GetTask(taskID)
+	if err != nil {
+		out <- sse.Message{Event: "error", Data: map[string]string{"error": "task not found: " + taskID}}
+		return
+	}
+	system := RenderTask(*task, vars, input)
+	msgs := make([]ChatMessage, 0, len(history)+2)
+	msgs = append(msgs, ChatMessage{Role: "system", Content: system})
+	msgs = append(msgs, history...)
+	msgs = append(msgs, ChatMessage{Role: "user", Content: input})
+	req := ChatRequest{Model: model, Messages: msgs, Temperature: task.Temperature}
+	e.stream(ctx, connID, req, task.OutputShape, out)
+}
+
+// stream is the shared completion path: resolve the connection + key, run the
+// provider, forward deltas, and — for a JSON-shaped task — emit a final
+// `parsed` event with the extracted JSON.
+func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, shape TaskOutputShape, out chan<- sse.Message) {
 	conn, err := e.Store.GetConnection(connID)
 	if err != nil {
 		out <- sse.Message{Event: "error", Data: map[string]string{"error": "connection not found"}}
@@ -124,8 +154,10 @@ func (e *Engine) Chat(ctx context.Context, connID string, req ChatRequest, out c
 	}()
 
 	out <- sse.Message{Event: "start", Data: map[string]any{"model": req.Model, "provider": string(conn.Provider)}}
+	var full strings.Builder
 	for d := range deltas {
 		if d.Text != "" {
+			full.WriteString(d.Text)
 			out <- sse.Message{Event: "delta", Data: map[string]string{"text": d.Text}}
 		}
 	}
@@ -134,9 +166,56 @@ func (e *Engine) Chat(ctx context.Context, connID string, req ChatRequest, out c
 		out <- sse.Message{Event: "error", Data: map[string]string{"error": chatErr.Error()}}
 		return
 	}
+	if shape == OutputJSON {
+		if j := extractJSON(full.String()); j != "" {
+			out <- sse.Message{Event: "parsed", Data: map[string]string{"json": j}}
+		}
+	}
 	out <- sse.Message{Event: "end", Data: map[string]any{
 		"usage": map[string]int{"promptTokens": usage.PromptTokens, "completionTokens": usage.CompletionTokens},
 	}}
+}
+
+// extractJSON pulls the first JSON object/array out of a model reply: a fenced
+// ```json block if present, else the first balanced {...} / [...].
+func extractJSON(s string) string {
+	if i := strings.Index(s, "```"); i >= 0 {
+		rest := s[i+3:]
+		rest = strings.TrimPrefix(rest, "json")
+		rest = strings.TrimPrefix(rest, "JSON")
+		if end := strings.Index(rest, "```"); end >= 0 {
+			cand := strings.TrimSpace(rest[:end])
+			if json.Valid([]byte(cand)) {
+				return cand
+			}
+		}
+	}
+	start := strings.IndexAny(s, "{[")
+	if start < 0 {
+		return ""
+	}
+	openCh := s[start]
+	closeCh := byte('}')
+	if openCh == '[' {
+		closeCh = ']'
+	}
+	depth := 0
+	for i := start; i < len(s); i++ {
+		switch s[i] {
+		case openCh:
+			depth++
+		case closeCh:
+			depth--
+			if depth == 0 {
+				cand := s[start : i+1]
+				if json.Valid([]byte(cand)) {
+					return cand
+				}
+				return ""
+			}
+		}
+	}
+	return ""
 }
 
 // --- model cache ---------------------------------------------------

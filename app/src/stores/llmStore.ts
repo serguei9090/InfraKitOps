@@ -5,9 +5,9 @@
  */
 import { create } from 'zustand'
 import * as api from '@/adapters/backend/llmClient'
-import type { ChatMessage, LlmConnection, LlmModel, TokenUsage } from '@/core/llm/llmModel'
+import type { ChatMessage, LlmConnection, LlmModel, LlmTask, TokenUsage } from '@/core/llm/llmModel'
 
-export type Section = 'playground' | 'connections'
+export type Section = 'playground' | 'connections' | 'tasks'
 
 export interface ChatTurn extends ChatMessage {
   /** streaming = still receiving; done/error = final */
@@ -28,6 +28,7 @@ interface LlmStore {
   section: Section
   connections: LlmConnection[]
   models: Record<string, LlmModel[]> // connId -> models
+  tasks: LlmTask[]
   loaded: boolean
   error: string | null
   chat: LiveChat | null
@@ -37,6 +38,9 @@ interface LlmStore {
   putConnection: (c: Partial<LlmConnection>) => Promise<LlmConnection | null>
   removeConnection: (id: string) => Promise<void>
   loadModels: (connId: string, force?: boolean) => Promise<LlmModel[]>
+  refreshTasks: () => Promise<void>
+  putTask: (t: Partial<LlmTask>) => Promise<void>
+  resetTask: (id: string) => Promise<void>
 
   startChat: (connId: string, model: string) => void
   sendMessage: (text: string) => void
@@ -51,6 +55,7 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
   section: 'playground',
   connections: [],
   models: {},
+  tasks: [],
   loaded: false,
   error: null,
   chat: null,
@@ -63,6 +68,24 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
     } catch (e) {
       set({ loaded: true, error: msg(e) })
     }
+  },
+
+  refreshTasks: async () => {
+    try {
+      set({ tasks: await api.listTasks() })
+    } catch (e) {
+      set({ error: msg(e) })
+    }
+  },
+
+  putTask: async (t) => {
+    await api.putTask(t)
+    await get().refreshTasks()
+  },
+
+  resetTask: async (id) => {
+    await api.deleteTask(id)
+    await get().refreshTasks()
   },
 
   putConnection: async (c) => {

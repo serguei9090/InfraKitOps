@@ -38,6 +38,7 @@ function SortableMessageCard(props: {
   message: Message
   index: number
   count: number
+  promptName?: string
   onChange: (patch: Partial<Pick<Message, 'role' | 'content'>>) => void
   onMove: (dir: -1 | 1) => void
   onDuplicate: () => void
@@ -278,6 +279,7 @@ export function PromptEditor({ prompt }: PromptEditorProps) {
                       message={m}
                       index={i}
                       count={messages.length}
+                      promptName={name}
                       onChange={(patch) => patchMessage(m.id, patch)}
                       onMove={(dir) => moveMessage(i, dir)}
                       onDuplicate={() => duplicateMessage(i)}

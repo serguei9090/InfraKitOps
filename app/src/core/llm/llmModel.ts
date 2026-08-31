@@ -59,3 +59,33 @@ export interface TokenUsage {
 export function emptyConnection(provider: ProviderKind = 'ollama'): Partial<LlmConnection> {
   return { name: '', provider, baseUrl: '', defaultModel: '' }
 }
+
+// --- grounding tasks ------------------------------------------------------
+
+export type TaskOutputShape = 'text' | 'diff' | 'json'
+
+export interface LlmTask {
+  id: string
+  title: string
+  description?: string
+  builtin: boolean
+  /** a built-in that a custom row currently overrides */
+  overridden?: boolean
+  systemTemplate: string
+  inputLabel?: string
+  outputShape: TaskOutputShape
+  suggestedModel?: string
+  temperature?: number
+}
+
+export function emptyTask(): LlmTask {
+  return { id: '', title: '', builtin: false, systemTemplate: '', outputShape: 'text' }
+}
+
+/** The tokens a task template references, minus `{{input}}`. */
+export function taskContextKeys(t: LlmTask): string[] {
+  const seen = new Set<string>()
+  for (const m of t.systemTemplate.matchAll(/\{\{\s*context\.([A-Za-z0-9_.]+)\s*\}\}/g)) seen.add(m[1])
+  return [...seen]
+}
+

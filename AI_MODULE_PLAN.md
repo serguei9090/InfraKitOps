@@ -355,16 +355,32 @@ Library's `diffWordsWithSpace` view).
   shown) end-to-end through the Go backend; fresh-tab load has zero console
   errors.
 
-### A1 — Grounding + first consumer
-- `internal/llm/tasks`: `Builtins()` (the §4 seed set), custom-task CRUD,
-  `Render`, `RunTask`. Endpoints `/llm/tasks*`, `/llm/tasks/{id}/run/stream`.
-- Frontend: **Tasks** section, `AiPanel` + `useLlm` (one-shot + diff-accept).
-- Wire **Prompt Library "Improve"**: a header button on `MessageCard` /
-  `PromptEditor` → `<AiPanel taskId="prompt.improve" context={{ text }} mode="oneshot" />`,
-  Accept replaces the message content and lands in the autosaved draft.
-  (Delivers the deferred Prompt Library P5 improve feature.)
-- **DoD**: select a message, Improve, accept the diff, save a version; edit the
-  built-in `prompt.improve` into a custom copy, see the new behaviour, Reset.
+### A1 — Grounding + first consumer — **DONE 2026-08-31**
+- `internal/templating/` — extracted shared `{{TOKEN}}` engine (`Re`,
+  `ExtractVars`, `Substitute`); `orchestrator/render.go` now delegates to it.
+- `internal/llm/task.go` — `Task` + `TaskOutputShape` + `Builtins()` (the 5
+  §4 seed tasks) + `RenderTask` (`{{context.*}}` always resolves — missing key
+  → blank, not a leaked token). `store.go` — `ListTasks` (builtins ∪ custom,
+  same-id custom overrides + `Overridden` flag) / `GetTask` / `PutTask` /
+  `DeleteTask` (revert-to-builtin). `engine.go` — `RunTask` + a shared
+  `stream()` (Chat and RunTask both use it); JSON-shape tasks emit a `parsed`
+  event via `extractJSON` (fenced block or first balanced `{}`/`[]`).
+- Endpoints `/llm/tasks` CRUD + `/{id}` + `/llm/tasks/{id}/run/stream`.
+- Frontend: `core/llm` gains `LlmTask`/`taskContextKeys`; `llmClient` +
+  `llmStore` task CRUD; **Tasks** nav section (`TasksView` — list, Customise a
+  builtin → editable clone, Reset). `useLlm(taskId)` hook + `AiPanel`
+  (connection/model picker remembered per task, streamed run, word-diff +
+  Accept/Reject for `diff` shape).
+- **Prompt Library "Improve"** — a Sparkles button on `MessageCard` toggles an
+  inline `<AiPanel taskId="prompt.improve" context={{ text, promptName }}
+  onAccept={…} />`; Accept replaces the message content (lands in the autosave
+  draft). Delivers the deferred Prompt Library P5 improve feature.
+- 3 new backend tests (templating, RenderTask/extractJSON, task CRUD+override).
+  No new deps.
+- **Verified in-browser** vs live Ollama: Tasks list shows all 5 builtins;
+  `prompt.improve` run from a Prompt Library message streamed a rewrite, the
+  word-diff rendered, Accept replaced the content; fresh-tab load zero console
+  errors.
 
 ### A2 — Native providers + chat mode + Runbooks Assistant
 - `anthropic` + `gemini` adapters.

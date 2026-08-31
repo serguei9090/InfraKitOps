@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -111,6 +112,115 @@ func (s *Store) PutConnection(c Connection) (Connection, error) {
 // DeleteConnection removes a connection.
 func (s *Store) DeleteConnection(id string) error {
 	res, err := s.db.Exec(`DELETE FROM llm_connection WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// --- tasks ---------------------------------------------------------
+
+// customTasks loads the editable rows keyed by id.
+func (s *Store) customTasks() (map[string]Task, error) {
+	rows, err := s.db.Query(`SELECT task_json FROM llm_task`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]Task{}
+	for rows.Next() {
+		var j string
+		if err := rows.Scan(&j); err != nil {
+			return nil, err
+		}
+		var t Task
+		if json.Unmarshal([]byte(j), &t) == nil && t.ID != "" {
+			out[t.ID] = t
+		}
+	}
+	return out, rows.Err()
+}
+
+// ListTasks returns built-ins ∪ custom. A custom row of the same id replaces
+// the built-in (flagged Overridden); a custom-only row is Builtin=false.
+func (s *Store) ListTasks() ([]Task, error) {
+	custom, err := s.customTasks()
+	if err != nil {
+		return nil, err
+	}
+	var out []Task
+	seen := map[string]bool{}
+	for _, b := range Builtins() {
+		seen[b.ID] = true
+		if c, ok := custom[b.ID]; ok {
+			c.Builtin = true
+			c.Overridden = true
+			out = append(out, c)
+		} else {
+			b.Builtin = true
+			out = append(out, b)
+		}
+	}
+	for id, c := range custom {
+		if !seen[id] {
+			c.Builtin = false
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+// GetTask resolves a task: a custom row if present, else the built-in.
+func (s *Store) GetTask(id string) (*Task, error) {
+	custom, err := s.customTasks()
+	if err != nil {
+		return nil, err
+	}
+	if c, ok := custom[id]; ok {
+		builtin := false
+		for _, b := range Builtins() {
+			if b.ID == id {
+				builtin = true
+			}
+		}
+		c.Builtin = builtin
+		c.Overridden = builtin
+		return &c, nil
+	}
+	for _, b := range Builtins() {
+		if b.ID == id {
+			b.Builtin = true
+			return &b, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+// PutTask upserts a custom task row (creating an override of a built-in, or a
+// brand-new task).
+func (s *Store) PutTask(t Task) (Task, error) {
+	if strings.TrimSpace(t.ID) == "" || strings.TrimSpace(t.Title) == "" || strings.TrimSpace(t.SystemTemplate) == "" {
+		return t, errors.New("task id, title and systemTemplate are required")
+	}
+	if t.OutputShape == "" {
+		t.OutputShape = OutputText
+	}
+	t.Builtin = false
+	t.Overridden = false
+	raw, _ := json.Marshal(t)
+	_, err := s.db.Exec(`INSERT INTO llm_task (id, task_json, updated_at) VALUES (?,?,?)
+		ON CONFLICT(id) DO UPDATE SET task_json = excluded.task_json, updated_at = excluded.updated_at`,
+		t.ID, string(raw), time.Now().UnixMilli())
+	return t, err
+}
+
+// DeleteTask drops a custom task row. If a built-in of the same id exists the
+// task reverts to it; otherwise it is gone.
+func (s *Store) DeleteTask(id string) error {
+	res, err := s.db.Exec(`DELETE FROM llm_task WHERE id = ?`, id)
 	if err != nil {
 		return err
 	}
