@@ -605,7 +605,30 @@ connection reports a clean error; step forms render from a saved spec.
   step's status/continue-on-error behaves. Node test-connection works; a
   changed host key blocks.
 
-### R3 — Packages + Git + polish
+### R3 — Packages + Git/file sync + polish — **DONE 2026-08-31**
+
+Shipped. Backend: `internal/packages` (`Detect` — `exec.LookPath` + `--version`
+for a curated set + arbitrary names; `detectManager` per-OS; `installCommand`
+per manager with a per-tool package-name map; `RunInstall` streams the command
+output; 2 tests) · `orchestrator/sync.go` (`ExportLibrary` writes
+`<slug>.runbook.json` per runbook + optional `git -C add/commit/push`;
+`ImportLibrary` reads them back, regenerates step ids, de-collides names with
+" (imported)"; 1 test). Endpoints: `GET /packages`,
+`GET /packages/install/stream` (SSE), `POST /library/{export,import}`. Frontend:
+`PackagesView` (detect table, per-missing-tool install command + streamed
+install), `LibrarySyncDialog` (folder + git-commit/push toggles, remembered dir),
+single-runbook JSON export (editor ↓ button) + import (Library "Import runbook"
+file picker), editor **⌘/Ctrl-S** save + **⌘/Ctrl-↵** run. 1294 FE tests + all
+BE tests green. Verified in-browser: git/uv/node/docker detected, helm/ansible/jq
+missing with winget commands; exported 3 runbooks to a folder → imported them
+back as de-collided drafts (3 → 6 runbooks).
+
+**Deferred:** dnd step reorder (the up/down buttons cover it — synthetic drag
+testing is unreliable), responsive `Tabs` `< lg` (desktop-first, same as the
+Prompt Library).
+
+<details><summary>original R3 checkpoint</summary>
+
 - `PackagesView` — detect table + assisted install (winget/choco/scoop/brew/apt…)
   with elevation prompt; `uv` bootstrap
 - **Git / file sync** — `/library/export` writes `<slug>.runbook.yaml` per
@@ -615,6 +638,7 @@ connection reports a clean error; step forms render from a saved spec.
 - editor polish: dnd step reorder, keyboard (⌘S / ⌘↵), responsive
 - **DoD**: install a missing tool via the detected manager; export the library
   to a git repo, change a file, import it back; round-trip a single runbook JSON.
+</details>
 
 ### R4 — Deferred (each independently schedulable)
 Python-via-`uv` executor · **AI Assistant** (script generation — reuses the

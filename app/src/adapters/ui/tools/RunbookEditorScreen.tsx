@@ -1,8 +1,9 @@
-import { ArrowLeft, Eye, Play, Plus, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Download, Eye, Play, Plus, Save, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { downloadBlob } from '@/lib/downloadFile'
 import { useBackendStore } from '@/stores/backendStore'
 import { useRunbookStore } from '@/stores/runbookStore'
 import * as api from '@/adapters/backend/runbookClient'
@@ -52,6 +53,32 @@ export function RunbookEditorScreen() {
   }, [id])
 
   const dirty = rb ? isDirty(rb) || specDiffersFromLatest(spec, rb) : false
+
+  // ⌘/Ctrl-S saves a version, ⌘/Ctrl-↵ opens the run dialog.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (e.key === 's') {
+        e.preventDefault()
+        if (dirty && !saving) void save()
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        setRunOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, saving, spec])
+
+  function exportJson() {
+    const payload = { format: 'infrakit-runbook', v: 1, slug: rb?.slug, spec }
+    downloadBlob(
+      JSON.stringify(payload, null, 2),
+      `${(rb?.slug || 'runbook').replace(/[^\w-]+/g, '_')}.runbook.json`,
+      'application/json',
+    )
+  }
 
   /** Set the spec, reconcile args, and debounce-save the draft. */
   const setSpec = useCallback(
@@ -175,6 +202,9 @@ export function RunbookEditorScreen() {
         </Button>
         <Button variant="ghost" size="sm" onClick={() => setRunOpen(true)}>
           <Play className="size-4" /> Run
+        </Button>
+        <Button variant="ghost" size="sm" onClick={exportJson} aria-label="Export runbook JSON">
+          <Download className="size-4" />
         </Button>
         <Button
           variant={rb.published ? 'outline' : 'ghost'}

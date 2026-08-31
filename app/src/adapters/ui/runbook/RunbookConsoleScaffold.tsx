@@ -13,6 +13,7 @@ import { SshNodesView } from './SshNodesView'
 import { PackagesView } from './PackagesView'
 import { AssistantPlaceholder } from './AssistantPlaceholder'
 import { VaultDialog } from './VaultDialog'
+import { LibrarySyncDialog } from './LibrarySyncDialog'
 import { RunPanel } from './RunPanel'
 
 const NAV: { id: Section; label: string; icon: typeof History }[] = [
@@ -104,6 +105,7 @@ export function RunbookConsoleScaffold() {
         </nav>
         <div className="flex-1" />
         <VaultDialog />
+        <LibrarySyncDialog />
         <Button size="sm" onClick={() => void newRunbook()}>
           <Plus className="size-4" /> New runbook
         </Button>

@@ -1,10 +1,11 @@
-import { Pencil, Play, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Pencil, Play, Trash2, Upload } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { currentSpec, EXECUTOR_LABEL, type Runbook } from '@/core/runbook/runbookModel'
+import { createRunbook } from '@/adapters/backend/runbookClient'
+import { currentSpec, EXECUTOR_LABEL, type Runbook, type RunbookSpec } from '@/core/runbook/runbookModel'
 import { useRunbookStore } from '@/stores/runbookStore'
 import { RunSetupDialog } from './RunSetupDialog'
 
@@ -13,9 +14,25 @@ export function LibraryView() {
   const error = useRunbookStore((s) => s.error)
   const remove = useRunbookStore((s) => s.remove)
   const setPublished = useRunbookStore((s) => s.setPublished)
+  const refresh = useRunbookStore((s) => s.refresh)
   const [query, setQuery] = useState('')
   const [runTarget, setRunTarget] = useState<Runbook | null>(null)
   const navigate = useNavigate()
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    try {
+      const parsed = JSON.parse(await f.text()) as { spec?: RunbookSpec }
+      if (!parsed.spec?.name || !Array.isArray(parsed.spec.steps)) throw new Error('not a runbook export')
+      await createRunbook(parsed.spec)
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'import failed')
+    }
+  }
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -40,6 +57,11 @@ export function LibraryView() {
           className="h-9 max-w-sm"
         />
         <span className="text-xs text-muted-foreground">{shown.length} runbook{shown.length === 1 ? '' : 's'}</span>
+        <div className="flex-1" />
+        <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
+          <Upload className="size-3.5" /> Import runbook
+        </Button>
+        <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} />
       </div>
 
       {error && <p className="mb-3 text-sm text-destructive">{error}</p>}

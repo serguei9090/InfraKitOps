@@ -6,12 +6,14 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/infrakit/backend/internal/executor"
 	"github.com/infrakit/backend/internal/orchestrator"
+	"github.com/infrakit/backend/internal/packages"
 	"github.com/infrakit/backend/internal/sse"
 )
 
@@ -408,6 +410,98 @@ func (h *RunbookHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		_ = h.Store.PutSetting(k, v)
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"settings": h.Store.GetSettings()})
+}
+
+// --- packages -------------------------------------------------------
+
+// Packages: GET /packages?extra=a,b
+func (h *RunbookHandlers) Packages(w http.ResponseWriter, r *http.Request) {
+	var extra []string
+	if e := r.URL.Query().Get("extra"); e != "" {
+		for _, s := range strings.Split(e, ",") {
+			extra = append(extra, strings.TrimSpace(s))
+		}
+	}
+	tools := packages.Detect(r.Context(), extra)
+	WriteJSON(w, http.StatusOK, map[string]any{"tools": tools})
+}
+
+// PackagesInstall: GET /packages/install/stream?tool=&manager=
+func (h *RunbookHandlers) PackagesInstall(w http.ResponseWriter, r *http.Request) {
+	tool := r.URL.Query().Get("tool")
+	mgr := r.URL.Query().Get("manager")
+	if tool == "" || mgr == "" {
+		sse.Reject(w, "tool and manager are required")
+		return
+	}
+	sw, err := sse.New(w)
+	if err != nil {
+		return
+	}
+	ch := make(chan sse.Message, 64)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancel()
+	go func() {
+		defer close(ch)
+		lw := &lineToSSE{ch: ch}
+		if err := packages.RunInstall(ctx, mgr, tool, lw); err != nil {
+			ch <- sse.Message{Event: "error", Data: map[string]string{"error": err.Error()}}
+			return
+		}
+		ch <- sse.Message{Event: "done", Data: map[string]string{"status": "ok"}}
+	}()
+	sw.Pump(ctx, ch)
+}
+
+type lineToSSE struct{ ch chan sse.Message }
+
+func (l *lineToSSE) Write(p []byte) (int, error) {
+	l.ch <- sse.Message{Event: "line", Data: map[string]string{"text": string(p)}}
+	return len(p), nil
+}
+
+// --- library git / file sync ---------------------------------------
+
+// LibraryExport: POST /library/export  { dir, gitCommit, gitPush }
+func (h *RunbookHandlers) LibraryExport(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var b struct {
+		Dir       string `json:"dir"`
+		GitCommit bool   `json:"gitCommit"`
+		GitPush   bool   `json:"gitPush"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	report, err := h.Store.ExportLibrary(r.Context(), b.Dir, b.GitCommit, b.GitPush)
+	if err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error(), "report": report})
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"report": report})
+}
+
+// LibraryImport: POST /library/import  { dir }
+func (h *RunbookHandlers) LibraryImport(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var b struct {
+		Dir string `json:"dir"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	n, err := h.Store.ImportLibrary(b.Dir)
+	if err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error(), "imported": n})
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]int{"imported": n})
 }
 
 // RunbookExecutors reports which executor kinds this host can run.

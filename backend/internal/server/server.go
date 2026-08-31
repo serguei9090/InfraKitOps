@@ -122,6 +122,10 @@ func NewRouter(opts Options) http.Handler {
 		})
 		r.Get("/runbook-settings", rbh.GetSettings)
 		r.Put("/runbook-settings", rbh.PutSettings)
+		r.Get("/packages", rbh.Packages)
+		r.Get("/packages/install/stream", rbh.PackagesInstall)
+		r.Post("/library/export", rbh.LibraryExport)
+		r.Post("/library/import", rbh.LibraryImport)
 
 		r.Route("/vault", func(r chi.Router) {
 			r.Get("/status", vh.Status)

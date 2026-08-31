@@ -127,6 +127,32 @@ export const getRunbookSettings = () =>
 export const putRunbookSettings = (patch: Record<string, string>) =>
   backendRequest<{ settings: Record<string, string> }>('PUT', '/runbook-settings', patch).then((r) => r.settings)
 
+// --- packages -----------------------------------------------------
+
+export interface PackageTool {
+  name: string
+  present: boolean
+  path?: string
+  version?: string
+  manager?: string
+  installCmd?: string
+  needsSudo?: boolean
+}
+export const listPackages = (extra?: string[]) =>
+  backendGet<{ tools: PackageTool[] | null }>(`/packages${extra?.length ? `?extra=${extra.join(',')}` : ''}`).then(
+    (r) => arr(r.tools),
+  )
+export function installPackage(tool: string, manager: string, handlers: StreamHandlers): () => void {
+  return openStream('/packages/install/stream', { tool, manager }, handlers)
+}
+
+// --- library git / file sync ------------------------------------
+
+export const libraryExport = (opts: { dir: string; gitCommit?: boolean; gitPush?: boolean }) =>
+  backendRequest<{ report: string }>('POST', '/library/export', opts)
+export const libraryImport = (dir: string) =>
+  backendRequest<{ imported: number }>('POST', '/library/import', { dir })
+
 // --- vault --------------------------------------------------------
 
 export const vaultStatus = () => backendGet<VaultStatus>('/vault/status')
