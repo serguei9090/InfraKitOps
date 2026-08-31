@@ -45,6 +45,7 @@ export function RunbookConsoleScaffold() {
   const section = useRunbookStore((s) => s.section)
   const setSection = useRunbookStore((s) => s.setSection)
   const refresh = useRunbookStore((s) => s.refresh)
+  const refreshNodes = useRunbookStore((s) => s.refreshNodes)
   const createBlank = useRunbookStore((s) => s.createBlank)
   const live = useRunbookStore((s) => s.live)
   const navigate = useNavigate()
@@ -64,9 +65,10 @@ export function RunbookConsoleScaffold() {
   useEffect(() => {
     if (status === 'available') {
       void refresh()
+      void refreshNodes()
       void refreshVault()
     }
-  }, [status, refresh, refreshVault])
+  }, [status, refresh, refreshNodes, refreshVault])
 
   if (status === 'unavailable' || status === 'connecting' || status === 'unknown') {
     return (

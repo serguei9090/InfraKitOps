@@ -221,6 +221,7 @@ export function RunbookEditorScreen() {
                 step={step}
                 index={i}
                 count={viewedSpec.steps.length}
+                readOnly={readOnly}
                 runnable={runnableMap}
                 onChange={(p) => !readOnly && patchStep(i, p)}
                 onMove={(d) => !readOnly && moveStep(i, d)}

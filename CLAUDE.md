@@ -240,12 +240,13 @@ second big consumer of the Go backend. Plan + phases:
   single-tool shell module.
 - **No dedicated Ansible / kubectl executor** — run them as plain commands in a
   shell/SSH step (§3.3). Ansible + kubectl get their own modules later.
-- **R0 + R1 done.** R1 = full-page editor (`/tools/runbook/edit/:id`) — steps
-  list, `ArgConfigPanel` ({{TOKEN}} auto-detect + per-arg regex/preset/type),
-  versioning (`runbookDiff` covers fields/args/steps), publish gate, run from
-  editor. R2 = SSH + HTTP executors + `SshNodesView`; R3 = Packages + git sync;
-  **R4 deferred**: Python-uv executor, AI Assistant (reuses Prompt Library P5
-  model connections), scheduled runs.
+- **R0 + R1 + R2 done.** R1 = full-page editor (`/tools/runbook/edit/:id`), args
+  auto-detect + per-arg validation, versioning (`runbookDiff`), publish gate.
+  R2 = **SSH** executor (`x/crypto/ssh`, host-key pinning) + **HTTP** executor
+  (status + dot-path asserts, response chains via `{{steps.N.stdout}}`) +
+  `SshNodesView` (registry + Test connection) + `SecretPicker`. R3 = Packages +
+  git sync; **R4 deferred**: Python-uv executor, AI Assistant (reuses Prompt
+  Library P5 model connections), scheduled runs.
 
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 

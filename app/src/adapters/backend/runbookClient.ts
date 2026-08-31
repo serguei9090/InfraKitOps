@@ -110,6 +110,16 @@ export const putNode = (n: Partial<SshNode>) =>
   backendRequest<{ node: SshNode }>('POST', '/ssh-nodes', n).then((r) => r.node)
 export const deleteNode = (id: string) => backendRequest<unknown>('DELETE', `/ssh-nodes/${id}`)
 
+export interface NodeTestResult {
+  ok: boolean
+  hostKeyFp: string
+  hostKeyLearned: boolean
+  hostKeyMismatch: boolean
+  error?: string
+}
+export const testNode = (id: string) =>
+  backendRequest<NodeTestResult>('POST', `/ssh-nodes/${id}/test`)
+
 // --- settings ------------------------------------------------------
 
 export const getRunbookSettings = () =>

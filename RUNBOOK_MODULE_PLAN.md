@@ -571,10 +571,30 @@ with per-step detail.
   in History with secrets/args redacted → edit → v2 → compare. Verified
   in-browser against the dev backend.
 
-### R2 — SSH + HTTP executors
+### R2 — SSH + HTTP executors — **DONE 2026-08-31**
+
+Shipped. Backend: `executor/ssh.go` (pure-Go `x/crypto/ssh`, password + private
+key auth, **host-key pinning** — trust-on-first-use, learned FP persisted to the
+node, mismatch aborts; `bash -c` remote exec, optional `sudo -n`, ctx timeout)
++ `executor/httpx.go` (method/url/headers/body, `ExpectStatus`, `Assert` via a
+small dot-path evaluator, response captured as stdout so `{{steps.N.stdout}}`
+chains; 3 tests). `engine.buildExecutorStep` resolves the SSH node + Vault auth
+secrets (by id) and renders `{{VAR}}` into the HTTP fields; secret-typed **args**
+resolve server-side by name and redact. `POST /ssh-nodes/{id}/test`. `For` /
+`AvailableKinds` flip ssh + http on. Frontend: `SshStepForm` (node picker /
+inline host + `SecretPicker`), `HttpStepForm` (method/url/headers/auth/status),
+`SecretPicker` (id or name mode), `SshNodesView` (table + add/edit + **Test
+connection** with host-key status), `RunSetupDialog` secret/enum arg inputs.
+1294 FE tests + all BE tests green. Verified: a 2-step bash→HTTP runbook runs
+`GET https://example.com`, checks `expectStatus:[200]`, chains; node test-
+connection reports a clean error; step forms render from a saved spec.
+
+<details><summary>original R2 checkpoint</summary>
+
 - `SshStepForm`, `HttpStepForm` (the steps list itself already ships in R1)
 - `{{steps.N.stdout}}` chaining is **already wired** in the engine (R0); R2
   just exposes it in the UI
+</details>
 - **SSH** executor (`x/crypto/ssh`, host-key pinning, jump host) + `SshNodesView`
   (registry, auth via Vault picker, **Test connection**)
 - **HTTP** executor (method/url/headers/body/auth→secret, status + JSONPath

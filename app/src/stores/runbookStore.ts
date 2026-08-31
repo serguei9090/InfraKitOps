@@ -5,7 +5,7 @@
  */
 import { create } from 'zustand'
 import * as api from '@/adapters/backend/runbookClient'
-import { emptySpec, type Runbook, type RunStep } from '@/core/runbook/runbookModel'
+import { emptySpec, type Runbook, type RunStep, type SshNode } from '@/core/runbook/runbookModel'
 
 export type Section = 'library' | 'history' | 'nodes' | 'packages' | 'assistant'
 
@@ -24,12 +24,16 @@ export interface LiveRun {
 interface RunbookStore {
   section: Section
   runbooks: Runbook[]
+  nodes: SshNode[]
   loaded: boolean
   error: string | null
   live: LiveRun | null
 
   setSection: (s: Section) => void
   refresh: () => Promise<void>
+  refreshNodes: () => Promise<void>
+  putNode: (n: Partial<SshNode>) => Promise<void>
+  deleteNode: (id: string) => Promise<void>
   createBlank: () => Promise<Runbook | null>
   remove: (id: string) => Promise<void>
   setPublished: (id: string, published: boolean) => Promise<void>
@@ -48,6 +52,7 @@ function msg(e: unknown): string {
 export const useRunbookStore = create<RunbookStore>((set, get) => ({
   section: 'library',
   runbooks: [],
+  nodes: [],
   loaded: false,
   error: null,
   live: null,
@@ -61,6 +66,24 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
     } catch (e) {
       set({ loaded: true, error: msg(e) })
     }
+  },
+
+  refreshNodes: async () => {
+    try {
+      set({ nodes: await api.listNodes() })
+    } catch (e) {
+      set({ error: msg(e) })
+    }
+  },
+
+  putNode: async (n) => {
+    await api.putNode(n)
+    await get().refreshNodes()
+  },
+
+  deleteNode: async (id) => {
+    await api.deleteNode(id)
+    await get().refreshNodes()
   },
 
   createBlank: async () => {

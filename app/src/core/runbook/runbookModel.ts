@@ -221,7 +221,14 @@ export function reconcileArgs(spec: RunbookSpec): ArgSpec[] {
   const detected: string[] = []
   const seen = new Set<string>()
   for (const step of spec.steps) {
-    for (const m of step.script.matchAll(TOKEN_RE)) {
+    const text = [
+      step.script,
+      step.http?.url ?? '',
+      step.http?.body ?? '',
+      ...(step.http?.headers ?? []).map((h) => h.v),
+      step.ssh?.inlineHost ?? '',
+    ].join('\n')
+    for (const m of text.matchAll(TOKEN_RE)) {
       const name = m[1]
       if (name.includes(':') || name.startsWith('steps.') || seen.has(name)) continue
       seen.add(name)

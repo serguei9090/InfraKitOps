@@ -4,11 +4,14 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { EXECUTOR_KINDS, EXECUTOR_LABEL, type ExecutorKind, type StepSpec } from '@/core/runbook/runbookModel'
+import { SshStepForm } from './SshStepForm'
+import { HttpStepForm } from './HttpStepForm'
 
 interface Props {
   step: StepSpec
   index: number
   count: number
+  readOnly?: boolean
   /** which executor kinds the connected backend can actually run */
   runnable: Record<string, boolean>
   onChange: (patch: Partial<StepSpec>) => void
@@ -16,7 +19,7 @@ interface Props {
   onDelete: () => void
 }
 
-export function StepCard({ step, index, count, runnable, onChange, onMove, onDelete }: Props) {
+export function StepCard({ step, index, count, readOnly, runnable, onChange, onMove, onDelete }: Props) {
   return (
     <div className="rounded-lg border border-border/60 bg-card">
       <div className="flex items-center gap-2 border-b border-border/60 px-2.5 py-1.5">
@@ -68,10 +71,10 @@ export function StepCard({ step, index, count, runnable, onChange, onMove, onDel
         </Button>
       </div>
 
-      {step.executor === 'ssh' || step.executor === 'http' ? (
-        <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-          The {EXECUTOR_LABEL[step.executor]} step form lands in R2. Use a shell step for now.
-        </p>
+      {step.executor === 'ssh' ? (
+        <SshStepForm step={step} readOnly={readOnly} onChange={onChange} />
+      ) : step.executor === 'http' ? (
+        <HttpStepForm step={step} onChange={onChange} />
       ) : (
         <Textarea
           value={step.script}

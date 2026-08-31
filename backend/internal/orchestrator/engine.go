@@ -12,9 +12,11 @@ import (
 	"github.com/infrakit/backend/internal/sse"
 )
 
-// SecretResolver resolves a `{{secret:NAME}}` ref to its plaintext (the vault).
+// SecretResolver resolves secrets from the vault (by `{{secret:NAME}}` ref or
+// by id for auth-secret references on ssh/http steps).
 type SecretResolver interface {
 	ResolveByName(name string) (string, error)
+	Resolve(id string) (string, error)
 }
 
 // Engine executes runbooks.
@@ -138,14 +140,38 @@ func (e *Engine) BuildPreview(rb *Runbook, version int, values map[string]string
 	}
 	for i, st := range spec.Steps {
 		rendered, secretNames := Render(st.Script, Values{Args: values, ResolveSecret: resolver})
-		redacted := rendered
-		for name := range secretNames {
-			if val, err := resolver(name); err == nil {
-				redacted = strings.ReplaceAll(redacted, val, "‹secret:"+name+"›")
+		redact := func(s string) string {
+			for name := range secretNames {
+				if val, err := resolver(name); err == nil {
+					s = strings.ReplaceAll(s, val, "‹secret:"+name+"›")
+				}
 			}
+			return s
+		}
+		var shown string
+		switch st.Executor {
+		case executor.KindSSH:
+			host := ""
+			if st.SSH != nil {
+				host = st.SSH.InlineHost
+				if st.SSH.NodeID != "" {
+					if n, err := e.Store.GetNode(st.SSH.NodeID); err == nil {
+						host = n.Host
+					}
+				}
+			}
+			h, _ := Render(host, Values{Args: values})
+			shown = "ssh " + strings.TrimSpace(h) + "\n" + redact(rendered)
+		case executor.KindHTTP:
+			if st.HTTP != nil {
+				u, _ := Render(st.HTTP.URL, Values{Args: values, ResolveSecret: resolver})
+				shown = redact(strings.ToUpper(st.HTTP.Method) + " " + strings.TrimSpace(u))
+			}
+		default:
+			shown = redact(rendered)
 		}
 		p.Steps = append(p.Steps, PreviewStep{
-			Index: i + 1, Name: stepName(st, i), Executor: string(st.Executor), Command: redacted,
+			Index: i + 1, Name: stepName(st, i), Executor: string(st.Executor), Command: shown,
 		})
 		p.Destructive = append(p.Destructive, ScanDestructive(rendered)...)
 	}
@@ -173,6 +199,20 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 	if !rb.Published {
 		// R0/R1: a draft/unpublished runbook is still runnable by its author.
 		// The published gate is enforced at the API layer per-caller in R1.
+	}
+
+	// Secret-typed args carry a vault secret *name*; resolve to plaintext
+	// server-side (never seen by the client) and track for redaction.
+	argSecretVals := map[string]string{}
+	if e.Secrets != nil {
+		for _, a := range spec.Args {
+			if a.Type == ArgSecret && values[a.Name] != "" {
+				if v, err := e.Secrets.ResolveByName(values[a.Name]); err == nil {
+					argSecretVals[values[a.Name]] = v
+					values[a.Name] = v
+				}
+			}
+		}
 	}
 
 	if e.sem != nil {
@@ -217,22 +257,43 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 				secretVals[name] = v
 			}
 		}
+		for name, v := range argSecretVals {
+			secretVals[name] = v
+		}
 
 		rs := RunStep{Index: i + 1, Name: stepName(st, i), Executor: string(st.Executor), StartedAt: time.Now().UnixMilli()}
-		rs.CommandRedacted = Redact(rendered, secretVals)
+
+		exStep, target, buildErr := e.buildExecutorStep(st, rendered, values, run.Steps, secretVals)
+		rs.Target = target
+		rs.CommandRedacted = Redact(exStep.Script, secretVals)
+		if exStep.HTTP != nil {
+			rs.CommandRedacted = Redact(exStep.HTTP.Method+" "+exStep.HTTP.URL, secretVals)
+		}
 		out <- sse.Message{Event: "step-start", Data: map[string]any{"index": rs.Index, "name": rs.Name, "executor": rs.Executor, "command": rs.CommandRedacted}}
 
 		ex := executor.For(st.Executor)
-		if ex == nil {
+		switch {
+		case buildErr != nil:
+			rs.Status = "failed"
+			rs.Stderr = buildErr.Error()
+			rs.ExitCode = -1
+		case ex == nil:
 			rs.Status = "failed"
 			rs.Stderr = "executor '" + string(st.Executor) + "' is not available on this host"
 			rs.ExitCode = -1
-		} else {
+		default:
 			stepCtx, cancel := context.WithTimeout(ctx, stepTimeout(st, spec))
 			sw := &redactWriter{out: out, event: "stdout", secrets: secretVals}
 			ew := &redactWriter{out: out, event: "stderr", secrets: secretVals}
-			res := ex.Run(stepCtx, executor.Step{Kind: st.Executor, Script: rendered}, sw, ew)
+			res := ex.Run(stepCtx, exStep, sw, ew)
 			cancel()
+			// Persist a host key learned on first SSH connect.
+			if st.Executor == executor.KindSSH && st.SSH != nil && st.SSH.NodeID != "" && res.HostKeyLearned && res.HostKeyFP != "" {
+				if n, err := e.Store.GetNode(st.SSH.NodeID); err == nil && n.HostKeyFP == "" {
+					n.HostKeyFP = res.HostKeyFP
+					_, _ = e.Store.PutNode(*n)
+				}
+			}
 			rs.ExitCode = res.ExitCode
 			rs.Stdout = Redact(res.Stdout, secretVals)
 			rs.Stderr = Redact(res.Stderr, secretVals)
@@ -279,6 +340,111 @@ func (w *redactWriter) Write(p []byte) (int, error) {
 	text := Redact(string(p), w.secrets)
 	w.out <- sse.Message{Event: w.event, Data: map[string]string{"text": text}}
 	return len(p), nil
+}
+
+// buildExecutorStep turns a spec step + its rendered script into the concrete
+// executor.Step, resolving the SSH node / auth secrets and rendering {{VAR}}
+// into the HTTP fields. `target` is a short human label for history.
+func (e *Engine) buildExecutorStep(
+	st StepSpec, rendered string, values map[string]string, prior []RunStep, secretVals map[string]string,
+) (executor.Step, string, error) {
+	resolveByName := func(name string) (string, error) {
+		if e.Secrets == nil {
+			return "", fmt.Errorf("vault unavailable")
+		}
+		return e.Secrets.ResolveByName(name)
+	}
+	rv := Values{Args: values, Steps: prior, ResolveSecret: resolveByName}
+
+	switch st.Executor {
+	case executor.KindSSH:
+		if st.SSH == nil {
+			return executor.Step{}, "", fmt.Errorf("ssh step has no connection config")
+		}
+		t := &executor.SSHTarget{User: st.SSH.User, Sudo: st.SSH.Sudo}
+		host := st.SSH.InlineHost
+		if st.SSH.NodeID != "" {
+			n, err := e.Store.GetNode(st.SSH.NodeID)
+			if err != nil {
+				return executor.Step{}, "", fmt.Errorf("ssh node not found")
+			}
+			host = n.Host
+			t.Port = n.Port
+			if t.User == "" {
+				t.User = n.User
+			}
+			t.HostKeyFP = n.HostKeyFP
+			if n.AuthSecret != "" && e.Secrets != nil {
+				v, err := e.Secrets.Resolve(n.AuthSecret)
+				if err != nil {
+					return executor.Step{}, "", fmt.Errorf("resolve node auth secret: %w", err)
+				}
+				if n.AuthKind == "key" {
+					t.PrivateKey = v
+				} else {
+					t.Password = v
+				}
+			}
+		}
+		if st.SSH.AuthSecretID != "" && e.Secrets != nil {
+			v, err := e.Secrets.Resolve(st.SSH.AuthSecretID)
+			if err != nil {
+				return executor.Step{}, "", fmt.Errorf("resolve step auth secret: %w", err)
+			}
+			if strings.Contains(v, "PRIVATE KEY") {
+				t.PrivateKey = v
+			} else {
+				t.Password = v
+			}
+		}
+		rHost, _ := Render(host, rv)
+		t.Host = strings.TrimSpace(rHost)
+		return executor.Step{Kind: executor.KindSSH, Script: rendered, SSH: t}, t.User + "@" + t.Host, nil
+
+	case executor.KindHTTP:
+		if st.HTTP == nil {
+			return executor.Step{}, "", fmt.Errorf("http step has no request config")
+		}
+		url, _ := Render(st.HTTP.URL, rv)
+		body, _ := Render(st.HTTP.Body, rv)
+		headers := map[string]string{}
+		for _, h := range st.HTTP.Headers {
+			hv, sec := Render(h.V, rv)
+			for name := range sec {
+				if v, err := resolveByName(name); err == nil {
+					secretVals[name] = v
+				}
+			}
+			headers[h.K] = hv
+		}
+		if st.HTTP.Auth != nil && st.HTTP.Auth.SecretID != "" && e.Secrets != nil {
+			v, err := e.Secrets.Resolve(st.HTTP.Auth.SecretID)
+			if err != nil {
+				return executor.Step{}, "", fmt.Errorf("resolve http auth secret: %w", err)
+			}
+			secretVals["_httpauth"] = v
+			if st.HTTP.Auth.Kind == "basic" {
+				headers["Authorization"] = executor.BasicAuthHeader("", v) // user:pass in the secret
+				if i := strings.IndexByte(v, ':'); i >= 0 {
+					headers["Authorization"] = executor.BasicAuthHeader(v[:i], v[i+1:])
+				}
+			} else {
+				headers["Authorization"] = "Bearer " + v
+			}
+		}
+		asserts := make([]executor.HTTPAssertion, 0, len(st.HTTP.Assert))
+		for _, a := range st.HTTP.Assert {
+			asserts = append(asserts, executor.HTTPAssertion{JSONPath: a.JSONPath, Equals: a.Equals})
+		}
+		req := &executor.HTTPRequest{
+			Method: st.HTTP.Method, URL: strings.TrimSpace(url), Headers: headers,
+			Body: body, ExpectStatus: st.HTTP.ExpectStatus, Assert: asserts,
+		}
+		return executor.Step{Kind: executor.KindHTTP, HTTP: req}, req.URL, nil
+
+	default:
+		return executor.Step{Kind: st.Executor, Script: rendered}, "", nil
+	}
 }
 
 func shouldRun(st StepSpec, prev *RunStep) bool {

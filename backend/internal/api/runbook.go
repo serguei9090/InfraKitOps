@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -338,6 +339,51 @@ func (h *RunbookHandlers) DeleteNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// TestNode: POST /ssh-nodes/{id}/test — opens an SSH session, learns/verifies
+// the host key, reports the outcome.
+func (h *RunbookHandlers) TestNode(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	n, err := h.Store.GetNode(chi.URLParam(r, "id"))
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	t := &executor.SSHTarget{Host: n.Host, Port: n.Port, User: n.User, HostKeyFP: n.HostKeyFP}
+	if n.AuthSecret != "" && h.Engine != nil && h.Engine.Secrets != nil {
+		v, serr := h.Engine.Secrets.Resolve(n.AuthSecret)
+		if serr != nil {
+			WriteJSON(w, http.StatusForbidden, map[string]string{"error": "cannot read the node's auth secret — is the vault unlocked?"})
+			return
+		}
+		if n.AuthKind == "key" {
+			t.PrivateKey = v
+		} else {
+			t.Password = v
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	hk, terr := executor.SSHTest(ctx, t)
+
+	if hk.Learned && hk.Fingerprint != "" && n.HostKeyFP == "" {
+		n.HostKeyFP = hk.Fingerprint
+		_, _ = h.Store.PutNode(*n)
+	}
+	resp := map[string]any{
+		"ok":              terr == nil && !hk.Mismatch,
+		"hostKeyFp":       hk.Fingerprint,
+		"hostKeyLearned":  hk.Learned,
+		"hostKeyMismatch": hk.Mismatch,
+	}
+	if terr != nil {
+		resp["error"] = terr.Error()
+	}
+	WriteJSON(w, http.StatusOK, resp)
 }
 
 // --- settings --------------------------------------------------------

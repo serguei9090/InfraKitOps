@@ -118,6 +118,7 @@ func NewRouter(opts Options) http.Handler {
 			r.Post("/", rbh.PutNode)
 			r.Put("/{id}", rbh.PutNode)
 			r.Delete("/{id}", rbh.DeleteNode)
+			r.Post("/{id}/test", rbh.TestNode)
 		})
 		r.Get("/runbook-settings", rbh.GetSettings)
 		r.Put("/runbook-settings", rbh.PutSettings)

@@ -9,6 +9,7 @@ import { previewRun } from '@/adapters/backend/runbookClient'
 import { currentSpec, type Preview, type Runbook } from '@/core/runbook/runbookModel'
 import { useRunbookStore } from '@/stores/runbookStore'
 import { cn } from '@/lib/utils'
+import { SecretPicker } from './SecretPicker'
 
 interface Props {
   runbook: Runbook
@@ -77,12 +78,34 @@ export function RunSetupDialog({ runbook, open, onOpenChange }: Props) {
                     {a.label || a.name}
                     {a.required && <span className="text-destructive"> *</span>}
                   </Label>
-                  <Input
-                    id={`a-${a.name}`}
-                    value={values[a.name] ?? ''}
-                    placeholder={a.help}
-                    onChange={(e) => setValues((v) => ({ ...v, [a.name]: e.target.value }))}
-                  />
+                  {a.type === 'secret' ? (
+                    <SecretPicker
+                      by="name"
+                      value={values[a.name] ?? ''}
+                      onChange={(v) => setValues((cur) => ({ ...cur, [a.name]: v }))}
+                    />
+                  ) : a.type === 'enum' && (a.enumValues?.length ?? 0) > 0 ? (
+                    <select
+                      id={`a-${a.name}`}
+                      value={values[a.name] ?? ''}
+                      onChange={(e) => setValues((v) => ({ ...v, [a.name]: e.target.value }))}
+                      className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+                    >
+                      <option value="">—</option>
+                      {a.enumValues!.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Input
+                      id={`a-${a.name}`}
+                      value={values[a.name] ?? ''}
+                      placeholder={a.help}
+                      onChange={(e) => setValues((v) => ({ ...v, [a.name]: e.target.value }))}
+                    />
+                  )}
                 </div>
               ))
             )}

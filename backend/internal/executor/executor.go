@@ -44,13 +44,20 @@ type SSHTarget struct {
 	HostKeyFP  string
 }
 
-// HTTPRequest — populated in R2.
+// HTTPRequest is one resolved request an http step performs.
 type HTTPRequest struct {
 	Method       string
 	URL          string
 	Headers      map[string]string
 	Body         string
 	ExpectStatus []int
+	Assert       []HTTPAssertion
+}
+
+// HTTPAssertion checks a dot-path in the JSON response body.
+type HTTPAssertion struct {
+	JSONPath string
+	Equals   string
 }
 
 // Result is what a finished step reports.
@@ -60,6 +67,11 @@ type Result struct {
 	Stderr   string `json:"stderr"`
 	// Err is a transport/spawn failure (not a non-zero exit).
 	Err string `json:"error,omitempty"`
+	// SSH only: the host key learned/seen this connection, and whether it
+	// mismatched a pinned one. The engine persists a newly-learned key.
+	HostKeyFP       string `json:"-"`
+	HostKeyMismatch bool   `json:"-"`
+	HostKeyLearned  bool   `json:"-"`
 }
 
 // Executor runs a resolved step, streaming output as it arrives.
@@ -77,8 +89,10 @@ func For(k Kind) Executor {
 		return shellExecutor{}
 	case KindBash:
 		return shellExecutor{}
-	case KindSSH, KindHTTP:
-		return nil // R2
+	case KindSSH:
+		return sshExecutor{}
+	case KindHTTP:
+		return httpExecutor{}
 	default:
 		return nil
 	}
@@ -89,8 +103,8 @@ func For(k Kind) Executor {
 func AvailableKinds() map[Kind]bool {
 	m := map[Kind]bool{
 		KindBash: true,
-		KindSSH:  false, // R2
-		KindHTTP: false, // R2
+		KindSSH:  true, // pure-Go client, always available
+		KindHTTP: true,
 	}
 	if runtime.GOOS == "windows" {
 		m[KindPowerShell] = true
