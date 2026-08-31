@@ -31,6 +31,7 @@ export function AiConsoleScaffold() {
   const setSection = useLlmStore((s) => s.setSection)
   const refresh = useLlmStore((s) => s.refresh)
   const refreshTasks = useLlmStore((s) => s.refreshTasks)
+  const refreshSettings = useLlmStore((s) => s.refreshSettings)
   const connections = useLlmStore((s) => s.connections)
   const refreshVault = useVaultStore((s) => s.refresh)
 
@@ -42,9 +43,10 @@ export function AiConsoleScaffold() {
     if (status === 'available') {
       void refresh()
       void refreshTasks()
+      void refreshSettings()
       void refreshVault()
     }
-  }, [status, refresh, refreshTasks, refreshVault])
+  }, [status, refresh, refreshTasks, refreshSettings, refreshVault])
 
   if (status === 'unavailable' || status === 'connecting' || status === 'unknown') {
     return (

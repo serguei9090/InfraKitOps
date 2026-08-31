@@ -179,14 +179,25 @@ deleted.
   endpoints"; fresh-tab load zero console errors. Green: build + 1299 tests +
   lint (no new warnings).
 
-### S1 — AI section
-- Backend: `GET/PUT /llm/settings` (3 keys), `Task.preferredConnectionId` /
-  `preferredModel`.
-- Frontend: `llmStore.settings`, the Defaults form, the grouped per-feature
-  prompt list (reusing `TaskDialog`), the fallback chain in `AiPanel`/`useLlm`.
-- **DoD**: set a global default model → a fresh `AiPanel` (Prompt Library
-  Improve) opens pre-selected on it; give `runbook.assistant` a different
-  preferred model → its panel picks that instead; Reset a customised prompt.
+### S1 — AI section — **DONE 2026-08-31**
+- Backend: `GET/PUT /llm/settings` (merge-write; `defaultConnectionId` /
+  `defaultModel` / `defaultTemperature`), `Task.PreferredConnectionID` /
+  `PreferredModel` (custom-override fields). 2 new tests.
+- Frontend: `LlmSettings` type, `llmStore.settings` +
+  `refreshSettings`/`putSettings`, `getLlmSettings`/`putLlmSettings` client.
+  `TaskDialog` extracted from `TasksView` to its own file + preferred
+  connection/model selects. New `AiSettings` section: a Defaults form
+  (connection → model → temperature) + the task registry grouped by
+  `TASK_GROUPS` prefix (`prompt.` / `runbook.` / `command.`), each row
+  Customise / Reset / shows its preferred model. Backend-unavailable → a
+  "connect a backend" state.
+- `AiPanel` resolution chain (fills connId + model independently, only while
+  empty, so a late `settings` still lands): localStorage pick → task preferred
+  → global default → first connection.
+- **Verified in-browser**: `/settings/ai` Defaults form persisted a connection
+  + model to `/llm/settings`; with localStorage cleared, a fresh "Explain
+  command" `AiPanel` opened pre-selected on the global default
+  (`Local Ollama` / `gemma4:e2b`); fresh-tab zero console errors. Green.
 
 ### S2 — Runbooks + Network sections
 - Backend: `runbook_settings` gains `vaultAutoLockMinutes` /

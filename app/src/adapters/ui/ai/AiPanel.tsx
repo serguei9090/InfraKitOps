@@ -43,6 +43,8 @@ export function AiPanel({
   const refresh = useLlmStore((s) => s.refresh)
   const tasks = useLlmStore((s) => s.tasks)
   const refreshTasks = useLlmStore((s) => s.refreshTasks)
+  const settings = useLlmStore((s) => s.settings)
+  const refreshSettings = useLlmStore((s) => s.refreshSettings)
 
   const task = useMemo(() => tasks.find((t) => t.id === taskId), [tasks, taskId])
   const { running, text, parsed, error, usage, run, reset } = useLlm(taskId)
@@ -56,20 +58,42 @@ export function AiPanel({
   useEffect(() => {
     if (connections.length === 0) void refresh()
     if (tasks.length === 0) void refreshTasks()
-  }, [connections.length, tasks.length, refresh, refreshTasks])
+    void refreshSettings()
+  }, [connections.length, tasks.length, refresh, refreshTasks, refreshSettings])
 
+  // Resolution order, first hit wins: last explicit pick (localStorage) →
+  // this task's preferred connection/model → the global default → first
+  // connection. Fills connId and model independently and only while each is
+  // still empty, so a later-arriving `settings` still applies.
+  // See SETTINGS_MODULE_PLAN.md §5.2.
   useEffect(() => {
-    if (connId || connections.length === 0) return
+    if (connections.length === 0 || (connId && model)) return
     let saved: { connId?: string; model?: string } = {}
     try {
       saved = JSON.parse(localStorage.getItem(lastKey(taskId)) ?? '{}')
     } catch {
       /* ignore */
     }
-    const pick = connections.find((c) => c.id === saved.connId) ?? connections[0]
-    setConnId(pick.id)
-    setModel(saved.model || task?.suggestedModel || pick.defaultModel || '')
-  }, [connections, connId, taskId, task])
+    const has = (id?: string) => id && connections.find((c) => c.id === id)?.id
+    const wantConn =
+      has(connId) ||
+      has(saved.connId) ||
+      has(task?.preferredConnectionId) ||
+      has(settings.defaultConnectionId) ||
+      connections[0].id
+    if (!connId) setConnId(wantConn)
+    if (!model) {
+      const conn = connections.find((c) => c.id === wantConn)
+      const next =
+        saved.model ||
+        task?.preferredModel ||
+        task?.suggestedModel ||
+        conn?.defaultModel ||
+        settings.defaultModel ||
+        ''
+      if (next) setModel(next)
+    }
+  }, [connections, connId, model, taskId, task, settings])
 
   useEffect(() => {
     if (connId) void loadModels(connId)

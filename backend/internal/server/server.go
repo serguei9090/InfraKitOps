@@ -153,6 +153,8 @@ func NewRouter(opts Options) http.Handler {
 			r.Put("/tasks/{id}", lh.PutTask)
 			r.Delete("/tasks/{id}", lh.DeleteTask)
 			r.Get("/tasks/{id}/run/stream", lh.TaskRunStream)
+			r.Get("/settings", lh.GetSettings)
+			r.Put("/settings", lh.PutSettings)
 		})
 
 		r.Route("/vault", func(r chi.Router) {

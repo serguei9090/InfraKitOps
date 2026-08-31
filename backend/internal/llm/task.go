@@ -29,6 +29,11 @@ type Task struct {
 	OutputShape    TaskOutputShape `json:"outputShape"`
 	SuggestedModel string          `json:"suggestedModel,omitempty"`
 	Temperature    *float64        `json:"temperature,omitempty"`
+	// Preferred connection + model for this task — a custom-override field, set
+	// from Settings. The frontend uses it in its fallback chain
+	// (SETTINGS_MODULE_PLAN.md §5.2).
+	PreferredConnectionID string `json:"preferredConnectionId,omitempty"`
+	PreferredModel        string `json:"preferredModel,omitempty"`
 }
 
 func f64(v float64) *float64 { return &v }

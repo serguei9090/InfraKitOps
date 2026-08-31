@@ -29,6 +29,7 @@ interface LlmStore {
   connections: LlmConnection[]
   models: Record<string, LlmModel[]> // connId -> models
   tasks: LlmTask[]
+  settings: Record<string, string>
   loaded: boolean
   error: string | null
   chat: LiveChat | null
@@ -41,6 +42,8 @@ interface LlmStore {
   refreshTasks: () => Promise<void>
   putTask: (t: Partial<LlmTask>) => Promise<void>
   resetTask: (id: string) => Promise<void>
+  refreshSettings: () => Promise<void>
+  putSettings: (patch: Record<string, string>) => Promise<void>
 
   startChat: (connId: string, model: string) => void
   sendMessage: (text: string) => void
@@ -56,6 +59,7 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
   connections: [],
   models: {},
   tasks: [],
+  settings: {},
   loaded: false,
   error: null,
   chat: null,
@@ -86,6 +90,18 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
   resetTask: async (id) => {
     await api.deleteTask(id)
     await get().refreshTasks()
+  },
+
+  refreshSettings: async () => {
+    try {
+      set({ settings: await api.getLlmSettings() })
+    } catch (e) {
+      set({ error: msg(e) })
+    }
+  },
+
+  putSettings: async (patch) => {
+    set({ settings: await api.putLlmSettings(patch) })
   },
 
   putConnection: async (c) => {

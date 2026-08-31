@@ -77,6 +77,16 @@ export interface LlmTask {
   outputShape: TaskOutputShape
   suggestedModel?: string
   temperature?: number
+  /** preferred connection + model for this task (set from Settings) */
+  preferredConnectionId?: string
+  preferredModel?: string
+}
+
+/** Global AI defaults, stored server-side in llm_settings. */
+export interface LlmSettings {
+  defaultConnectionId?: string
+  defaultModel?: string
+  defaultTemperature?: string
 }
 
 export function emptyTask(): LlmTask {

@@ -118,6 +118,32 @@ func (h *LLMHandlers) Models(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{"models": models})
 }
 
+// --- settings ----------------------------------------------------
+
+// GetSettings: GET /llm/settings
+func (h *LLMHandlers) GetSettings(w http.ResponseWriter, _ *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"settings": h.Store.GetSettings()})
+}
+
+// PutSettings: PUT /llm/settings — merge-write, returns the merged map.
+func (h *LLMHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var patch map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	for k, v := range patch {
+		_ = h.Store.PutSetting(k, v)
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"settings": h.Store.GetSettings()})
+}
+
 // --- tasks --------------------------------------------------------
 
 // ListTasks: GET /llm/tasks

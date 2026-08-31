@@ -82,3 +82,27 @@ func TestTaskCRUDAndOverride(t *testing.T) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }
+
+func TestTaskPreferredModelPersists(t *testing.T) {
+	s := newStore(t)
+	base, _ := s.GetTask("prompt.improve")
+	base.PreferredConnectionID = "conn_x"
+	base.PreferredModel = "fast-local"
+	if _, err := s.PutTask(*base); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.GetTask("prompt.improve")
+	if got.PreferredConnectionID != "conn_x" || got.PreferredModel != "fast-local" || !got.Overridden {
+		t.Fatalf("preferred not persisted: %+v", got)
+	}
+}
+
+func TestSettingsRoundTrip(t *testing.T) {
+	s := newStore(t)
+	_ = s.PutSetting("defaultConnectionId", "conn_a")
+	_ = s.PutSetting("defaultModel", "gpt-4o")
+	m := s.GetSettings()
+	if m["defaultConnectionId"] != "conn_a" || m["defaultModel"] != "gpt-4o" {
+		t.Fatalf("settings = %v", m)
+	}
+}

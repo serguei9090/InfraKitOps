@@ -74,6 +74,14 @@ export const putTask = (t: Partial<LlmTask>) =>
 
 export const deleteTask = (id: string) => backendRequest<unknown>('DELETE', `/llm/tasks/${id}`)
 
+// --- settings ---------------------------------------------------
+
+export const getLlmSettings = () =>
+  backendGet<{ settings: Record<string, string> }>('/llm/settings').then((r) => r.settings ?? {})
+
+export const putLlmSettings = (patch: Record<string, string>) =>
+  backendRequest<{ settings: Record<string, string> }>('PUT', '/llm/settings', patch).then((r) => r.settings ?? {})
+
 export interface TaskRunOpts {
   taskId: string
   connId: string

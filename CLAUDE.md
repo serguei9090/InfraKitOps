@@ -292,7 +292,7 @@ Assistant.
   (`AssistantView`, `runbook.assistant` task, chat grounded on the spec) +
   editor "Generate step" (`runbook.gen-step` → append) + per-`StepCard`
   "Explain" (`command.explain`).
-### Settings module (started 2026-08-31, S0 done)
+### Settings module (started 2026-08-31, S0 + S1 done)
 
 `/settings` page (`adapters/ui/settings/`) — replaces the old rearrange-only
 `ModuleSettingsDialog` (deleted). Left menu of sections from a
@@ -304,10 +304,14 @@ phases: [`SETTINGS_MODULE_PLAN.md`](SETTINGS_MODULE_PLAN.md).
   → `navigate('/settings')`. Sections: **General** (theme, expanded-sidebar,
   module reorder/hide — dnd list ported from the old dialog), **Backend**
   (`backendStore` status/version + Reconnect + live capabilities), **About**.
-- **S1 next**: AI section — `GET/PUT /llm/settings` (default connection / model
+- **S1 done**: AI section — `GET/PUT /llm/settings` (default connection / model
   / temperature), `Task.preferredConnectionId`/`preferredModel`, per-feature
-  system prompts grouped by module, `AiPanel` fallback chain (localStorage →
-  task preferred → global default). **S2**: Runbooks + Network sections.
+  system prompts grouped by `TASK_GROUPS` prefix (reuses the extracted
+  `adapters/ui/ai/TaskDialog`), `AiPanel` resolution chain (localStorage pick →
+  task preferred → global default → first connection).
+- **S2 next**: Runbooks section (`runbook_settings` retention/autolock/
+  concurrency — flags become defaults) + Network section (move
+  `NetworkSettingsDialog` body in, module keeps a deep-link).
 - Shared config → backend (`llm_settings` / `runbook_settings`); local
   (theme, module order, network blob) → client `IStoragePort`.
 
