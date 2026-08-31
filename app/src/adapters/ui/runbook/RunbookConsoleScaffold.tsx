@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
-import { Boxes, History, Lock, LockOpen, Network, Package, Play, Sparkles } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Boxes, History, Lock, LockOpen, Network, Package, Plus, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useBackendStore } from '@/stores/backendStore'
 import { useRunbookStore, type Section } from '@/stores/runbookStore'
@@ -44,8 +45,14 @@ export function RunbookConsoleScaffold() {
   const section = useRunbookStore((s) => s.section)
   const setSection = useRunbookStore((s) => s.setSection)
   const refresh = useRunbookStore((s) => s.refresh)
-  const createStarter = useRunbookStore((s) => s.createStarter)
+  const createBlank = useRunbookStore((s) => s.createBlank)
   const live = useRunbookStore((s) => s.live)
+  const navigate = useNavigate()
+
+  async function newRunbook() {
+    const rb = await createBlank()
+    if (rb) navigate(`/tools/runbook/edit/${rb.id}`)
+  }
 
   const vaultStatus = useVaultStore((s) => s.status)
   const refreshVault = useVaultStore((s) => s.refresh)
@@ -95,8 +102,8 @@ export function RunbookConsoleScaffold() {
         </nav>
         <div className="flex-1" />
         <VaultDialog />
-        <Button size="sm" onClick={() => void createStarter()}>
-          <Play className="size-4" /> New runbook
+        <Button size="sm" onClick={() => void newRunbook()}>
+          <Plus className="size-4" /> New runbook
         </Button>
       </Header>
 

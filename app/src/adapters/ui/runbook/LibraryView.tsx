@@ -1,5 +1,6 @@
-import { Play, Trash2 } from 'lucide-react'
+import { Pencil, Play, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,7 @@ export function LibraryView() {
   const setPublished = useRunbookStore((s) => s.setPublished)
   const [query, setQuery] = useState('')
   const [runTarget, setRunTarget] = useState<Runbook | null>(null)
+  const navigate = useNavigate()
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -87,6 +89,13 @@ export function LibraryView() {
                   <Button
                     size="sm"
                     variant="outline"
+                    onClick={() => navigate(`/tools/runbook/edit/${rb.id}`)}
+                  >
+                    <Pencil className="size-3.5" /> Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     onClick={() => void setPublished(rb.id, !rb.published)}
                   >
                     {rb.published ? 'Unpublish' : 'Publish'}
@@ -106,10 +115,6 @@ export function LibraryView() {
           })}
         </div>
       )}
-
-      <p className="mt-6 text-xs text-muted-foreground">
-        The full step editor lands in R1 — for now a new runbook is a one-step echo you can Run.
-      </p>
 
       {runTarget && (
         <RunSetupDialog runbook={runTarget} open onOpenChange={(o) => !o && setRunTarget(null)} />

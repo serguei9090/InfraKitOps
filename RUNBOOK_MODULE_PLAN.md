@@ -539,22 +539,42 @@ resolved **and redacted** (`‹secret:GREETING›`), run lands in History.
   web-without-backend shows the connect state.
 </details>
 
-### R1 — Library + single-step shell runbooks
+### R1 — Library + shell runbook editor — **DONE 2026-08-31**
+
+Shipped: full-page **`RunbookEditorScreen`** (`/tools/runbook/edit/:id`) —
+inline name/timeout/description, a steps list (`StepCard`: shell executor
+picker with ssh/http greyed "R2", script textarea, continue-on-error /
+run-if / per-step timeout, add/remove/move), `ArgConfigPanel` (auto-detects
+`{{TOKEN}}` from the scripts, per-arg label/help/type/preset/regex/default/
+error/required, "secrets used" list). Debounced draft autosave.
+`RunbookVersionList` + `runbookDiff.ts` (fields + **args** + steps, word-level,
+4 tests) + `RunbookCompareDialog`. `LibraryView` gains Edit; "New runbook"
+creates a blank draft and opens the editor. Publish toggle. Run from the
+editor via `RunSetupDialog` + docked `RunPanel`. **CORS fix**: `PUT` added to
+`Access-Control-Allow-Methods`. 1294 FE tests + all BE tests green.
+Verified in-browser: author a 3-arg runbook with a regex on PORT → save v1 →
+add the regex → save v2 → compare (arg change shown) → publish → run with an
+invalid PORT (validation blocks) then a valid one → SSE stream → run in History
+with per-step detail.
+
+<details><summary>original R1 checkpoint</summary>
+
 - `RunbookEditorScreen` (single step, shell executors, `{{ARG}}` auto-detect,
   `ArgConfigPanel`), `LibraryView` grid + toolbar, `RunDialog` (fill args,
   dry-run, confirm + redacted preview, destructive warnings), streamed output,
   `HistoryView` + `RunDetailView`
 - per-runbook versioning (Save/draft/restore/pin/delete/compare) + `runbookDiff`
 - **published gate** — draft vs published, non-author run blocked
+</details>
 - **DoD**: author a PowerShell/bash runbook with 3 args + regex validation →
   publish → run with a dry-run first, then for real → output streams, run lands
   in History with secrets/args redacted → edit → v2 → compare. Verified
   in-browser against the dev backend.
 
-### R2 — Multi-step + SSH + HTTP
-- steps list in the editor (add/reorder/delete, per-step executor +
-  continue-on-error + run-if); `SshStepForm`, `HttpStepForm`
-- `{{steps.N.stdout}}` chaining in the engine
+### R2 — SSH + HTTP executors
+- `SshStepForm`, `HttpStepForm` (the steps list itself already ships in R1)
+- `{{steps.N.stdout}}` chaining is **already wired** in the engine (R0); R2
+  just exposes it in the UI
 - **SSH** executor (`x/crypto/ssh`, host-key pinning, jump host) + `SshNodesView`
   (registry, auth via Vault picker, **Test connection**)
 - **HTTP** executor (method/url/headers/body/auth→secret, status + JSONPath

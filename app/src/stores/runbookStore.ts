@@ -30,9 +30,8 @@ interface RunbookStore {
 
   setSection: (s: Section) => void
   refresh: () => Promise<void>
-  createStarter: () => Promise<Runbook | null>
+  createBlank: () => Promise<Runbook | null>
   remove: (id: string) => Promise<void>
-  saveVersion: (id: string, note?: string) => Promise<void>
   setPublished: (id: string, published: boolean) => Promise<void>
 
   startRun: (
@@ -64,12 +63,10 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
     }
   },
 
-  createStarter: async () => {
+  createBlank: async () => {
     try {
       const spec = emptySpec('New runbook')
-      spec.steps[0].name = 'Say hello'
-      spec.steps[0].script = 'echo "hello from {{WHO}}"'
-      spec.args = [{ name: 'WHO', label: 'Who', type: 'string', required: true, default: 'runbook' }]
+      spec.steps[0].name = 'Step 1'
       const rb = await api.createRunbook(spec)
       await get().refresh()
       return rb
@@ -81,11 +78,6 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
 
   remove: async (id) => {
     await api.deleteRunbook(id)
-    await get().refresh()
-  },
-
-  saveVersion: async (id, note) => {
-    await api.saveVersion(id, note)
     await get().refresh()
   },
 

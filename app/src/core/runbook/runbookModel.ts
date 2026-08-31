@@ -211,3 +211,26 @@ export function nextVersionNumber(rb: Runbook): number {
 export function isDirty(rb: Runbook): boolean {
   return rb.draft != null
 }
+
+/** Reconcile `spec.args` with the `{{TOKEN}}`s actually in the step scripts:
+ *  keep config for tokens still present (in detection order), drop the rest,
+ *  add a default config for new tokens. Returns the same array reference when
+ *  nothing changed so callers can skip a re-render. */
+export function reconcileArgs(spec: RunbookSpec): ArgSpec[] {
+  const TOKEN_RE = /\{\{\s*([A-Za-z0-9_.:]+)\s*\}\}/g
+  const detected: string[] = []
+  const seen = new Set<string>()
+  for (const step of spec.steps) {
+    for (const m of step.script.matchAll(TOKEN_RE)) {
+      const name = m[1]
+      if (name.includes(':') || name.startsWith('steps.') || seen.has(name)) continue
+      seen.add(name)
+      detected.push(name)
+    }
+  }
+  const byName = new Map(spec.args.map((a) => [a.name, a]))
+  const next = detected.map<ArgSpec>((name) => byName.get(name) ?? { name, type: 'string', required: true })
+  const same =
+    next.length === spec.args.length && next.every((a, i) => a === spec.args[i])
+  return same ? spec.args : next
+}
