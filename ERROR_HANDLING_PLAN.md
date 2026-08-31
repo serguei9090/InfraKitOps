@@ -239,13 +239,22 @@ clear(): void
   Details; API path returns `{code:"unreachable",hint:…}`. Fresh tab zero
   console errors. Green.
 
-### E2 — Vault + Runbooks + Network write
-- `apierr` in `vault.go` (`Locked`, `Auth` for wrong master password),
-  `orchestrator` run/save/nodes, `firewall`/`hosts` write endpoints.
-- Their stores `report()`.
-- **DoD**: unlock with a wrong password → `auth_failed`; run a step that needs
-  the vault while locked → `locked` with "Unlock the Vault"; SSH host-key
-  mismatch → `permission`.
+### E2 — Vault + Runbooks + Network write — **DONE 2026-08-31** (commit `b407525`)
+- `apierr` in `vault.go` (`vaultErr` maps every `vault.Err*`; wrong master
+  password → `auth_failed` + "enter the vault's master password" hint),
+  `runbook.go` (`writeStoreErr`, TestNode vault-locked → `locked`, publish
+  gate → coded SSE `error` event via new `sse.RejectCoded`), `hostsfile.go` +
+  `firewall.go` (500 → `internal`, decode → `validation`, `ErrNeedsElevation`
+  → `permission` keeping the `needsElevation` flag, firewall reject →
+  `validation` + hint).
+- `sse.Reject` → `RejectCoded(w, code, msg, hint)` so pre-stream rejections
+  carry a code.
+- FE: `vaultStore.error` is now an `AppError`, `VaultDialog` renders
+  `<InlineError>`; `runbookStore` mutations `report()` through `errorStore`,
+  the live-run `error` event + transport `onError` classify into
+  `live.errorObj` → `<InlineError>` in `RunPanel`.
+- Browser-verified: wrong master password → "Authentication failed / Enter
+  the vault's master password / wrong master password". Green.
 
 ### E3 — Deferred
 Retry-from-toast (needs an action registry) · an error-history drawer ·

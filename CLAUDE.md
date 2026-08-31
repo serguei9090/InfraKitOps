@@ -320,6 +320,36 @@ phases: [`SETTINGS_MODULE_PLAN.md`](SETTINGS_MODULE_PLAN.md).
 - Shared config → backend (`llm_settings` / `runbook_settings`); local
   (theme, module order, network blob) → client `IStoragePort`.
 
+### Shared error handling (started 2026-08-31, E0–E2 done)
+
+One classify-and-present system for backend/transport failures across every
+module. Plan: [`ERROR_HANDLING_PLAN.md`](ERROR_HANDLING_PLAN.md).
+
+- **Backend** `internal/apierr` — coded `Error{code,error,hint,status}`
+  (closed code set: `auth_failed`/`unreachable`/`timeout`/`rate_limited`/
+  `not_found`/`conflict`/`validation`/`locked`/`permission`/`upstream`/
+  `internal`), constructors + `Write(w, err)` + `ClassifyHTTP`/`ClassifyNet`
+  (upstream provider status / dial error → code). SSE errors ride the `error`
+  event as `{error,code?,hint?}` (`sse.RejectCoded`; `llm.Engine` `errData`).
+  A new endpoint returns `apierr.Write(w, apierr.Validation("…"))`, not a bare
+  `{error}` string.
+- **Frontend** `core/errors/appError.ts` — framework-free `AppErr extends
+  Error` + `classify(raw, source)` (existing AppErr · `BackendUnavailableError`
+  · `AbortError` · `TypeError` "failed to fetch" · `{error,code,hint}`
+  envelope · plain Error/string). `PRESETS` give each code a title / hint /
+  retryable / sticky. `stores/errorStore.ts` — `reportError(raw, 'Module')`
+  (dedup 4s, cap 8, drops aborted); `window.unhandledrejection` auto-reports.
+- **UI** `adapters/ui/errors/` — `<ErrorToaster/>` (in `AppShellScaffold`,
+  bottom-right, sticky for auth/internal/backend_down else 6s), `<InlineError
+  error onRetry?/>` over shadcn `alert`, `<ErrorIcon code/>`.
+- **`backendClient`** already throws `AppErr` on every non-2xx + transport
+  failure — a new module just lets it throw and calls `reportError` on
+  mutation failures (or renders `<InlineError>` where a pane owns the error).
+- **Covered so far**: all `/llm/*` + the 4 provider adapters (E1), `/vault/*`,
+  `/runbooks/*` run/nodes/schedules/publish, `/hosts` + `/firewall/change`
+  (E2). **E3 deferred**: retry-from-toast, error-history drawer, the other
+  ~70 endpoints, wording/i18n pass.
+
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 
 A handful of the 44 client-only tools now have an **optional** backend upgrade —
