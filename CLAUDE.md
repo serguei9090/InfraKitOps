@@ -212,9 +212,12 @@ diagnostics only. Plan + roadmap: [`NETWORK_MODULE_PLAN.md`](NETWORK_MODULE_PLAN
   `LISTENING <addr>` off stdout, exposes `{ endpoint, token, available }` via the
   `backend_endpoint` command, kills it on exit. `capabilities/sidecar.json` scopes
   `shell:allow-spawn` to the one binary with validated args.
-- **Build the sidecar binary before `tauri dev`/`tauri build`**:
-  `backend/build-sidecar.sh` (or `.ps1`) cross-compiles into
-  `app/src-tauri/binaries/infrakit-backend-<triple>` (git-ignored).
+- **Build the sidecar binary before `tauri dev`/`tauri build`**: `bun run
+  build:sidecar` (from `app/`; `--all` = windows+linux) — runs
+  `vendor-tools/fetch-tools` then `backend/build-sidecar` into
+  `app/src-tauri/binaries/<name>-<triple>` (git-ignored). `tauri build` does
+  NOT run this itself (no portable pre-bundle hook for cross-compiled Go);
+  `externalBin` fails loudly if the binaries are absent.
 - **Frontend**: `adapters/backend/backendClient.ts` + `stores/backendStore.ts`
   (`backendAvailable` status + per-tool capability map). Network tool screens use the
   **T4 `NetworkToolScaffold`** (`adapters/ui/network/`), not `ToolDetailScaffold`, and
@@ -448,6 +451,7 @@ Backend (run from `backend/`):
 go test ./...                       # backend unit tests
 go run ./cmd/infrakit-backend       # run the service (prints LISTENING + TOKEN)
 ./build-sidecar.sh                   # cross-compile into app/src-tauri/binaries/
+                                     # (or, from app/:  bun run build:sidecar)
 ```
 
 ## Commit workflow

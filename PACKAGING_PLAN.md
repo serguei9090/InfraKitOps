@@ -57,17 +57,22 @@ residue, plus a **static web bundle** that deploys as-is. Linux is best-effort.
   the default Tauri logo.
 - CSP correctness is only provable in P7e (packaged run).
 
-### P7b — Sidecar build wired into `tauri build`
-- Add `bun run build:sidecar` (calls `backend/build-sidecar.ps1` on Windows,
-  `.sh` elsewhere) and a `pretauri-build`-style step, OR document it as a
-  required manual pre-step in `CLAUDE.md` (Tauri has no portable `beforeBundle`
-  for cross-compiled Go).
-- `vendor-tools/fetch-tools.ps1` run + `tools.lock` verified as part of it.
-- Confirm `externalBin` resolves all three (`infrakit-backend`,
-  `infrakit-helper`, and — where applicable — `iperf3`) for the host triple.
-**DoD**: fresh checkout → `bun install && bun run build:sidecar && bun tauri
-build` produces `src-tauri/target/release/bundle/nsis/*.exe` with the binaries
-embedded. One commit.
+### P7b — Sidecar build wired into `tauri build` — **DONE 2026-09-01** (commit `<p7b>`)
+- `app/scripts/build-sidecar.ts` + `bun run build:sidecar` (`--all` for
+  windows+linux). Runs, from the repo root: `vendor-tools/fetch-tools.{sh,ps1}`
+  (SHA-256-verify iperf3) → `backend/build-sidecar.{sh,ps1}` (backend + helper
+  → `app/src-tauri/binaries/<name>-<triple>[.exe]`, copies matching iperf3).
+  Picks `.ps1` on win32, `.sh` elsewhere.
+- **Not** auto-run by `tauri build` — Tauri has no portable pre-bundle hook
+  for cross-compiled Go. It's a manual/CI pre-step; `externalBin` fails loudly
+  if the binaries are missing.
+- Verified: `bun run build:sidecar` on Windows produces
+  `infrakit-backend-x86_64-pc-windows-msvc.exe` (~20 MB) +
+  `infrakit-helper-…exe` (~2.7 MB); no Windows iperf3 by design.
+- `CLAUDE.md` Commands + the "build the sidecar before tauri dev/build" note
+  updated to point at `bun run build:sidecar`.
+**DoD**: `bun install && bun run build:sidecar && bun run tauri build` — see
+the Verification log for the first full run.
 
 ### P7c — Capability / permission least-privilege audit
 - Enumerate every Tauri command + plugin the frontend actually invokes

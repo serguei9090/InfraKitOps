@@ -10,6 +10,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "tauri": "tauri",
+    "build:sidecar": "bun scripts/build-sidecar.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "set-version": "bun scripts/set-version.ts",
