@@ -292,10 +292,24 @@ Assistant.
   (`AssistantView`, `runbook.assistant` task, chat grounded on the spec) +
   editor "Generate step" (`runbook.gen-step` → append) + per-`StepCard`
   "Explain" (`command.explain`).
-- **Next**: `SETTINGS_MODULE_PLAN.md` (app-shell — absorbs
-  `ModuleSettingsDialog` + AI global defaults + per-module task grouping; see
-  `AI_MODULE_PLAN.md` §9b). Then AI **A3** (tool-calling, history persistence,
-  cost view — all deferred).
+### Settings module (started 2026-08-31, S0 done)
+
+`/settings` page (`adapters/ui/settings/`) — replaces the old rearrange-only
+`ModuleSettingsDialog` (deleted). Left menu of sections from a
+`SETTINGS_SECTIONS` registry (`registry.tsx`); a module with settings adds one
+entry + its panel, no edit to `SettingsScaffold`. Plan +
+phases: [`SETTINGS_MODULE_PLAN.md`](SETTINGS_MODULE_PLAN.md).
+
+- **S0 done**: scaffold + routes (`/settings`, `/settings/:section`), rail gear
+  → `navigate('/settings')`. Sections: **General** (theme, expanded-sidebar,
+  module reorder/hide — dnd list ported from the old dialog), **Backend**
+  (`backendStore` status/version + Reconnect + live capabilities), **About**.
+- **S1 next**: AI section — `GET/PUT /llm/settings` (default connection / model
+  / temperature), `Task.preferredConnectionId`/`preferredModel`, per-feature
+  system prompts grouped by module, `AiPanel` fallback chain (localStorage →
+  task preferred → global default). **S2**: Runbooks + Network sections.
+- Shared config → backend (`llm_settings` / `runbook_settings`); local
+  (theme, module order, network blob) → client `IStoragePort`.
 
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 

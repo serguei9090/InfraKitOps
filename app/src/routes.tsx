@@ -89,6 +89,9 @@ import { RunbookEditorScreen } from './adapters/ui/tools/RunbookEditorScreen'
 // AI Hub
 import { AiScreen } from './adapters/ui/tools/AiScreen'
 
+// Settings
+import { SettingsScreen } from './adapters/ui/settings/SettingsScreen'
+
 // Configuration Builders — Zabbix / Fail2ban
 import { ZabbixConfigBuilderScreen } from './adapters/ui/tools/ZabbixConfigBuilderScreen'
 import { Fail2banConfigBuilderScreen } from './adapters/ui/tools/Fail2banConfigBuilderScreen'
@@ -202,6 +205,8 @@ export const router = createBrowserRouter([
       { path: 'tools/runbook', element: <RunbookScreen /> },
       { path: 'tools/runbook/edit/:id', element: <RunbookEditorScreen /> },
       { path: 'tools/ai', element: <AiScreen /> },
+      { path: 'settings', element: <SettingsScreen /> },
+      { path: 'settings/:section', element: <SettingsScreen /> },
 
       // Configuration Builders — Zabbix / Fail2ban
       { path: 'tools/zabbix-config-builder', element: <ZabbixConfigBuilderScreen /> },

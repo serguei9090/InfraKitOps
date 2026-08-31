@@ -159,14 +159,25 @@ deleted.
 
 ## 6. Phasing
 
-### S0 — Scaffold + General + Backend + About
-- `core/settings/`, `SettingsScaffold`, `registry.ts`, routes, rail gear → nav.
-- **General**: theme toggle, rail-expanded toggle, module reorder/hide (port
-  the `ModuleSettingsDialog` dnd list verbatim). Delete `ModuleSettingsDialog`.
-- **Backend**: status + endpoint/token form (web) + Reconnect, from
-  `backendStore`. **About**: version + links.
-- **DoD**: reorder a module from `/settings/general`, see the rail update;
-  toggle theme; the old dialog is gone and the gear opens the page.
+### S0 — Scaffold + General + Backend + About — **DONE 2026-08-31**
+- `adapters/ui/settings/` — `registry.tsx` (`SETTINGS_SECTIONS` +
+  `SettingsSectionDef`), `SettingsScaffold` (left menu + pane, with shared
+  `SettingsGroup` / `SettingsRow` helpers), `SettingsScreen` wrapper. Routes
+  `/settings` + `/settings/:section` in the shell layout. `core/settings/` not
+  needed for S0 (nothing framework-free yet).
+- **General** — `Switch` for dark theme + expanded-sidebar; the
+  `ModuleSettingsDialog` `@dnd-kit` reorder/hide list ported verbatim into
+  `ModuleOrderList`.
+- **Backend** — `backendStore` status/version/host + Reconnect
+  (`retry()`) + a live-capabilities chip list. (Runtime endpoint/token
+  override for the web build → S3; the field is baked at build time today.)
+- **About** — frontend/backend versions + the plan-doc list.
+- Rail: the gear is now a `RailIcon` → `navigate('/settings')`,
+  `selected` on `/settings*`. `ModuleSettingsDialog.tsx` deleted.
+- **Verified in-browser**: gear opens `/settings` from any module; theme +
+  expanded-sidebar toggles apply live; Reconnect shows "connected · dev · 24/26
+  endpoints"; fresh-tab load zero console errors. Green: build + 1299 tests +
+  lint (no new warnings).
 
 ### S1 — AI section
 - Backend: `GET/PUT /llm/settings` (3 keys), `Task.preferredConnectionId` /

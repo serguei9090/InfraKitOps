@@ -9,7 +9,6 @@ import { createSchemaRepository } from '@/adapters/storage/schemaRepository'
 import { NetworkSettingsDialog } from '@/adapters/ui/network/NetworkSettingsDialog'
 import { useModuleVisibilityStore, visibleModulesInOrder } from '@/stores/moduleVisibilityStore'
 import { useSearchQueryStore } from '@/stores/searchQueryStore'
-import { ModuleSettingsDialog } from './ModuleSettingsDialog'
 import { moduleContainingRoute, moduleRailRoute, type ModuleDef } from './moduleTaxonomy'
 
 const schemaRepository = createSchemaRepository()
@@ -97,20 +96,12 @@ function ModuleRail({ modules, activeModuleId }: { modules: ModuleDef[]; activeM
           />
         ))}
       </div>
-      <ModuleSettingsDialog
-        trigger={
-          <button
-            type="button"
-            aria-label="Rearrange modules"
-            className={cn(
-              'flex items-center gap-2.5 rounded-[10px] text-muted-foreground hover:bg-accent/40 hover:text-foreground',
-              expanded ? 'w-full px-2.5 py-2 text-sm' : 'size-9 justify-center',
-            )}
-          >
-            <Settings className="size-[18px] shrink-0" />
-            {expanded ? <span className="truncate">Rearrange modules</span> : null}
-          </button>
-        }
+      <RailIcon
+        icon={Settings}
+        label="Settings"
+        expanded={expanded}
+        selected={pathname.startsWith('/settings')}
+        onClick={() => navigate('/settings')}
       />
     </nav>
   )
