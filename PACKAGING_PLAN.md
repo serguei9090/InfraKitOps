@@ -32,7 +32,7 @@ residue, plus a **static web bundle** that deploys as-is. Linux is best-effort.
 |---|---------|--------|
 | 1 | `tauri.conf.json` `beforeDevCommand`/`beforeBuildCommand` say `npm run …` — repo is **bun** | ✅ → `bun run dev` / `bun run build` |
 | 2 | Version drift: `package.json` `0.0.0`, `tauri.conf.json` `0.1.0`, `Cargo.toml` `0.1.0` | ✅ all three `0.1.0`; new `bun run set-version <x>` (`app/scripts/set-version.ts`) writes all three, no-arg = drift check (exit 1 on mismatch — wire into CI in P7h) |
-| 3 | `Cargo.toml` `description = "A Tauri App"`, `authors = ["you"]` | ✅ real description + author. **`name = "app"` left as-is** — renaming ripples through `[lib] name`, `target/`, and is cosmetic; skip. `license = ""` still open (no `LICENSE` file in repo — needs a project decision). |
+| 3 | `Cargo.toml` `description = "A Tauri App"`, `authors = ["you"]` | ✅ real description + author + `license = "MIT"`. Root `LICENSE` (MIT, © 2026 InfraKit Studio) added; `app/package.json` `"license": "MIT"`. **`name = "app"` left as-is** — renaming ripples through `[lib] name`, `target/`, cosmetic; skip. |
 | 4 | Icons are the **default Tauri logo** (`icon.icns` is Tauri's) | ⏳ **open** — needs a 1024² brand source PNG, then `bun tauri icon <src>`. Tracked as P7a-icons. |
 | 5 | Default window `800×600` — app shell is designed wider | ✅ `1280×832`, `minWidth 960`, `minHeight 600` |
 | 6 | `security.csp: null` (dev-permissive) | ✅ set: `default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:*; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'`. **Only applies to the packaged build — must be re-verified in P7e** (a too-tight CSP shows as a white screen / blocked requests; `connect-src` covers the sidecar's random `127.0.0.1` port + dev). |
@@ -51,10 +51,10 @@ residue, plus a **static web bundle** that deploys as-is. Linux is best-effort.
 
 ## 4. Phases
 
-### P7a — Config hygiene — **DONE 2026-09-01** (commit pending), except:
-- **P7a-icons** (open): generate brand icons from a 1024² source.
-- **license string** in `Cargo.toml` / NSIS license page — needs a project
-  licence decision + a `LICENSE` file.
+### P7a — Config hygiene — **DONE 2026-09-01** (commits `9927219`, `<licence>`), except:
+- **P7a-icons** (open, deferred by owner 2026-09-01): generate brand icons
+  from a 1024² source PNG via `bun tauri icon <src>`. Until then the app ships
+  the default Tauri logo.
 - CSP correctness is only provable in P7e (packaged run).
 
 ### P7b — Sidecar build wired into `tauri build`
