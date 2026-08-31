@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { openTaskStream } from '@/adapters/backend/llmClient'
+import { classify, type AppError } from '@/core/errors/appError'
 import type { ChatMessage, TokenUsage } from '@/core/llm/llmModel'
 
 export interface LlmRunInput {
@@ -15,7 +16,7 @@ export interface LlmRunState {
   text: string
   parsed?: unknown
   usage?: TokenUsage
-  error?: string
+  error?: AppError
 }
 
 /**
@@ -49,14 +50,18 @@ export function useLlm(taskId: string) {
                 case 'end':
                   return { ...s, running: false, usage: d.usage as TokenUsage | undefined }
                 case 'error':
-                  return { ...s, running: false, error: (d.error as string) ?? 'run failed' }
+                  return {
+                    ...s,
+                    running: false,
+                    error: classify({ error: d.error, code: d.code, hint: d.hint }, 'AI Hub'),
+                  }
                 default:
                   return s
               }
             })
           },
           onClose: () => setState((s) => ({ ...s, running: false })),
-          onError: (e) => setState((s) => ({ ...s, running: false, error: e.message })),
+          onError: (e) => setState((s) => ({ ...s, running: false, error: classify(e, 'AI Hub') })),
         },
       )
     },

@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/sse"
 )
@@ -31,11 +32,15 @@ func (h *LLMHandlers) guard(w http.ResponseWriter) bool {
 }
 
 func llmErr(w http.ResponseWriter, err error) {
-	if errors.Is(err, llm.ErrNotFound) {
-		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
-		return
+	var ae *apierr.Error
+	switch {
+	case errors.As(err, &ae):
+		apierr.Write(w, ae)
+	case errors.Is(err, llm.ErrNotFound):
+		apierr.Write(w, apierr.NotFound("not found"))
+	default:
+		apierr.Write(w, apierr.Validation(err.Error()))
 	}
-	WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 }
 
 // ListConnections: GET /llm/connections
@@ -58,7 +63,7 @@ func (h *LLMHandlers) PutConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	var c llm.Connection
 	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if id := chi.URLParam(r, "id"); id != "" {
@@ -96,7 +101,13 @@ func (h *LLMHandlers) TestConnection(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	models, err := h.Engine.TestConnection(ctx, chi.URLParam(r, "id"))
 	if err != nil {
-		WriteJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		out := map[string]any{"ok": false, "error": err.Error()}
+		var ae *apierr.Error
+		if errors.As(err, &ae) {
+			out["code"] = string(ae.Code)
+			out["hint"] = ae.Hint
+		}
+		WriteJSON(w, http.StatusOK, out)
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "models": models})
@@ -135,7 +146,7 @@ func (h *LLMHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	var patch map[string]string
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	for k, v := range patch {
@@ -166,7 +177,7 @@ func (h *LLMHandlers) PutTask(w http.ResponseWriter, r *http.Request) {
 	}
 	var t llm.Task
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if id := chi.URLParam(r, "id"); id != "" {

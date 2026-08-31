@@ -5,7 +5,10 @@
  */
 import { create } from 'zustand'
 import * as api from '@/adapters/backend/llmClient'
+import { reportError } from '@/stores/errorStore'
 import type { ChatMessage, LlmConnection, LlmModel, LlmTask, TokenUsage } from '@/core/llm/llmModel'
+
+const SRC = 'AI Hub'
 
 export type Section = 'playground' | 'connections' | 'tasks'
 
@@ -83,13 +86,21 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
   },
 
   putTask: async (t) => {
-    await api.putTask(t)
-    await get().refreshTasks()
+    try {
+      await api.putTask(t)
+      await get().refreshTasks()
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 
   resetTask: async (id) => {
-    await api.deleteTask(id)
-    await get().refreshTasks()
+    try {
+      await api.deleteTask(id)
+      await get().refreshTasks()
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 
   refreshSettings: async () => {
@@ -101,7 +112,11 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
   },
 
   putSettings: async (patch) => {
-    set({ settings: await api.putLlmSettings(patch) })
+    try {
+      set({ settings: await api.putLlmSettings(patch) })
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 
   putConnection: async (c) => {
@@ -110,19 +125,23 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
       await get().refresh()
       return saved
     } catch (e) {
-      set({ error: msg(e) })
+      reportError(e, SRC)
       return null
     }
   },
 
   removeConnection: async (id) => {
-    await api.deleteConnection(id)
-    set((s) => {
-      const models = { ...s.models }
-      delete models[id]
-      return { models }
-    })
-    await get().refresh()
+    try {
+      await api.deleteConnection(id)
+      set((s) => {
+        const models = { ...s.models }
+        delete models[id]
+        return { models }
+      })
+      await get().refresh()
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 
   loadModels: async (connId, force = false) => {

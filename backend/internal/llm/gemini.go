@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -43,14 +42,14 @@ func (geminiProvider) ListModels(ctx context.Context, conn Connection, key strin
 	if err != nil {
 		return nil, scrubKey(err, key)
 	}
+	scrub := func(e error) error { return scrubKey(e, key) }
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, scrubKey(err, key)
+		return nil, netErr(err, scrub)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-		return nil, fmt.Errorf("GET /v1beta/models: %s: %s", resp.Status, bytes.TrimSpace(b))
+		return nil, httpErr("gemini", resp)
 	}
 	var body struct {
 		Models []struct {
@@ -120,12 +119,11 @@ func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr 
 	req.Header.Set("content-type", "application/json")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return Usage{}, scrubKey(err, key)
+		return Usage{}, netErr(err, func(e error) error { return scrubKey(e, key) })
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-		return Usage{}, fmt.Errorf("streamGenerateContent: %s: %s", resp.Status, bytes.TrimSpace(b))
+		return Usage{}, httpErr("gemini", resp)
 	}
 
 	sc := bufio.NewScanner(resp.Body)

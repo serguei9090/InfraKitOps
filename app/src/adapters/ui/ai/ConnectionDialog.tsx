@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,8 @@ import {
   type ProviderKind,
 } from '@/core/llm/llmModel'
 import { SecretPicker } from '@/adapters/ui/runbook/SecretPicker'
+import { InlineError } from '@/adapters/ui/errors/InlineError'
+import { classify, type AppError } from '@/core/errors/appError'
 import { cn } from '@/lib/utils'
 
 type Draft = Partial<LlmConnection>
@@ -29,7 +31,7 @@ interface Props {
 export function ConnectionDialog({ draft, onClose }: Props) {
   const putConnection = useLlmStore((s) => s.putConnection)
   const [d, setD] = useState<Draft | null>(draft)
-  const [test, setTest] = useState<{ state: 'idle' | 'running' | 'ok' | 'err'; models?: LlmModel[]; error?: string }>({
+  const [test, setTest] = useState<{ state: 'idle' | 'running' | 'ok' | 'err'; models?: LlmModel[]; error?: AppError }>({
     state: 'idle',
   })
 
@@ -41,9 +43,10 @@ export function ConnectionDialog({ draft, onClose }: Props) {
     setTest({ state: 'running' })
     try {
       const r = await testConnection(id)
-      setTest(r.ok ? { state: 'ok', models: r.models } : { state: 'err', error: r.error })
+      if (r.ok) setTest({ state: 'ok', models: r.models })
+      else setTest({ state: 'err', error: classify({ error: r.error, code: r.code, hint: r.hint }, 'AI Hub') })
     } catch (e) {
-      setTest({ state: 'err', error: e instanceof Error ? e.message : String(e) })
+      setTest({ state: 'err', error: classify(e, 'AI Hub') })
     }
   }
 
@@ -141,11 +144,7 @@ export function ConnectionDialog({ draft, onClose }: Props) {
                 <CheckCircle2 className="size-3.5" /> {test.models?.length ?? 0} models available
               </p>
             )}
-            {test.state === 'err' && (
-              <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
-                <XCircle className="size-3.5" /> {test.error}
-              </p>
-            )}
+            {test.state === 'err' && <InlineError error={test.error} className="mt-1.5" />}
             {!d.id && (
               <p className={cn('mt-1 text-xs text-muted-foreground')}>Save first, then Test to pull the model list.</p>
             )}

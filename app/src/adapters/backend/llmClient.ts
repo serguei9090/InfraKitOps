@@ -29,6 +29,8 @@ export interface ConnectionTestResult {
   ok: boolean
   models?: LlmModel[]
   error?: string
+  code?: string
+  hint?: string
 }
 export const testConnection = (id: string) =>
   backendRequest<ConnectionTestResult>('POST', `/llm/connections/${id}/test`)

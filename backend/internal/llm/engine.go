@@ -3,11 +3,13 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/sse"
 )
 
@@ -179,7 +181,7 @@ func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, sha
 	}
 	<-done
 	if chatErr != nil {
-		send(sse.Message{Event: "error", Data: map[string]string{"error": chatErr.Error()}})
+		send(sse.Message{Event: "error", Data: errData(chatErr)})
 		return
 	}
 	if shape == OutputJSON {
@@ -190,6 +192,20 @@ func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, sha
 	send(sse.Message{Event: "end", Data: map[string]any{
 		"usage": map[string]int{"promptTokens": usage.PromptTokens, "completionTokens": usage.CompletionTokens},
 	}})
+}
+
+// errData shapes an SSE `error` payload — `{error}` plus `code`+`hint` when the
+// error was classified by internal/apierr.
+func errData(err error) map[string]string {
+	d := map[string]string{"error": err.Error()}
+	var ae *apierr.Error
+	if errors.As(err, &ae) {
+		d["code"] = string(ae.Code)
+		if ae.Hint != "" {
+			d["hint"] = ae.Hint
+		}
+	}
+	return d
 }
 
 // sendOrDone sends m on out, or returns false if ctx is cancelled first (the

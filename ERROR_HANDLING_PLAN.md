@@ -218,13 +218,26 @@ clear(): void
   API key" with the key icon; a `TypeError('Failed to fetch')` → "Service not
   reachable". Fresh tab zero console errors. Green: build + 1307 tests + lint.
 
-### E1 — LLM path (highest value — "wrong key / endpoint down")
-- `apierr` in the 4 LLM adapters + the `/llm/*` endpoints; `stream` error
-  event carries `code`+`hint`.
-- `llmStore` + `useLlm` `report()`; `ConnectionDialog` / `AiSettings` inline.
-- **DoD**: a connection with a bad key → "Authentication failed — check the API
-  key" (not a raw 401 body); a wrong base URL → "Service not reachable — is it
-  running?"; both from Test and from a live run.
+### E1 — LLM path — **DONE 2026-08-31**
+- `internal/llm/provider.go` gained `netErr(err, scrub)` (→ `apierr.ClassifyNet`;
+  gemini scrubs the key first) and `httpErr(label, resp)` (reads a bounded
+  body → `apierr.ClassifyHTTP`). All 4 adapters (`ollama`/`openai`/`anthropic`/
+  `gemini`) use them on `Do` errors + non-200. `Engine.stream`'s `error` event
+  → `errData(err)` = `{error}` + `code`+`hint` when it's an `*apierr.Error`.
+- `api/llm.go`: `llmErr` classifies (`*apierr.Error` → `apierr.Write`,
+  `ErrNotFound` → 404, else `Validation`); decode errors → `Validation`;
+  `TestConnection` returns `{ok,error,code,hint}`.
+- Frontend: `useLlm` classifies the SSE `error` event + transport `onError`
+  into an `AppError`; `AiPanel` renders `<InlineError onRetry={runOnce}/>`
+  (was a bare `<p>`). `ConnectionDialog` Test → `<InlineError>`.
+  `llmStore` mutations (`putConnection`/`removeConnection`/`putTask`/
+  `resetTask`/`putSettings`) → `reportError(e, 'AI Hub')`.
+- 4 new backend tests (provider classifies 401→auth, dial-refused→unreachable;
+  + the 2 E0 apierr tests).
+- **Verified in-browser**: a connection at a dead port → Test → 🔌 "Service not
+  reachable — is it running, is the URL right?" with the raw dial error in the
+  Details; API path returns `{code:"unreachable",hint:…}`. Fresh tab zero
+  console errors. Green.
 
 ### E2 — Vault + Runbooks + Network write
 - `apierr` in `vault.go` (`Locked`, `Auth` for wrong master password),

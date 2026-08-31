@@ -1,10 +1,14 @@
 package llm
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/infrakit/backend/internal/apierr"
 )
 
 // httpClient is shared by all adapters. No overall timeout — streamed chats can
@@ -62,6 +66,26 @@ func baseURL(conn Connection) string {
 		u = defaultBaseURL(conn.Provider)
 	}
 	return u
+}
+
+// netErr classifies a transport failure into an *apierr.Error (unreachable /
+// timeout / …). `scrub`, if set, sanitises the message first (gemini's URL key).
+// A cancelled-context error passes through unchanged.
+func netErr(err error, scrub func(error) error) error {
+	if scrub != nil {
+		err = scrub(err)
+	}
+	if e := apierr.ClassifyNet(err); e != nil {
+		return e
+	}
+	return err
+}
+
+// httpErr reads a bounded error body off a non-2xx response and classifies it
+// (401→auth_failed, 429→rate_limited, …).
+func httpErr(label string, resp *http.Response) error {
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+	return apierr.ClassifyHTTP(label, resp.StatusCode, string(bytes.TrimSpace(b)))
 }
 
 // contextErr maps a cancelled/expired context to a friendly message.

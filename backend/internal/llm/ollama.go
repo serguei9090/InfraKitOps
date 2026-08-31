@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 )
 
@@ -27,11 +26,11 @@ func (ollamaProvider) ListModels(ctx context.Context, conn Connection, key strin
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, netErr(err, nil)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ollama /api/tags: %s", resp.Status)
+		return nil, httpErr("ollama", resp)
 	}
 	var body struct {
 		Models []struct {
@@ -76,12 +75,11 @@ func (ollamaProvider) Chat(ctx context.Context, conn Connection, key string, cr 
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return Usage{}, err
+		return Usage{}, netErr(err, nil)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-		return Usage{}, fmt.Errorf("ollama /api/chat: %s: %s", resp.Status, bytes.TrimSpace(b))
+		return Usage{}, httpErr("ollama", resp)
 	}
 
 	sc := bufio.NewScanner(resp.Body)

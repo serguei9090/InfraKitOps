@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 )
@@ -35,12 +34,11 @@ func (p anthropicProvider) ListModels(ctx context.Context, conn Connection, key 
 	p.headers(req, key)
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, netErr(err, nil)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-		return nil, fmt.Errorf("GET /v1/models: %s: %s", resp.Status, bytes.TrimSpace(b))
+		return nil, httpErr("anthropic", resp)
 	}
 	var body struct {
 		Data []struct {
@@ -98,12 +96,11 @@ func (p anthropicProvider) Chat(ctx context.Context, conn Connection, key string
 	req.Header.Set("accept", "text/event-stream")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return Usage{}, err
+		return Usage{}, netErr(err, nil)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-		return Usage{}, fmt.Errorf("POST /v1/messages: %s: %s", resp.Status, bytes.TrimSpace(b))
+		return Usage{}, httpErr("anthropic", resp)
 	}
 
 	sc := bufio.NewScanner(resp.Body)

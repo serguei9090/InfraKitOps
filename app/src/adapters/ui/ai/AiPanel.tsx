@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useLlmStore } from '@/stores/llmStore'
 import type { ChatMessage } from '@/core/llm/llmModel'
 import { useLlm } from './useLlm'
+import { InlineError } from '@/adapters/ui/errors/InlineError'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -207,7 +208,7 @@ export function AiPanel({
               {running && <ChatBubble role="assistant" content={text || '…'} />}
             </div>
           )}
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          <InlineError error={error} />
           <div className="flex items-end gap-2">
             <Textarea
               value={input}
@@ -259,7 +260,7 @@ export function AiPanel({
             )}
           </div>
 
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          <InlineError error={error} onRetry={runOnce} retrying={running} />
 
           {text && (
             <div className="rounded-md border border-border/50 bg-background p-2 text-xs">
