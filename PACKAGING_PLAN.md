@@ -109,16 +109,26 @@ and returns `{}` → desktop prefs quietly stop persisting). Needs a real
 `tauri dev` / packaged run to confirm — do it as the first step of P7e, not
 blind. Also add `capabilities/README.md` documenting each grant then.
 
-### P7d — Windows installer
-- NSIS config in `tauri.conf.json` `bundle.windows.nsis` — per-user,
-  `installMode: "currentUser"`, start-menu shortcut, license page pointing at
-  a bundled `LICENSE`.
-- `bundle.resources` — bundle `vendor-tools/TOOLS.md` + license texts
-  (attribution obligation, `CLAUDE.md` "bundled-binary license rule").
-- WebView2: `bundle.windows.webviewInstallMode` = `downloadBootstrapper`
-  (smallest) — document the offline-install alternative (`embedBootstrapper`).
-**DoD**: `*.exe` installs to `%LOCALAPPDATA%\InfraKit Studio`, launches from
-the Start menu. One commit.
+### P7d — Windows installer — **baseline works out of the box (2026-09-01)**
+
+First full `bun run tauri build` on this machine (10m25s release compile) →
+**both bundlers succeeded with zero extra config**:
+- `target/release/bundle/msi/InfraKit Studio_0.1.0_x64_en-US.msi` (14 MB, WiX)
+- `target/release/bundle/nsis/InfraKit Studio_0.1.0_x64-setup.exe` (11 MB)
+- `externalBin` resolved — `infrakit-backend.exe` (20 MB) + `infrakit-helper.exe`
+  (2.7 MB) staged next to `app.exe` in `target/release/`, `-<triple>` suffix
+  stripped, packed into the installers.
+
+Remaining P7d tuning (not blocking a usable installer):
+- `tauri.conf.json` `bundle.windows.nsis` — `installMode: "currentUser"`
+  (per-user, no admin), start-menu shortcut, `license` → the repo `LICENSE`.
+- `bundle` `targets` — currently `"all"` builds **both** MSI and NSIS. Pick
+  one primary (decision §3-A → NSIS): `"targets": ["nsis"]`.
+- `bundle.resources` — bundle `vendor-tools/TOOLS.md` + third-party license
+  texts (attribution; `CLAUDE.md` "bundled-binary license rule").
+- `bundle.windows.webviewInstallMode` = `downloadBootstrapper` (smallest);
+  note `embedBootstrapper` for offline installs.
+**DoD**: `*-setup.exe` installs per-user, launches from the Start menu.
 
 ### P7e — End-to-end verification gate (manual, gates "done")
 The bar from `MIGRATION_PLAN.md` Phase 7 + `README.md` Phase 5:
@@ -169,4 +179,10 @@ Record the run in `PACKAGING_PLAN.md` (this file) under "Verification log".
 
 ## 6. Verification log
 
-_(fill in P7e runs here)_
+### 2026-09-01 — first `bun run tauri build` (dev machine, not a clean VM)
+- `bun run build:sidecar` → `infrakit-backend-x86_64-pc-windows-msvc.exe`
+  (20 MB) + `infrakit-helper-…exe` (2.7 MB).
+- `bun run tauri build`: frontend build OK → release compile 10m25s → **MSI
+  + NSIS both produced**, no errors, `externalBin` resolved.
+- **Not yet done**: silent install / launch / sidecar-answers / UAC-helper /
+  no-orphan / uninstall on a clean profile (the real P7e gate).
