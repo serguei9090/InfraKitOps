@@ -22,6 +22,10 @@ var Version = "dev"
 // from /health to decide whether to show the login layer.
 var AuthMode = "off"
 
+// TLSFingerprint is the sha256 fingerprint of the serving cert when --tls is
+// on (U6). Empty otherwise. The desktop client pins it.
+var TLSFingerprint = ""
+
 var startedAt = time.Now()
 
 // hostname is this machine's name, used as the history "target" for
@@ -55,8 +59,10 @@ type healthResponse struct {
 	PID       int    `json:"pid"`
 	UptimeSec int64  `json:"uptimeSec"`
 	Elevated  bool   `json:"elevated"`
-	OS        string `json:"os"`
-	AuthMode  string `json:"authMode"`
+	OS          string `json:"os"`
+	AuthMode    string `json:"authMode"`
+	TLS         bool   `json:"tls"`
+	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
 // Health reports liveness plus the facts the frontend needs to decide which
@@ -67,8 +73,10 @@ func Health(w http.ResponseWriter, _ *http.Request) {
 		Version:   Version,
 		PID:       os.Getpid(),
 		UptimeSec: int64(time.Since(startedAt).Seconds()),
-		Elevated:  privilege.IsElevated(),
-		OS:        runtime.GOOS,
-		AuthMode:  AuthMode,
+		Elevated:    privilege.IsElevated(),
+		OS:          runtime.GOOS,
+		AuthMode:    AuthMode,
+		TLS:         TLSFingerprint != "",
+		Fingerprint: TLSFingerprint,
 	})
 }

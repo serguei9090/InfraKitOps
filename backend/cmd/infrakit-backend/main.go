@@ -13,6 +13,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"errors"
 	"flag"
@@ -23,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -34,6 +36,7 @@ import (
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/promptstore"
 	"github.com/infrakit/backend/internal/server"
+	"github.com/infrakit/backend/internal/tlscert"
 	"github.com/infrakit/backend/internal/tools/iperf"
 	"github.com/infrakit/backend/internal/vault"
 )
@@ -53,6 +56,10 @@ func main() {
 	maxConcurrentRuns := flag.Int("max-concurrent-runs", 4, "cap on runbooks executing at once (0 = unlimited)")
 	authMode := flag.String("auth", "off", `"off" = single-user static token; "on" = multi-user sessions`)
 	authDBPath := flag.String("auth-db", "", `auth database path ("" = OS config dir)`)
+	tlsMode := flag.String("tls", "off", `"off", "auto" (self-signed, pin the printed FINGERPRINT), or a cert file path`)
+	tlsKey := flag.String("tls-key", "", "private key file (with --tls <certfile>)")
+	var corsOrigins multiFlag
+	flag.Var(&corsOrigins, "cors-origin", "extra browser origin allowed under --auth on (repeatable)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -191,10 +198,30 @@ func main() {
 		log.Fatalf("bind %s: %v", *addr, err)
 	}
 
-	// The host reads these two lines to learn where to connect.
+	// TLS (U6). --tls auto self-signs into the config dir; the client pins the
+	// printed FINGERPRINT.
+	cfgDir, _ := appDataDir()
+	tlsHost, _, _ := net.SplitHostPort(*addr)
+	cert, fingerprint, terr := tlscert.Load(*tlsMode, cfgDir, *tlsKey, []string{tlsHost})
+	if terr != nil {
+		log.Fatalf("tls: %v", terr)
+	}
+	tlsOn := *tlsMode != "" && *tlsMode != "off"
+
+	// Hard gate: multi-user mode over a non-loopback bind MUST use TLS —
+	// passwords and session tokens in clear on a LAN is a non-starter.
+	if *authMode == "on" && !tlsOn && !isLoopback(ln.Addr()) {
+		log.Fatalf("refusing to start: --auth on with a non-loopback bind (%s) needs --tls (auto or a real cert)", ln.Addr())
+	}
+
+	// The host reads these lines to learn where + how to connect.
 	fmt.Printf("LISTENING %s\n", ln.Addr().String())
 	if generated {
 		fmt.Printf("TOKEN %s\n", tok)
+	}
+	if tlsOn {
+		fmt.Printf("FINGERPRINT %s\n", fingerprint)
+		api.TLSFingerprint = fingerprint
 	}
 	os.Stdout.Sync()
 
@@ -202,6 +229,7 @@ func main() {
 	handler := server.NewRouter(server.Options{
 		Token:         tok,
 		Auth:          authSvc,
+		CORSOrigins:   corsOrigins,
 		OnActivity:    wd.Touch,
 		History:       store,
 		Orchestrator:  orch,
@@ -224,6 +252,12 @@ func main() {
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	if tlsOn {
+		httpServer.TLSConfig = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		}
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -241,9 +275,31 @@ func main() {
 		_ = httpServer.Shutdown(shutdownCtx)
 	}()
 
-	if err := httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	serve := httpServer.Serve
+	if tlsOn {
+		serve = func(l net.Listener) error { return httpServer.ServeTLS(l, "", "") }
+	}
+	if err := serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("serve: %v", err)
 	}
+}
+
+// multiFlag collects a repeatable string flag.
+type multiFlag []string
+
+func (m *multiFlag) String() string { return strings.Join(*m, ",") }
+func (m *multiFlag) Set(v string) error {
+	*m = append(*m, v)
+	return nil
+}
+
+func isLoopback(a net.Addr) bool {
+	host, _, err := net.SplitHostPort(a.String())
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // openHistory resolves the database path and opens the store. A failure is

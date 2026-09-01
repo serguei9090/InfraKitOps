@@ -72,6 +72,17 @@ export function BackendSettings() {
                 {health.elevated ? ' · elevated' : ''}
               </span>
             </SettingsRow>
+            <SettingsRow label="Transport">
+              <span className="font-mono text-xs">
+                {health.tls ? 'HTTPS' : 'HTTP'}
+                {health.authMode === 'on' ? ' · multi-user' : ''}
+              </span>
+            </SettingsRow>
+            {health.fingerprint && (
+              <SettingsRow label="Cert fingerprint" hint="Share this so clients can pin the self-signed certificate.">
+                <span className="font-mono text-[10px] break-all">{health.fingerprint}</span>
+              </SettingsRow>
+            )}
           </>
         )}
         <SettingsRow label="">

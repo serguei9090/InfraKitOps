@@ -28,6 +28,9 @@ type Options struct {
 	// Auth, when set, switches the service into multi-user mode: session
 	// tokens instead of the static Token, plus /auth + /users + /audit.
 	Auth *auth.Service
+	// CORSOrigins are extra browser origins allowed in addition to the
+	// built-in localhost / tauri set (U6, for a hosted web deployment).
+	CORSOrigins []string
 	// OnActivity, if set, is called once per request so an idle watchdog can
 	// reset its timer.
 	OnActivity func()
@@ -63,7 +66,7 @@ type Options struct {
 func NewRouter(opts Options) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
-	r.Use(cors)
+	r.Use(cors(opts.CORSOrigins))
 	r.Use(activity(opts.OnActivity))
 	if opts.Auth != nil {
 		r.Use(sessionAuth(opts.Auth))

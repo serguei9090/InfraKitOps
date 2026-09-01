@@ -119,6 +119,10 @@ export interface HealthInfo {
   os: string
   /** "on" when the backend runs in multi-user mode (USER_MANAGEMENT_PLAN.md) */
   authMode?: 'off' | 'on'
+  /** true when the backend serves HTTPS (U6) */
+  tls?: boolean
+  /** sha256 fingerprint of the serving cert, for pinning (U6) */
+  fingerprint?: string
 }
 
 export interface ToolCapability {

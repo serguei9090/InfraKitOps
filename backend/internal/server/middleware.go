@@ -19,15 +19,19 @@ var tauriOrigins = map[string]bool{
 	"tauri://localhost":       true,
 }
 
-// originAllowed permits the Tauri webview origins and any loopback origin (a
-// dev Vite server on any port). The service binds 127.0.0.1 and every request
-// still needs the bearer token, so loopback pages are not a real exposure.
-func originAllowed(origin string) bool {
+// originAllowed permits the Tauri webview origins, any loopback origin (a dev
+// Vite server on any port), and any explicitly configured extra origin (U6).
+func originAllowed(origin string, extra []string) bool {
 	if origin == "" {
 		return true // non-browser / same-origin caller
 	}
 	if tauriOrigins[origin] {
 		return true
+	}
+	for _, e := range extra {
+		if strings.EqualFold(strings.TrimRight(e, "/"), strings.TrimRight(origin, "/")) {
+			return true
+		}
 	}
 	u, err := url.Parse(origin)
 	if err != nil {
@@ -171,23 +175,26 @@ func accessGuard(next http.Handler) http.Handler {
 }
 
 // cors allows the known app origins (and same-origin / non-browser callers that
-// send no Origin header) and answers preflight requests.
-func cors(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" && originAllowed(origin) {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Expose-Headers", "X-Pdf-Bytes-In, X-Pdf-Bytes-Out")
-		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+// send no Origin header) and answers preflight requests. `extra` are additional
+// origins configured with --cors-origin.
+func cors(extra []string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if origin != "" && originAllowed(origin, extra) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Expose-Headers", "X-Pdf-Bytes-In, X-Pdf-Bytes-Out")
+			}
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // activity calls onActivity once per request so the caller's idle watchdog can
