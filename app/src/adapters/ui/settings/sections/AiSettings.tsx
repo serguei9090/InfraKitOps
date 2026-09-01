@@ -6,14 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useBackendStore } from '@/stores/backendStore'
 import { useLlmStore } from '@/stores/llmStore'
 import type { LlmTask } from '@/core/llm/llmModel'
+import { groupTasks } from '@/core/llm/taskGroups'
 import { TaskDialog } from '@/adapters/ui/ai/TaskDialog'
 import { SettingsGroup, SettingsRow } from '../SettingsScaffold'
-
-const TASK_GROUPS: { prefix: string; label: string }[] = [
-  { prefix: 'prompt.', label: 'Prompt Library' },
-  { prefix: 'runbook.', label: 'Runbooks' },
-  { prefix: 'command.', label: 'Shell & SSH' },
-]
 
 export function AiSettings() {
   const status = useBackendStore((s) => s.status)
@@ -51,13 +46,7 @@ export function AiSettings() {
   }, [defConn, loadModels])
   const defModels = defConn ? (models[defConn] ?? []) : []
 
-  const grouped = useMemo(
-    () =>
-      TASK_GROUPS.map((g) => ({ ...g, tasks: tasks.filter((t) => t.id.startsWith(g.prefix)) })).filter(
-        (g) => g.tasks.length > 0,
-      ),
-    [tasks],
-  )
+  const grouped = useMemo(() => groupTasks(tasks), [tasks])
 
   if (status !== 'available') {
     return (
@@ -134,7 +123,7 @@ export function AiSettings() {
 
       {grouped.map((g) => (
         <SettingsGroup
-          key={g.prefix}
+          key={g.key}
           title={`${g.label} — prompts`}
           description="The system prompt each feature sends. Customise to change its behaviour everywhere."
         >
