@@ -122,6 +122,8 @@ export interface LlmConversation {
   model?: string
   taskId?: string
   pinned: boolean
+  promptTokens: number
+  completionTokens: number
   createdAt: number
   updatedAt: number
 }
@@ -131,6 +133,8 @@ export interface StoredMessage {
   role: ChatRole
   content: string
   steps?: ChatToolStep[]
+  promptTokens?: number
+  completionTokens?: number
 }
 
 /** Global AI defaults, stored server-side in llm_settings. */

@@ -361,7 +361,13 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
     if (!c || c.turns.length === 0) return null
     const messages: StoredMessage[] = c.turns
       .filter((t) => t.state !== 'error')
-      .map((t) => ({ role: t.role, content: t.content, steps: t.steps }))
+      .map((t) => ({
+        role: t.role,
+        content: t.content,
+        steps: t.steps,
+        promptTokens: t.usage?.promptTokens,
+        completionTokens: t.usage?.completionTokens,
+      }))
     const firstUser = c.turns.find((t) => t.role === 'user')?.content ?? 'Chat'
     try {
       const id = await api.saveConversation({
@@ -397,6 +403,10 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
             content: m.content,
             state: 'done',
             steps: m.steps,
+            usage:
+              m.promptTokens || m.completionTokens
+                ? { promptTokens: m.promptTokens ?? 0, completionTokens: m.completionTokens ?? 0 }
+                : undefined,
           })),
         },
       })

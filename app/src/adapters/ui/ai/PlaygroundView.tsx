@@ -122,12 +122,19 @@ export function PlaygroundView() {
                 >
                   <button
                     type="button"
-                    className="min-w-0 flex-1 truncate text-left"
+                    className="min-w-0 flex-1 text-left"
                     onClick={() => void loadConversation(c.id)}
                     title={c.title}
                   >
-                    {c.pinned && <Pin className="mr-1 inline size-3 text-primary" />}
-                    {c.title}
+                    <span className="block truncate">
+                      {c.pinned && <Pin className="mr-1 inline size-3 text-primary" />}
+                      {c.title}
+                    </span>
+                    {c.promptTokens + c.completionTokens > 0 && (
+                      <span className="block text-[10px] text-muted-foreground">
+                        {fmtTok(c.promptTokens + c.completionTokens)} tok
+                      </span>
+                    )}
                   </button>
                   <button
                     type="button"
@@ -296,6 +303,10 @@ export function PlaygroundView() {
       </div>
     </div>
   )
+}
+
+function fmtTok(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
 }
 
 function safeGet(k: string): string {
