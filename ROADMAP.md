@@ -39,13 +39,14 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 
 ## Remaining
 
-All 15 done. **E3 complete.** Only the parked items are left (see below).
+All 15 numbered items + A4f + S3f done. Only parked items left (above).
+**Next: a user-management module** — plan not written yet.
 
 ## Done
 
-AI A0–A2 · **A3b/A3c/A3e** · A4a–A4d · **A4e (complete)** · AI Stop ·
-provider→model auto-fill · Gemini MCP fixes (`$schema` strip,
-`thoughtSignature` echo) · E0–E2 · **E3a/E3b/E3e** · S0–S2 · **S3a/S3b/S3c** ·
-**E3c/E3d** · **E3 complete** · **A4f (MCP resources + prompts)** · CS0–CS4 ·
+AI A0–A2 · **A3b/A3c/A3e** · A4a–A4d · **A4e (complete)** ·
+**A4f (MCP resources + prompts)** · AI Stop · provider→model auto-fill ·
+Gemini MCP fixes (`$schema` strip, `thoughtSignature` echo) · E0–E2 ·
+**E3a–E3e (E3 complete)** · S0–S2 · **S3a–S3d** · **S3f** · CS0–CS4 ·
 **jsrsasign→peculiar** · P7a–P7d baseline · dialog-width fix ·
 Tasks-view grouping.

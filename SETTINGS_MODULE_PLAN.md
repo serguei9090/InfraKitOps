@@ -268,13 +268,16 @@ Needs the account / auth layer that doesn't exist. When it does: the S3b
 envelope is the payload; sync = push/pull it to a user endpoint with
 last-write-wins + a manual conflict view.
 
-#### S3f — Web-build backend endpoint override
-Noted at §… (the `VITE_BACKEND_URL` field is build-time-baked today). A
-Settings → Backend field (web build only) writing to `localStorage`, read by
-`backendClient`/`sseClient` `resolve()` before the env fallback. Pairs with
-`PACKAGING_PLAN.md` P7f.
-**DoD**: set a URL in the field on the static build → tools connect without a
-rebuild.
+#### S3f — Web-build backend endpoint override — **DONE 2026-09-01** (`2396bbf`)
+`adapters/backend/endpointOverride.ts` — `readEndpointOverride` /
+`writeEndpointOverride` / `resolveWebEndpoint` (localStorage
+`infrakit:backend-endpoint` `{url,token}` wins over
+`VITE_BACKEND_URL`/`VITE_BACKEND_TOKEN`). Both `backendClient` and `sseClient`
+call `resolveWebEndpoint()` in their non-Tauri branch; `backendStore.retry()`
+now also `resetSseConnection()`. Settings → Backend "Endpoint override" group
+(rendered only when `!isTauri()`): URL + token inputs, Save & reconnect,
+Clear. Verified: override → dead port → "not reachable"; Clear → env default →
+"connected". Pairs with `PACKAGING_PLAN.md` P7f.
 
 ---
 

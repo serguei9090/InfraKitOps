@@ -350,7 +350,7 @@ Assistant.
   Lets the model look up commands/docs not in its training (Context7, web
   search). Note: Knowledge Hub's `McpServersScreen` is just a link list,
   unrelated.
-### Settings module (started 2026-08-31, S0–S2 done)
+### Settings module (started 2026-08-31, S0–S2 + S3a–S3d + S3f done)
 
 `/settings` page (`adapters/ui/settings/`) — replaces the old rearrange-only
 `ModuleSettingsDialog` (deleted). Left menu of sections from a
@@ -373,10 +373,19 @@ phases: [`SETTINGS_MODULE_PLAN.md`](SETTINGS_MODULE_PLAN.md).
   `Engine.SetMaxConcurrent` new) + Network section (`NetworkSettingsDialog`
   body moved in, the dialog deleted, the module's "Toolkit settings" button
   deep-links to `/settings/network`).
-- **S3 deferred**: export/import all settings, keyboard-shortcut editor,
-  per-section reset, settings search, cross-device sync.
+- **S3a–S3d done** (2026-09-01): per-section reset (`SettingsResetButton`),
+  export/import all settings (`settingsBackup.ts`, no secrets), nav search
+  (`keywords` per section), keyboard-shortcut editor (`core/shortcuts/` +
+  `useShortcut` + General rebind UI).
+- **S3f done** (`2396bbf`): web-build backend endpoint override —
+  `adapters/backend/endpointOverride.ts` (`localStorage`
+  `infrakit:backend-endpoint` `{url,token}` beats `VITE_BACKEND_URL`),
+  `resolveWebEndpoint()` in `backendClient`+`sseClient`, Settings → Backend
+  "Endpoint override" group (web build only).
+- **S3e killed**: cross-device sync — standalone app, no account layer.
 - Shared config → backend (`llm_settings` / `runbook_settings`); local
-  (theme, module order, network blob) → client `IStoragePort`.
+  (theme, module order, network blob, endpoint override) → client
+  `IStoragePort` / `localStorage`.
 
 ### Shared error handling (started 2026-08-31, E0–E2 done)
 
@@ -405,32 +414,21 @@ module. Plan: [`ERROR_HANDLING_PLAN.md`](ERROR_HANDLING_PLAN.md).
   mutation failures (or renders `<InlineError>` where a pane owns the error).
 - **Covered so far**: all `/llm/*` + the 4 provider adapters (E1), `/vault/*`,
   `/runbooks/*` run/nodes/schedules/publish, `/hosts` + `/firewall/change`
-  (E2). **E3 planned** (`ERROR_HANDLING_PLAN.md` §E3): E3a retry-from-toast,
-  E3b error-history drawer, E3c migrate the other ~70 endpoints, E3d
-  wording/i18n scaffold, E3e per-source rate-limit.
+  (E2). **E3 COMPLETE** (`ERROR_HANDLING_PLAN.md` §E3): E3a retry-from-toast,
+  E3b error-history drawer, E3c all ~70 endpoints migrated + `apierr.Unavailable()`
+  + `backend.yml` grep guard, E3d `errorStrings.ts` i18n scaffold + wording
+  pass, E3e per-source rate-limit.
 
-### Next-work plans (written 2026-09-01, none started)
+### Roadmap status (2026-09-01)
 
-Five phased plans queued; order TBD:
-
-- **[`PACKAGING_PLAN.md`](PACKAGING_PLAN.md)** — Phase 7. Config hygiene
-  (npm→bun in `tauri.conf.json`, version drift, default-Tauri icons, CSP) →
-  sidecar build wired into `tauri build` → capability least-privilege audit →
-  NSIS installer → manual install/launch/uninstall gate → web static deploy →
-  Linux best-effort → release CI.
-- **[`CODE_SPLITTING_PLAN.md`](CODE_SPLITTING_PLAN.md)** — entry chunk is
-  989 KB gzip (one eager chunk). CS0 vendor split + treemap → CS1 router
-  `lazy:` per `/tools/*` route → CS2 heavy-lib isolation (`pdf-lib`,
-  `jsrsasign`, …) → CS3 hover-prefetch → CS4 CI budget guard. Target ≤ 350 KB
-  gzip first-load.
-- **`AI_MODULE_PLAN.md` §A3** — A3a tool/function-calling passthrough (no
-  agent loop in the engine), A3b opt-in conversation history (`llm_conversation`
-  /`llm_message`), A3c token/cost aggregation, A3d embeddings (gated on a
-  consumer), A3e reliability polish.
-- **`SETTINGS_MODULE_PLAN.md` §S3** — S3a per-section reset, S3b export/import
-  all settings (no secrets), S3c settings search, S3d keyboard-shortcut
-  editor, S3e cross-device sync (deferred — needs account layer), S3f
-  web-build backend endpoint override.
+`ROADMAP.md` — **all 15 numbered items + A4f done.** See it and the
+`*_PLAN.md` docs for detail. Landed since 2026-09-01: AI **A3b/A3c/A3e**,
+**A4e** (complete), **A4f** (MCP resources + prompts), **E3** (complete),
+**S3a–S3d + S3f**, **CS** jsrsasign→peculiar. **Remaining = parked only**:
+Packaging P7e–P7h (owner-paused until an installer is wanted), A4f
+`Task.resources` always-inject. **Killed**: A3d embeddings, S3e sync
+(standalone app, no DB / no account layer). Next queued: a **user management**
+module (own plan, not written yet).
 
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 
