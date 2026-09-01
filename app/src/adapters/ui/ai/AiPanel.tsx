@@ -1,15 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { diffWordsWithSpace } from 'diff'
-import { Check, Loader2, Send, Sparkles, X } from 'lucide-react'
+import { Check, Loader2, Paperclip, Send, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useLlmStore } from '@/stores/llmStore'
+import { useMcpStore } from '@/stores/mcpStore'
 import type { ChatMessage, ChatToolStep } from '@/core/llm/llmModel'
+import type { McpContextBlock } from '@/core/mcp/mcpModel'
 import { useLlm } from './useLlm'
+import { ContextPickerDialog } from './ContextPickerDialog'
 import { ToolSteps } from './ToolSteps'
 import { InlineError } from '@/adapters/ui/errors/InlineError'
 import { cn } from '@/lib/utils'
+
+/** MCP resource blocks → user context messages, prepended to a task run. */
+function contextMessages(blocks: McpContextBlock[]): ChatMessage[] {
+  return blocks.map((b) => ({ role: 'user', content: `> context from ${b.uri}\n\n${b.text}` }))
+}
 
 type ChatTurn = ChatMessage & { steps?: ChatToolStep[] }
 
@@ -53,17 +61,25 @@ export function AiPanel({
   const task = useMemo(() => tasks.find((t) => t.id === taskId), [tasks, taskId])
   const { running, text, parsed, error, usage, steps, run, reset, cancel, resume } = useLlm(taskId)
 
+  const mcpServers = useMcpStore((s) => s.servers)
+  const refreshMcp = useMcpStore((s) => s.refresh)
+  const mcpLoaded = useMcpStore((s) => s.loaded)
+  const enabledServers = mcpServers.filter((s) => s.enabled).length
+
   const [connId, setConnId] = useState('')
   const [model, setModel] = useState('')
   const [input, setInput] = useState('')
   const [turns, setTurns] = useState<ChatTurn[]>([])
+  const [attached, setAttached] = useState<McpContextBlock[]>([])
+  const [pickCtx, setPickCtx] = useState(false)
   const pendingRef = useRef(false)
 
   useEffect(() => {
     if (connections.length === 0) void refresh()
     if (tasks.length === 0) void refreshTasks()
     void refreshSettings()
-  }, [connections.length, tasks.length, refresh, refreshTasks, refreshSettings])
+    if (!mcpLoaded) void refreshMcp()
+  }, [connections.length, tasks.length, refresh, refreshTasks, refreshSettings, mcpLoaded, refreshMcp])
 
   // Resolution order, first hit wins: last explicit pick (localStorage) →
   // this task's preferred connection/model → the global default → first
@@ -131,7 +147,8 @@ export function AiPanel({
   function runOnce() {
     if (!connId || !model) return
     rememberPick()
-    run({ connId, model, context, input })
+    run({ connId, model, context, input, history: contextMessages(attached) })
+    setAttached([])
   }
 
   function sendChat() {
@@ -140,8 +157,9 @@ export function AiPanel({
     const msg = input.trim()
     setTurns((t) => [...t, { role: 'user', content: msg }])
     pendingRef.current = true
-    run({ connId, model, context, input: msg, history: turns })
+    run({ connId, model, context, input: msg, history: [...contextMessages(attached), ...turns] })
     setInput('')
+    setAttached([])
   }
 
   if (connections.length === 0) {
@@ -188,6 +206,21 @@ export function AiPanel({
       <div className="flex items-center gap-2">
         <Sparkles className="size-3.5 text-primary" />
         <span className="text-xs font-medium">{task?.title ?? taskId}</span>
+        {enabledServers > 0 && (
+          <button
+            type="button"
+            aria-label="Attach MCP resource"
+            title="Attach an MCP resource as context"
+            onClick={() => setPickCtx(true)}
+            className={cn(
+              'flex items-center gap-1 rounded px-1 text-[10px]',
+              attached.length > 0 ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Paperclip className="size-3" />
+            {attached.length > 0 ? attached.length : ''}
+          </button>
+        )}
         <div className="flex-1" />
         {usage && (
           <span className="text-[10px] text-muted-foreground">
@@ -202,6 +235,29 @@ export function AiPanel({
       </div>
 
       {picker}
+
+      {attached.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {attached.map((b) => (
+            <span
+              key={b.uri}
+              className="inline-flex items-center gap-1 rounded border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[10px]"
+              title={b.uri}
+            >
+              <Paperclip className="size-2.5" />
+              <span className="max-w-32 truncate">{b.name}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${b.name}`}
+                onClick={() => setAttached((a) => a.filter((x) => x.uri !== b.uri))}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <X className="size-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {mode === 'chat' ? (
         <>
@@ -344,6 +400,13 @@ export function AiPanel({
           )}
         </>
       )}
+
+      <ContextPickerDialog
+        open={pickCtx}
+        onClose={() => setPickCtx(false)}
+        attached={attached.map((b) => b.uri)}
+        onAdd={(b) => setAttached((a) => (a.some((x) => x.uri === b.uri) ? a : [...a, b]))}
+      />
     </div>
   )
 }
