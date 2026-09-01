@@ -1,12 +1,18 @@
 # User management module (U)
 
-Status: **U0–U2 done 2026-09-01** (`711c812` U0, `458996a` U1, `7557fbb`+`8a2bad8`
-U2). Multi-user auth + per-user AI data + per-user vaults work end-to-end.
-Left: U3 (Runbooks/History scoping + approvals), U4 (Prompt Library server-
-side), U5 (admin polish + audit viewer), U6 (self-signed TLS). Supersedes
-[`USER_MANAGEMENT_PROPOSAL.md`](USER_MANAGEMENT_PROPOSAL.md) — all 10 open
-decisions resolved (§2). Backend-first, touches every backend subsystem plus a
-new frontend auth layer.
+Status: **U0–U6 COMPLETE 2026-09-01.** Full multi-tenant user management ships:
+opt-in `--auth on`, per-user AI data + per-user vaults + per-user runbooks/
+history + server-side Prompt Library, multi-user runbook approvals, admin
+audit log, self-signed TLS with fingerprint pinning + a hard non-loopback
+gate. `--auth off` is byte-identical to before. Commits: `711c812` U0 ·
+`458996a` U1 · `7557fbb`+`8a2bad8` U2 · `906bef4` U3 · `41ef0a1` U4 ·
+`d6b9aa4` U5 · `505de32` U6. Supersedes
+[`USER_MANAGEMENT_PROPOSAL.md`](USER_MANAGEMENT_PROPOSAL.md) — all 10
+decisions resolved (§2).
+
+**Remaining polish (not blocking):** the Tauri desktop custom-cert verifier
+for a desktop app pointed at a remote HTTPS backend (the loopback sidecar
+needs no TLS); per-resource ACLs / sharing; SSO/OIDC/LDAP (explicitly out).
 
 ---
 
@@ -165,13 +171,12 @@ Each phase is a green checkpoint; commit per checkpoint bullet.
 | **U0** ✅ `711c812` | `internal/auth` (auth.db `auth_user`/`auth_session`/`auth_audit`, Argon2id PHC hashes, opaque sha256-at-rest session tokens w/ 14d sliding expiry, in-memory login throttle, append-only audit, last-admin guard); `--auth` + `--auth-db` flags; `/health` `authMode`; `sessionAuth` + `accessGuard` (viewer write-gate + per-user module ACL via `moduleOf`) middleware; `/auth/*` + `/users` + `/audit`; bootstrap-via-`SETUP-TOKEN`. **No data scoping** — auth on = login wall, data shared. 7 tests, curl-verified. | Backend auth works. |
 | **U1** ✅ `458996a` | Frontend: `authStore` (mode from `/health`, session in `localStorage`, 401→drop), `backendClient`/`sseClient` session-token priority, `App.tsx` gate → `<AuthGate>` (login + first-run setup screens), `<UserMenu>` (role / change-pw / sign-out), rail + shell-route filter by `me.allowedModules`, admin-only Settings → **Users** (list / create / role / disable / delete / module-access checkboxes / password reset). `--auth off` = no auth UI, full rail, unchanged. Browser-verified. | **Login end-to-end; team can share the backend, all data still common.** |
 | **U2** ✅ `7557fbb` (U2a) + `8a2bad8` (U2b) | **U2a** `internal/userctx` (user id on ctx) · `vault.Registry` (one `*Vault` per user, `vault/<id>.enc`, `""` = legacy `vault.enc`) · the 3 `SecretResolver` ifaces gain a ctx arg, threaded through `engine.resolveKey` / mcp `transport`+`buildEnv` / orchestrator `BuildPreview`+`buildExecutorStep`+`Run` · `VaultHandlers`/`RunbookHandlers`/`main.go` wired. **U2b** `owner` column + filter on `llm_connection`/`llm_task`/`mcp_server`/`llm_conversation`/`llm_usage` (additive ALTER; `owner=''` = pre-auth) · store methods take `owner`, handlers pass `owner(r)` · mcp Manager re-checks `store.Get` before reusing a cached session · `Service.OnBootstrap` → `main.go` claims orphans for the first admin. `--auth off` = `owner`/`userctx` are `""` → no-op, byte-identical. Curl-verified: per-user connections + vaults isolated, cross-user DELETE → 404, single-user legacy vault path intact. | Per-user AI + secrets. |
-| **U3** | Runbooks + History scoping: `owner_id` on runbooks (draft visibility) / runs / schedules / history; `runbook_settings` split instance vs user. Multi-user **approval gate** (`requiresApproval` → SSE pause → different operator `POST /runs/{id}/approve`, reuses the A4c pause/resume pattern). | Per-user runbooks + shared published + approvals. |
-| **U4** | Prompt Library server-side: `prompt*` tables + `/prompts/*` + `BackendPromptRepo`; owner-scoped + published gallery; client repo switch by `authMode`. | Per-user prompts + shared templates. |
-| **U5** | Admin polish: full Settings → **Users** (module-access editor, reset password, forced change) + **Audit** viewer; instance-settings section. | Manageable. |
-| **U6** | TLS: `--tls auto` self-signed + fingerprint pinning (desktop verifier, web documented), `--tls`/`--tls off`, CORS allowlist, throttle tuning, security review pass. | Safe to deploy off-box. |
+| **U3** ✅ `906bef4` | `owner` on `runbook`/`run`/`ssh_node`/`runbook_schedule` (orchestrator.db) + `run` (history.db); runbook visibility = published ∪ own ∪ orphan, drafts owner-only; `RunbookOwner` guard on mutations; `ImportLibrary`/`ExportLibrary` scoped. **Approval gate**: `Spec.RequiresApproval` → run parks `awaiting_approval`, SSE `approval-required`, blocks on `Engine.awaitRunApproval` (30 min); `POST /runs/{id}/approve` (refused for the starter → 403), `GET /runs/pending-approvals`. FE: editor "needs approval" toggle, RunPanel Waiting state, Approvals console tab (multi-user only). Curl-verified full flow. | Per-user runbooks + shared published + approvals. |
+| **U4** ✅ `41ef0a1` | `internal/promptstore` (`prompt`/`prompt_folder`/`prompt_template` JSON blobs in llm.db, owner-scoped, `published`). `/prompts/*` mounted only with `--auth on`; cross-user save → 404. FE `BackendPromptRepository` + `ModeAwarePromptRepository` dispatching per call by `authStore.mode` — local `IStoragePort` repo unchanged for solo. Curl-verified isolation + publish. | Per-user prompts + shared templates. |
+| **U5** ✅ `d6b9aa4` | `userctx` carries role+username; `requireAdmin` on `PUT /llm/settings` + `PUT /runbook-settings`. `api.audit(r,…)` sink → `auth.Service.AuditRaw`; hooks: runbook run / approve / deny, vault unlock, secret write, connection write. FE: admin-only **Audit log** section; `<ForcedPasswordChange>` on `me.mustChangePw`; `<InstanceSettingsNotice>` on AI/Runbooks sections. (Users editor already full from U1.) | Manageable. |
+| **U6** ✅ `505de32` | `internal/tlscert` — `--tls auto` self-signs (10y ECDSA, localhost/127.0.0.1/::1 + bind-host SANs), prints `FINGERPRINT sha256:…`; `--tls <cert> --tls-key <key>` BYO; `ServeTLS`; `/health` `{tls,fingerprint}`. **Hard gate**: `--auth on` + non-loopback bind + no TLS → fatal. `--cors-origin` allowlist. FE: Backend settings show Transport + fingerprint. Curl-verified. Deferred: Tauri desktop cert verifier (loopback sidecar needs none). | Safe to deploy off-box. |
 
-**First real milestone = U0+U1** (shared login). **Module "done" = U0–U5.**
-**U6 is a hard gate before any non-loopback deployment.**
+**All phases done.** Solo desktop (`--auth off`) is byte-identical throughout.
 
 ---
 

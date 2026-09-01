@@ -421,14 +421,19 @@ module. Plan: [`ERROR_HANDLING_PLAN.md`](ERROR_HANDLING_PLAN.md).
 
 ### Roadmap status (2026-09-01)
 
-`ROADMAP.md` — **all 15 numbered items + A4f done.** See it and the
-`*_PLAN.md` docs for detail. Landed since 2026-09-01: AI **A3b/A3c/A3e**,
-**A4e** (complete), **A4f** (MCP resources + prompts), **E3** (complete),
-**S3a–S3d + S3f**, **CS** jsrsasign→peculiar. **Remaining = parked only**:
-Packaging P7e–P7h (owner-paused until an installer is wanted), A4f
-`Task.resources` always-inject. **Killed**: A3d embeddings, S3e sync
-(standalone app, no DB / no account layer). Next queued: a **user management**
-module (own plan, not written yet).
+`ROADMAP.md` — **all 15 numbered items + A4f + the user-management module
+(U0–U6) done.** See it and the `*_PLAN.md` docs for detail. Landed since
+2026-09-01: AI **A3b/A3c/A3e**, **A4e/A4f**, **E3** (complete),
+**S3a–S3d + S3f**, **CS** jsrsasign→peculiar, and **user management**
+([`USER_MANAGEMENT_PLAN.md`](USER_MANAGEMENT_PLAN.md)) — opt-in multi-tenant
+auth (`--auth on`, **off by default — solo desktop byte-identical**),
+per-user AI/vault/runbook/history data, server-side Prompt Library,
+multi-user runbook approvals, admin audit log, self-signed TLS
+(`--tls auto`) + fingerprint pinning + a hard non-loopback gate.
+**Remaining = parked only**: Packaging P7e–P7h (owner-paused), A4f
+`Task.resources` always-inject, the Tauri desktop custom-cert verifier
+(U6 deferred), S3e sync (now buildable on the account layer, unpark on
+request). **Killed**: A3d embeddings.
 
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 

@@ -38,13 +38,15 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 
 ## Remaining
 
-All 15 numbered items + A4f + S3f done. Only parked items left (above).
-**Next: user management module** — design approved, phased plan in
-[`USER_MANAGEMENT_PLAN.md`](USER_MANAGEMENT_PLAN.md) (U0–U6, multi-tenant,
-opt-in `--auth on`, off by default). Not started.
+All 15 numbered items + A4f + S3f done. **User management module U0–U6 done**
+([`USER_MANAGEMENT_PLAN.md`](USER_MANAGEMENT_PLAN.md)) — multi-tenant auth,
+opt-in `--auth on` (off by default, solo unchanged). Only parked items left:
 
-- **S3e** cross-device settings sync — unpark only if requested; the U-module
-  account layer would make it buildable.
+- **S3e** cross-device settings sync — now buildable on the U-module account
+  layer; unpark only if requested.
+- Tauri desktop custom-cert verifier for a desktop app pointed at a remote
+  HTTPS backend (U6 deferred — the loopback sidecar needs no TLS).
+- Packaging P7e–P7h (owner-paused).
 
 ## Done
 
