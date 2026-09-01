@@ -321,8 +321,12 @@ Assistant.
   others pause on a `tool-approval` SSE event and wait on
   `POST /llm/tool/{id}/resume {approved}` (`Engine.ResumeTool`, 5-min timeout
   → deny); declined result still fed back so the model reacts. FE: amber
-  Approve/Deny row in `<ToolSteps>`, `llmStore.resumeToolCall`. **A4d next** =
-  per-task opt-in (`Task.tools` + `TaskDialog` + `<AiPanel>` passthrough).
+  Approve/Deny row in `<ToolSteps>`, `llmStore.resumeToolCall`. **A4d done
+  2026-09-01**: `Task.Tools []string` (server ids / `["all"]`),
+  `TaskRunStream` merges it, `TaskDialog` "MCP tools" checkboxes, `useLlm`
+  tracks `steps[]` + `resume()`, `<AiPanel>` renders `<ToolSteps>` in both
+  modes. Built-ins ship tool-free; user opts a task in. **A4e deferred**
+  (tool transcript in saved convos, cost accounting, `list_changed` refresh).
   Lets the model look up commands/docs not in its training (Context7, web
   search). Note: Knowledge Hub's `McpServersScreen` is just a link list,
   unrelated.

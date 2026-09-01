@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { openTaskStream } from '@/adapters/backend/llmClient'
+import { openTaskStream, resumeTool } from '@/adapters/backend/llmClient'
 import { classify, type AppError } from '@/core/errors/appError'
-import type { ChatMessage, TokenUsage } from '@/core/llm/llmModel'
+import type { ChatMessage, ChatToolStep, TokenUsage } from '@/core/llm/llmModel'
+import { reportError } from '@/stores/errorStore'
 
 export interface LlmRunInput {
   connId: string
@@ -9,6 +10,8 @@ export interface LlmRunInput {
   context?: Record<string, string>
   input?: string
   history?: ChatMessage[]
+  /** "all" or a comma list of MCP server ids — overrides the task's own config */
+  tools?: string
 }
 
 export interface LlmRunState {
@@ -17,6 +20,8 @@ export interface LlmRunState {
   parsed?: unknown
   usage?: TokenUsage
   error?: AppError
+  /** MCP tool calls the model made this run (A4d) */
+  steps: ChatToolStep[]
 }
 
 /**
@@ -24,14 +29,16 @@ export interface LlmRunState {
  * grounding context. The task's system prompt + context + input are assembled
  * server-side; this hook just streams the result. See AI_MODULE_PLAN.md §7.1.
  */
+const EMPTY: LlmRunState = { running: false, text: '', steps: [] }
+
 export function useLlm(taskId: string) {
-  const [state, setState] = useState<LlmRunState>({ running: false, text: '' })
+  const [state, setState] = useState<LlmRunState>(EMPTY)
   const abortRef = useRef<(() => void) | null>(null)
 
   const run = useCallback(
     (opts: LlmRunInput) => {
       abortRef.current?.()
-      setState({ running: true, text: '' })
+      setState({ running: true, text: '', steps: [] })
       abortRef.current = openTaskStream(
         { taskId, ...opts },
         {
@@ -46,6 +53,37 @@ export function useLlm(taskId: string) {
                     return { ...s, parsed: JSON.parse(d.json as string) }
                   } catch {
                     return s
+                  }
+                case 'tool-call':
+                  return {
+                    ...s,
+                    steps: [
+                      ...s.steps,
+                      { id: String(d.id), name: String(d.name), args: d.args as Record<string, unknown> | undefined },
+                    ],
+                  }
+                case 'tool-approval':
+                  return {
+                    ...s,
+                    steps: s.steps.map((st) =>
+                      st.id === String(d.id) ? { ...st, approvalId: String(d.approvalId) } : st,
+                    ),
+                  }
+                case 'tool-result':
+                  return {
+                    ...s,
+                    steps: s.steps.map((st) =>
+                      st.id === String(d.id)
+                        ? {
+                            ...st,
+                            done: true,
+                            ok: d.ok !== false,
+                            denied: d.denied === true,
+                            approvalId: undefined,
+                            result: (d.text as string) ?? '',
+                          }
+                        : st,
+                    ),
                   }
                 case 'end':
                   return { ...s, running: false, usage: d.usage as TokenUsage | undefined }
@@ -75,10 +113,18 @@ export function useLlm(taskId: string) {
 
   const reset = useCallback(() => {
     abortRef.current?.()
-    setState({ running: false, text: '' })
+    setState(EMPTY)
+  }, [])
+
+  const resume = useCallback((approvalId: string, approved: boolean) => {
+    setState((s) => ({
+      ...s,
+      steps: s.steps.map((st) => (st.approvalId === approvalId ? { ...st, approvalId: undefined } : st)),
+    }))
+    void resumeTool(approvalId, approved).catch((e) => reportError(e, 'AI Hub'))
   }, [])
 
   useEffect(() => () => abortRef.current?.(), [])
 
-  return { ...state, run, cancel, reset }
+  return { ...state, run, cancel, reset, resume }
 }

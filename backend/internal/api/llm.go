@@ -273,7 +273,15 @@ func (h *LLMHandlers) TaskRunStream(w http.ResponseWriter, r *http.Request) {
 	ch := make(chan sse.Message, 128)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	tools := h.resolveTools(r.Context(), q.Get("tools"))
+	// The task's own `tools` config is the source; an explicit ?tools= query
+	// (playground-style) overrides it.
+	toolSpec := q.Get("tools")
+	if toolSpec == "" {
+		if t, err := h.Store.GetTask(chi.URLParam(r, "id")); err == nil && len(t.Tools) > 0 {
+			toolSpec = strings.Join(t.Tools, ",")
+		}
+	}
+	tools := h.resolveTools(r.Context(), toolSpec)
 	go func() {
 		h.Engine.RunTask(ctx, chi.URLParam(r, "id"), connID, q.Get("model"), vars, q.Get("input"), history, tools, ch)
 		close(ch)

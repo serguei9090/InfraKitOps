@@ -95,6 +95,8 @@ export interface LlmTask {
   /** preferred connection + model for this task (set from Settings) */
   preferredConnectionId?: string
   preferredModel?: string
+  /** MCP tools this task may use (A4d): mcp_server ids, or ["all"]. Empty = none. */
+  tools?: string[]
 }
 
 /** Global AI defaults, stored server-side in llm_settings. */

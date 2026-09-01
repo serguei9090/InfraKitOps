@@ -34,6 +34,11 @@ type Task struct {
 	// (SETTINGS_MODULE_PLAN.md §5.2).
 	PreferredConnectionID string `json:"preferredConnectionId,omitempty"`
 	PreferredModel        string `json:"preferredModel,omitempty"`
+
+	// Tools opts this task into MCP tools (A4d): a list of mcp_server ids, or
+	// the single element "all". Empty → no tools. Read-only tools auto-run;
+	// others prompt for approval (A4c).
+	Tools []string `json:"tools,omitempty"`
 }
 
 func f64(v float64) *float64 { return &v }

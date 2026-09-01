@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useLlmStore } from '@/stores/llmStore'
+import { useMcpStore } from '@/stores/mcpStore'
 import type { LlmTask, TaskOutputShape } from '@/core/llm/llmModel'
 
 const SHAPES: TaskOutputShape[] = ['text', 'diff', 'json']
@@ -22,11 +23,17 @@ export function TaskDialog({ draft, onClose, onSave }: Props) {
   const connections = useLlmStore((s) => s.connections)
   const models = useLlmStore((s) => s.models)
   const loadModels = useLlmStore((s) => s.loadModels)
+  const mcpServers = useMcpStore((s) => s.servers)
+  const refreshMcp = useMcpStore((s) => s.refresh)
   const [t, setT] = useState<LlmTask | null>(draft)
 
   useEffect(() => {
     if (t?.preferredConnectionId) void loadModels(t.preferredConnectionId)
   }, [t?.preferredConnectionId, loadModels])
+
+  useEffect(() => {
+    void refreshMcp()
+  }, [refreshMcp])
 
   if (!t) return null
   const idLocked = draft?.builtin ?? false
@@ -183,6 +190,56 @@ export function TaskDialog({ draft, onClose, onSave }: Props) {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div>
+            <Label className="text-xs">MCP tools</Label>
+            <p className="mb-1.5 text-[11px] text-muted-foreground">
+              Let this task&rsquo;s model call tools to look things up. Read-only tools run automatically; others
+              ask first. Add servers in AI Hub → MCP.
+            </p>
+            {mcpServers.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground">No MCP servers configured.</p>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    className="size-3.5 accent-primary"
+                    checked={(t.tools ?? []).includes('all')}
+                    onChange={(e) =>
+                      setT((c) => ({ ...c!, tools: e.target.checked ? ['all'] : [] }))
+                    }
+                  />
+                  All servers
+                </label>
+                {mcpServers.map((s) => {
+                  const all = (t.tools ?? []).includes('all')
+                  const on = all || (t.tools ?? []).includes(s.id)
+                  return (
+                    <label key={s.id} className="flex items-center gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        className="size-3.5 accent-primary"
+                        disabled={all}
+                        checked={on}
+                        onChange={(e) =>
+                          setT((c) => {
+                            const cur = (c!.tools ?? []).filter((x) => x !== 'all')
+                            return {
+                              ...c!,
+                              tools: e.target.checked ? [...cur, s.id] : cur.filter((x) => x !== s.id),
+                            }
+                          })
+                        }
+                      />
+                      {s.name}
+                      {!s.enabled && <span className="text-[10px] text-muted-foreground">(disabled)</span>}
+                    </label>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           </div>

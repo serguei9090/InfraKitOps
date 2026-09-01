@@ -5,10 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useLlmStore } from '@/stores/llmStore'
-import type { ChatMessage } from '@/core/llm/llmModel'
+import type { ChatMessage, ChatToolStep } from '@/core/llm/llmModel'
 import { useLlm } from './useLlm'
+import { ToolSteps } from './ToolSteps'
 import { InlineError } from '@/adapters/ui/errors/InlineError'
 import { cn } from '@/lib/utils'
+
+type ChatTurn = ChatMessage & { steps?: ChatToolStep[] }
 
 interface Props {
   /** built-in or custom task id, e.g. "prompt.improve" */
@@ -48,12 +51,12 @@ export function AiPanel({
   const refreshSettings = useLlmStore((s) => s.refreshSettings)
 
   const task = useMemo(() => tasks.find((t) => t.id === taskId), [tasks, taskId])
-  const { running, text, parsed, error, usage, run, reset, cancel } = useLlm(taskId)
+  const { running, text, parsed, error, usage, steps, run, reset, cancel, resume } = useLlm(taskId)
 
   const [connId, setConnId] = useState('')
   const [model, setModel] = useState('')
   const [input, setInput] = useState('')
-  const [turns, setTurns] = useState<ChatMessage[]>([])
+  const [turns, setTurns] = useState<ChatTurn[]>([])
   const pendingRef = useRef(false)
 
   useEffect(() => {
@@ -107,9 +110,11 @@ export function AiPanel({
     if (mode !== 'chat' || running || !pendingRef.current) return
     pendingRef.current = false
     if (error) return
-    if (text) setTurns((t) => [...t, { role: 'assistant', content: text }])
+    if (text || steps.length > 0) {
+      setTurns((t) => [...t, { role: 'assistant', content: text, steps: steps.length ? steps : undefined }])
+    }
     reset()
-  }, [mode, running, text, error, reset])
+  }, [mode, running, text, steps, error, reset])
 
   const connModels = models[connId] ?? []
   const before = context[diffKey] ?? ''
@@ -203,9 +208,23 @@ export function AiPanel({
           {(turns.length > 0 || running) && (
             <div className="flex max-h-72 flex-col gap-2 overflow-y-auto rounded-md border border-border/50 bg-background p-2">
               {turns.map((m, i) => (
-                <ChatBubble key={i} role={m.role} content={m.content} />
+                <div key={i} className="flex flex-col gap-1">
+                  {m.steps && m.steps.length > 0 && <ToolSteps steps={m.steps} />}
+                  {m.content && <ChatBubble role={m.role} content={m.content} />}
+                </div>
               ))}
-              {running && <ChatBubble role="assistant" content={text || '…'} />}
+              {running && (
+                <div className="flex flex-col gap-1">
+                  {steps.length > 0 && (
+                    <ToolSteps
+                      steps={steps}
+                      onApprove={(id) => resume(id, true)}
+                      onDeny={(id) => resume(id, false)}
+                    />
+                  )}
+                  <ChatBubble role="assistant" content={text || '…'} />
+                </div>
+              )}
             </div>
           )}
           <InlineError error={error} />
@@ -275,6 +294,10 @@ export function AiPanel({
           </div>
 
           <InlineError error={error} onRetry={runOnce} retrying={running} />
+
+          {steps.length > 0 && (
+            <ToolSteps steps={steps} onApprove={(id) => resume(id, true)} onDeny={(id) => resume(id, false)} />
+          )}
 
           {text && (
             <div className="rounded-md border border-border/50 bg-background p-2 text-xs">
