@@ -30,7 +30,7 @@ export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     label: 'General',
     icon: SlidersHorizontal,
     scope: 'local',
-    keywords: ['theme', 'dark', 'light', 'appearance', 'sidebar', 'rail', 'module', 'order', 'hide', 'reorder'],
+    keywords: ['theme', 'dark', 'light', 'appearance', 'sidebar', 'rail', 'module', 'order', 'hide', 'reorder', 'shortcut', 'keyboard', 'keybind', 'hotkey', 'backup', 'export', 'import'],
     element: <GeneralSettings />,
   },
   {

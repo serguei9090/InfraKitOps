@@ -28,6 +28,7 @@ import { kModuleTaxonomy, type ModuleDef } from '@/adapters/ui/shell/moduleTaxon
 import { SettingsGroup, SettingsRow } from '../SettingsScaffold'
 import { SettingsResetButton } from '../SettingsResetButton'
 import { applyBackup, buildBackup, downloadBackup } from '../settingsBackup'
+import { ShortcutSettings } from './ShortcutSettings'
 
 export function GeneralSettings() {
   const mode = useThemeStore((s) => s.mode)
@@ -53,6 +54,10 @@ export function GeneralSettings() {
         description="Drag to reorder the rail. Uncheck to hide a module from the rail and the All Tools page."
       >
         <ModuleOrderList />
+      </SettingsGroup>
+
+      <SettingsGroup title="Keyboard shortcuts">
+        <ShortcutSettings />
       </SettingsGroup>
 
       <SettingsGroup

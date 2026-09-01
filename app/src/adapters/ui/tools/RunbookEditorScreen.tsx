@@ -24,6 +24,7 @@ import { AiPanel } from '@/adapters/ui/ai/AiPanel'
 import { downloadBlob } from '@/lib/downloadFile'
 import { useBackendStore } from '@/stores/backendStore'
 import { useRunbookStore } from '@/stores/runbookStore'
+import { useShortcut } from '@/hooks/useShortcut'
 import * as api from '@/adapters/backend/runbookClient'
 import {
   currentSpec,
@@ -79,22 +80,10 @@ export function RunbookEditorScreen() {
 
   const dirty = rb ? isDirty(rb) || specDiffersFromLatest(spec, rb) : false
 
-  // ⌘/Ctrl-S saves a version, ⌘/Ctrl-↵ opens the run dialog.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (!(e.metaKey || e.ctrlKey)) return
-      if (e.key === 's') {
-        e.preventDefault()
-        if (dirty && !saving) void save()
-      } else if (e.key === 'Enter') {
-        e.preventDefault()
-        setRunOpen(true)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, saving, spec])
+  useShortcut('save', () => {
+    if (dirty && !saving) void save()
+  })
+  useShortcut('primaryAction', () => setRunOpen(true))
 
   function exportJson() {
     const payload = { format: 'infrakit-runbook', v: 1, slug: rb?.slug, spec }
