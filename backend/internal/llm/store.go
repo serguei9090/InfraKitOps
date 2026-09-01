@@ -53,6 +53,10 @@ func Open(dsn string) (*Store, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
+// DB exposes the underlying handle so a sibling table (internal/mcp) can share
+// llm.db without a second connection pool.
+func (s *Store) DB() *sql.DB { return s.db }
+
 // --- connections -----------------------------------------------------
 
 // ListConnections returns every connection, newest first.

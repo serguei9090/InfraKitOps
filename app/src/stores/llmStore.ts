@@ -10,7 +10,7 @@ import type { ChatMessage, LlmConnection, LlmModel, LlmTask, TokenUsage } from '
 
 const SRC = 'AI Hub'
 
-export type Section = 'playground' | 'connections' | 'tasks'
+export type Section = 'playground' | 'connections' | 'tasks' | 'mcp'
 
 export interface ChatTurn extends ChatMessage {
   /** streaming = still receiving; done/error = final */

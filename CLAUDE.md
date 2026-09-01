@@ -304,13 +304,17 @@ Assistant.
   stays true for the whole stream so Stop shows during model spin-up too.
 - **A3 planned** (`AI_MODULE_PLAN.md` §A3): history persistence, token/cost,
   embeddings, reliability. **A4 = MCP tools + tool-calling** — own plan
-  [`AI_MCP_PLAN.md`](AI_MCP_PLAN.md) (not started): `internal/mcp/` on the
-  official `modelcontextprotocol/go-sdk` (first new backend dep since the LLM
-  module), agent loop in `internal/llm/agent.go`, stdio+http transports,
-  auto-run read-only tools / confirm writes, per-task opt-in + Playground
-  toggle. Lets the model look up commands/docs not in its training (Context7,
-  web search). Note: Knowledge Hub's `McpServersScreen` is just a link list,
-  unrelated.
+  [`AI_MCP_PLAN.md`](AI_MCP_PLAN.md). **A4a done 2026-09-01**: `internal/mcp/`
+  on `modelcontextprotocol/go-sdk` v1.7.0 (first new backend dep since the LLM
+  module — MIT/Apache) — `mcp_server` registry in `llm.db`, `Manager`
+  (stdio `CommandTransport` + http `StreamableClientTransport`, tool cache,
+  `{{secret:}}` env via Vault, least-env spawn, 32 KB result cap),
+  `/mcp/servers*` + `/mcp/tools`, `capabilities.mcp`, AI Hub **"MCP"** tab
+  (`McpView`/`McpServerDialog`). No LLM wiring yet. **A4b next**: tool-calling
+  in the engine (`internal/llm/agent.go` agent loop) + 4 adapter mappings +
+  Playground toggle. A4c approval, A4d per-task opt-in. Lets the model look up
+  commands/docs not in its training (Context7, web search). Note: Knowledge
+  Hub's `McpServersScreen` is just a link list, unrelated.
 ### Settings module (started 2026-08-31, S0–S2 done)
 
 `/settings` page (`adapters/ui/settings/`) — replaces the old rearrange-only

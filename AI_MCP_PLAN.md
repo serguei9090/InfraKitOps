@@ -1,6 +1,6 @@
 # AI — MCP tools & tool-calling (A4)
 
-Status: **proposal, written 2026-09-01. Not started.** Extends the AI module
+Status: **A4a done 2026-09-01. A4b next.** Extends the AI module
 (`AI_MODULE_PLAN.md`) with **Model Context Protocol** clients so a model can
 call tools mid-answer — web search, Context7 doc lookup, filesystem, etc. —
 to ground answers on things outside its training (a new CLI flag, a fresh API,
@@ -173,7 +173,7 @@ plain API call.
 
 | Phase | Content | Ships value |
 |---|---|---|
-| **A4a** | `internal/mcp/` + go-sdk + `mcp_server` registry + `/mcp/*` + AI Hub "MCP" section (add / enable / test / see tools). **No LLM wiring yet.** | You can connect Context7 and see its tools. |
+| **A4a** ✅ | `internal/mcp/` (spec + store on `llm.db` + `Manager` on go-sdk v1.7.0, stdio `CommandTransport` + http `StreamableClientTransport`, tool cache, `{{secret:}}` env via Vault, 32 KB result cap, least-env spawn) + `/mcp/servers*` + `/mcp/tools` + `capabilities.mcp` + AI Hub **"MCP"** tab (`McpView` + `McpServerDialog` — transport picker, env rows, Test → tool list with read-only/confirm badge). `core/mcp/mcpModel.ts`, `mcpClient.ts`, `mcpStore.ts`. **No LLM wiring.** Verified in-browser: added `@modelcontextprotocol/server-everything`, Test discovered 14 tools with correct `readOnly` flags. | Connect Context7 / any server, see its tools. |
 | **A4b** | Tool-calling in the engine + 4 adapter mappings + agent loop (auto-run all, no approval yet) + Playground "Tools" toggle + step rendering. | Playground model can call Context7 and answer with fresh docs. |
 | **A4c** | Approval flow — `readOnlyHint` auto, others pause → `tool-approval` event → inline Approve/Deny → `/llm/tool/{id}/resume`. | Safe for write-capable servers. |
 | **A4d** | Per-task `tools` config + `TaskDialog` UI + `<AiPanel>` passthrough. First consumer: **Runbooks "Generate step" / Assistant** looks up an unknown command before answering. | Every module's AI can opt into tools. |
@@ -188,8 +188,13 @@ exposing its own tools to external clients.
 
 ## 9. Dependencies
 
-- **`github.com/modelcontextprotocol/go-sdk`** — MIT. New direct backend dep
-  (first since the LLM module). Pulls a small indirect set (JSON-schema,
-  transport helpers). Record in the backend deps note + `CLAUDE.md`.
+- **`github.com/modelcontextprotocol/go-sdk` v1.7.0** — MIT (→ Apache-2.0
+  transition; both permissive, pass the gate). First direct backend dep since
+  the LLM module. Indirect: `google/jsonschema-go` (MIT), `segmentio/encoding`
+  + `segmentio/asm` (MIT), `yosida95/uritemplate` (BSD-2), `x/oauth2` + `x/time`
+  (BSD-3), `golang-jwt/jwt/v5` (MIT). All permissive.
+- **First-run latency**: a stdio server run via `npx`/`uvx` downloads its
+  package on first connect (30s+). `connectTimeout` is 60s and the test/tools
+  endpoints allow 75s; the UI should say "first connect can be slow".
 - No frontend dep — the step/approval UI is plain React over the existing SSE
   client.

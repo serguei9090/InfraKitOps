@@ -13,6 +13,7 @@ import (
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
+	"github.com/infrakit/backend/internal/mcp"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/vault"
 )
@@ -41,6 +42,8 @@ type Options struct {
 	LLM *llm.Store
 	// LLMEngine runs model listing + chat. Nil → the same.
 	LLMEngine *llm.Engine
+	// MCP is the Model Context Protocol client manager. Nil → /mcp* endpoints 503.
+	MCP *mcp.Manager
 }
 
 // NewRouter returns the fully wired API handler.
@@ -59,6 +62,7 @@ func NewRouter(opts Options) http.Handler {
 	rbh := &api.RunbookHandlers{Store: opts.Orchestrator, Engine: opts.RunbookEngine, Vault: opts.Vault}
 	vh := &api.VaultHandlers{Vault: opts.Vault}
 	lh := &api.LLMHandlers{Store: opts.LLM, Engine: opts.LLMEngine}
+	mh := &api.MCPHandlers{Manager: opts.MCP}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", api.Health)
@@ -155,6 +159,15 @@ func NewRouter(opts Options) http.Handler {
 			r.Get("/tasks/{id}/run/stream", lh.TaskRunStream)
 			r.Get("/settings", lh.GetSettings)
 			r.Put("/settings", lh.PutSettings)
+		})
+
+		r.Route("/mcp", func(r chi.Router) {
+			r.Get("/servers", mh.ListServers)
+			r.Post("/servers", mh.PutServer)
+			r.Put("/servers/{id}", mh.PutServer)
+			r.Delete("/servers/{id}", mh.DeleteServer)
+			r.Post("/servers/{id}/test", mh.TestServer)
+			r.Get("/tools", mh.ListTools)
 		})
 
 		r.Route("/vault", func(r chi.Router) {

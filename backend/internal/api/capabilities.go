@@ -75,6 +75,8 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"runbook": {Available: true},
 		// AI layer. Same deal — endpoints 503 when llm.db isn't open.
 		"llm": {Available: true},
+		// MCP client layer (A4). 503 when the manager isn't wired.
+		"mcp": {Available: true},
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{

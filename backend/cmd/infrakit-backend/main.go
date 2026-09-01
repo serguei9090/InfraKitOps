@@ -29,6 +29,7 @@ import (
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
+	"github.com/infrakit/backend/internal/mcp"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/server"
 	"github.com/infrakit/backend/internal/tools/iperf"
@@ -88,6 +89,7 @@ func main() {
 
 	llmStore := openLLM(*llmDBPath)
 	var llmEngine *llm.Engine
+	var mcpManager *mcp.Manager
 	if llmStore != nil {
 		defer llmStore.Close()
 		var secrets llm.SecretResolver
@@ -95,6 +97,17 @@ func main() {
 			secrets = vlt
 		}
 		llmEngine = llm.NewEngine(llmStore, secrets)
+
+		if mcpStore, err := mcp.NewStore(llmStore.DB()); err != nil {
+			log.Printf("mcp: %v (mcp disabled)", err)
+		} else {
+			var mcpSecrets mcp.SecretResolver
+			if vlt != nil {
+				mcpSecrets = vlt
+			}
+			mcpManager = mcp.NewManager(mcpStore, mcpSecrets, api.Version)
+			defer mcpManager.CloseAll()
+		}
 	}
 	defer iperf.StopServer() // kill any managed `iperf3 -s` child
 
@@ -120,6 +133,7 @@ func main() {
 		Vault:         vlt,
 		LLM:           llmStore,
 		LLMEngine:     llmEngine,
+		MCP:           mcpManager,
 		AppVersion:    api.Version,
 		HistoryPolicy: history.PrunePolicy{
 			RetentionDays: *retentionDays,
