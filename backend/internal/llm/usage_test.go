@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -12,14 +13,14 @@ func TestUsageAggregate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	u.Record("c1", "prompt.improve", "gpt-4o", 100, 20)
-	u.Record("c1", "prompt.improve", "gpt-4o", 200, 30)
-	u.Record("c1", "", "gpt-4o-mini", 50, 10) // playground
-	u.Record("c2", "", "llama3.1:8b", 0, 0)   // zero → dropped
+	u.Record(context.Background(), "c1", "prompt.improve", "gpt-4o", 100, 20)
+	u.Record(context.Background(), "c1", "prompt.improve", "gpt-4o", 200, 30)
+	u.Record(context.Background(), "c1", "", "gpt-4o-mini", 50, 10) // playground
+	u.Record(context.Background(), "c2", "", "llama3.1:8b", 0, 0)   // zero → dropped
 
 	since := time.Now().Add(-time.Hour).UnixMilli()
 
-	byModel, err := u.Aggregate(since, "model")
+	byModel, err := u.Aggregate("", since, "model")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +32,7 @@ func TestUsageAggregate(t *testing.T) {
 		t.Fatalf("gpt-4o bucket wrong: %+v", byModel[0])
 	}
 
-	byTask, err := u.Aggregate(since, "task")
+	byTask, err := u.Aggregate("", since, "task")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +47,7 @@ func TestUsageAggregate(t *testing.T) {
 	}
 
 	// window excludes old rows
-	empty, _ := u.Aggregate(time.Now().Add(time.Hour).UnixMilli(), "model")
+	empty, _ := u.Aggregate("", time.Now().Add(time.Hour).UnixMilli(), "model")
 	if len(empty) != 0 {
 		t.Fatalf("future window should be empty: %+v", empty)
 	}

@@ -169,7 +169,7 @@ func TestGeminiEchoesThoughtSignature(t *testing.T) {
 	defer srv.Close()
 
 	s := newStore(t)
-	conn, _ := s.PutConnection(Connection{Name: "G", Provider: ProviderGemini, BaseURL: srv.URL, AuthSecretID: ""})
+	conn, _ := s.PutConnection("", Connection{Name: "G", Provider: ProviderGemini, BaseURL: srv.URL, AuthSecretID: ""})
 	eng := NewEngine(s, nil)
 	eng.SetToolRunner(&fakeRunner{})
 

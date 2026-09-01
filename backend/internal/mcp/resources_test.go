@@ -13,7 +13,7 @@ import (
 func testManager(t *testing.T, configure func(*sdk.Server)) (*Manager, string, *sdk.Server) {
 	t.Helper()
 	store := newStore(t)
-	id, err := store.Put(ServerConfig{
+	id, err := store.Put("", ServerConfig{
 		Name: "test", Transport: TransportStdio, Command: "unused", Enabled: true,
 	})
 	if err != nil {

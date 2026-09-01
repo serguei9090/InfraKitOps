@@ -26,20 +26,20 @@ func newStore(t *testing.T) *Store {
 func TestServerCRUD(t *testing.T) {
 	s := newStore(t)
 
-	if _, err := s.Put(ServerConfig{Transport: TransportStdio, Command: "x"}); err == nil {
+	if _, err := s.Put("", ServerConfig{Transport: TransportStdio, Command: "x"}); err == nil {
 		t.Fatal("expected name-required error")
 	}
-	if _, err := s.Put(ServerConfig{Name: "x", Transport: TransportStdio}); err == nil {
+	if _, err := s.Put("", ServerConfig{Name: "x", Transport: TransportStdio}); err == nil {
 		t.Fatal("expected command-required error")
 	}
-	if _, err := s.Put(ServerConfig{Name: "x", Transport: TransportHTTP}); err == nil {
+	if _, err := s.Put("", ServerConfig{Name: "x", Transport: TransportHTTP}); err == nil {
 		t.Fatal("expected url-required error")
 	}
-	if _, err := s.Put(ServerConfig{Name: "x", Transport: "carrier-pigeon"}); err == nil {
+	if _, err := s.Put("", ServerConfig{Name: "x", Transport: "carrier-pigeon"}); err == nil {
 		t.Fatal("expected bad-transport error")
 	}
 
-	id, err := s.Put(ServerConfig{
+	id, err := s.Put("", ServerConfig{
 		Name: "Context7", Transport: TransportStdio,
 		Command: "npx", Args: []string{"-y", "@upstash/context7-mcp"},
 		Env: map[string]string{"KEY": "{{secret:CTX7}}"}, Enabled: true,
@@ -48,7 +48,7 @@ func TestServerCRUD(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s.Get(id)
+	got, err := s.Get("", id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,26 +59,26 @@ func TestServerCRUD(t *testing.T) {
 	// update keeps createdAt
 	got.Name = "ctx7"
 	got.CreatedAt = 0
-	if _, err := s.Put(*got); err != nil {
+	if _, err := s.Put("", *got); err != nil {
 		t.Fatal(err)
 	}
-	again, _ := s.Get(id)
+	again, _ := s.Get("", id)
 	if again.Name != "ctx7" || again.CreatedAt != got.CreatedAt && again.CreatedAt == 0 {
 		t.Fatalf("update lost fields: %+v", again)
 	}
 
-	list, err := s.List()
+	list, err := s.List("")
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v %d", err, len(list))
 	}
 
-	if err := s.Delete(id); err != nil {
+	if err := s.Delete("", id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Get(id); err != ErrNotFound {
+	if _, err := s.Get("", id); err != ErrNotFound {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
-	if err := s.Delete(id); err != ErrNotFound {
+	if err := s.Delete("", id); err != ErrNotFound {
 		t.Fatalf("delete missing: want ErrNotFound, got %v", err)
 	}
 }

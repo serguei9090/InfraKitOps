@@ -32,7 +32,7 @@ func TestExtractJSON(t *testing.T) {
 func TestTaskCRUDAndOverride(t *testing.T) {
 	s := newStore(t)
 
-	list, err := s.ListTasks()
+	list, err := s.ListTasks("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,52 +46,52 @@ func TestTaskCRUDAndOverride(t *testing.T) {
 	}
 
 	// override a builtin
-	if _, err := s.PutTask(Task{ID: "prompt.improve", Title: "My Improve", SystemTemplate: "custom {{input}}"}); err != nil {
+	if _, err := s.PutTask("", Task{ID: "prompt.improve", Title: "My Improve", SystemTemplate: "custom {{input}}"}); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := s.GetTask("prompt.improve")
+	got, _ := s.GetTask("", "prompt.improve")
 	if got.Title != "My Improve" || !got.Builtin || !got.Overridden {
 		t.Fatalf("override resolve = %+v", got)
 	}
 
 	// a brand-new custom task
-	if _, err := s.PutTask(Task{ID: "my.thing", Title: "Mine", SystemTemplate: "{{input}}"}); err != nil {
+	if _, err := s.PutTask("", Task{ID: "my.thing", Title: "Mine", SystemTemplate: "{{input}}"}); err != nil {
 		t.Fatal(err)
 	}
-	list, _ = s.ListTasks()
+	list, _ = s.ListTasks("")
 	if len(list) != len(Builtins())+1 {
 		t.Fatalf("list after custom = %d", len(list))
 	}
 
 	// invalid task rejected
-	if _, err := s.PutTask(Task{ID: "bad"}); err == nil {
+	if _, err := s.PutTask("", Task{ID: "bad"}); err == nil {
 		t.Fatal("expected validation error")
 	}
 
 	// delete override → reverts to builtin
-	if err := s.DeleteTask("prompt.improve"); err != nil {
+	if err := s.DeleteTask("", "prompt.improve"); err != nil {
 		t.Fatal(err)
 	}
-	got, _ = s.GetTask("prompt.improve")
+	got, _ = s.GetTask("", "prompt.improve")
 	if got.Overridden || !strings.Contains(got.SystemTemplate, "prompt engineer") {
 		t.Fatalf("did not revert to builtin: %+v", got)
 	}
 
 	// delete a non-existent custom row
-	if err := s.DeleteTask("prompt.improve"); err != ErrNotFound {
+	if err := s.DeleteTask("", "prompt.improve"); err != ErrNotFound {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }
 
 func TestTaskPreferredModelPersists(t *testing.T) {
 	s := newStore(t)
-	base, _ := s.GetTask("prompt.improve")
+	base, _ := s.GetTask("", "prompt.improve")
 	base.PreferredConnectionID = "conn_x"
 	base.PreferredModel = "fast-local"
-	if _, err := s.PutTask(*base); err != nil {
+	if _, err := s.PutTask("", *base); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := s.GetTask("prompt.improve")
+	got, _ := s.GetTask("", "prompt.improve")
 	if got.PreferredConnectionID != "conn_x" || got.PreferredModel != "fast-local" || !got.Overridden {
 		t.Fatalf("preferred not persisted: %+v", got)
 	}

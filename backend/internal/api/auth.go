@@ -11,6 +11,7 @@ import (
 
 	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/auth"
+	"github.com/infrakit/backend/internal/userctx"
 )
 
 // AuthHandlers wires /auth*, /users* and /audit. Only mounted when the backend
@@ -28,6 +29,10 @@ func (h *AuthHandlers) me(r *http.Request) *auth.User {
 	}
 	return h.UserOf(r)
 }
+
+// owner returns the calling user's id for per-user data scoping (U2). "" in
+// single-user mode → the store treats it as "all rows".
+func owner(r *http.Request) string { return userctx.From(r.Context()) }
 
 func clientIP(r *http.Request) string {
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {

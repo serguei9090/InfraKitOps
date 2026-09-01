@@ -11,6 +11,7 @@ import (
 
 	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/sse"
+	"github.com/infrakit/backend/internal/userctx"
 )
 
 // SecretResolver fetches an API key from the calling user's Vault by secret
@@ -71,7 +72,7 @@ func (e *Engine) SetToolRunner(t ToolRunner) { e.tools = t }
 // UsageRecorder is written after each completed stream (A3c). *UsageStore
 // satisfies it. Nil → no accounting.
 type UsageRecorder interface {
-	Record(connID, taskID, model string, prompt, completion int)
+	Record(ctx context.Context, connID, taskID, model string, prompt, completion int)
 }
 
 // SetUsageRecorder wires token-usage accounting (A3c).
@@ -184,7 +185,7 @@ func (e *Engine) resolveKey(ctx context.Context, conn Connection) (string, error
 
 // TestConnection resolves the key and lists models — the "does this work" check.
 func (e *Engine) TestConnection(ctx context.Context, id string) ([]Model, error) {
-	conn, err := e.Store.GetConnection(id)
+	conn, err := e.Store.GetConnection(userctx.From(ctx), id)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +231,7 @@ func (e *Engine) RunTask(
 	vars map[string]string, input string, history []ChatMessage, tools []ToolDef,
 	out chan<- sse.Message,
 ) {
-	task, err := e.Store.GetTask(taskID)
+	task, err := e.Store.GetTask(userctx.From(ctx), taskID)
 	if err != nil {
 		sendOrDone(ctx, out, sse.Message{Event: "error", Data: map[string]string{"error": "task not found: " + taskID}})
 		return
@@ -250,7 +251,7 @@ func (e *Engine) RunTask(
 func (e *Engine) stream(ctx context.Context, connID, taskID string, req ChatRequest, shape TaskOutputShape, out chan<- sse.Message) {
 	send := func(m sse.Message) bool { return sendOrDone(ctx, out, m) }
 
-	conn, err := e.Store.GetConnection(connID)
+	conn, err := e.Store.GetConnection(userctx.From(ctx), connID)
 	if err != nil {
 		send(sse.Message{Event: "error", Data: map[string]string{"error": "connection not found"}})
 		return
@@ -376,7 +377,7 @@ func (e *Engine) stream(ctx context.Context, connID, taskID string, req ChatRequ
 		}
 	}
 	if e.usage != nil {
-		e.usage.Record(connID, taskID, req.Model, total.PromptTokens, total.CompletionTokens)
+		e.usage.Record(ctx, connID, taskID, req.Model, total.PromptTokens, total.CompletionTokens)
 	}
 	send(sse.Message{Event: "end", Data: map[string]any{
 		"usage": map[string]int{"promptTokens": total.PromptTokens, "completionTokens": total.CompletionTokens},

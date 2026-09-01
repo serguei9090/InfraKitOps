@@ -57,7 +57,7 @@ func TestAgentLoopRunsToolThenAnswers(t *testing.T) {
 	defer srv.Close()
 
 	s := newStore(t)
-	conn, _ := s.PutConnection(Connection{Name: "O", Provider: ProviderOpenAICompatible, BaseURL: srv.URL})
+	conn, _ := s.PutConnection("", Connection{Name: "O", Provider: ProviderOpenAICompatible, BaseURL: srv.URL})
 	eng := NewEngine(s, nil)
 	fr := &fakeRunner{}
 	eng.SetToolRunner(fr)
@@ -121,7 +121,7 @@ func TestAgentLoopWaitsForApproval(t *testing.T) {
 	defer srv.Close()
 
 	s := newStore(t)
-	conn, _ := s.PutConnection(Connection{Name: "O", Provider: ProviderOpenAICompatible, BaseURL: srv.URL})
+	conn, _ := s.PutConnection("", Connection{Name: "O", Provider: ProviderOpenAICompatible, BaseURL: srv.URL})
 	eng := NewEngine(s, nil)
 	fr := &fakeRunner{}
 	eng.SetToolRunner(fr)

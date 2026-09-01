@@ -39,11 +39,11 @@ func mcpErr(w http.ResponseWriter, err error) {
 }
 
 // ListServers: GET /mcp/servers
-func (h *MCPHandlers) ListServers(w http.ResponseWriter, _ *http.Request) {
+func (h *MCPHandlers) ListServers(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	list, err := h.Manager.Store().List()
+	list, err := h.Manager.Store().List(owner(r))
 	if err != nil {
 		mcpErr(w, err)
 		return
@@ -68,7 +68,7 @@ func (h *MCPHandlers) PutServer(w http.ResponseWriter, r *http.Request) {
 		c.ID = id
 	}
 	prevID := c.ID
-	id, err := h.Manager.Store().Put(c)
+	id, err := h.Manager.Store().Put(owner(r), c)
 	if err != nil {
 		mcpErr(w, err)
 		return
@@ -87,7 +87,7 @@ func (h *MCPHandlers) DeleteServer(w http.ResponseWriter, r *http.Request) {
 	}
 	id := chi.URLParam(r, "id")
 	h.Manager.Disconnect(id)
-	if err := h.Manager.Store().Delete(id); err != nil {
+	if err := h.Manager.Store().Delete(owner(r), id); err != nil {
 		mcpErr(w, err)
 		return
 	}

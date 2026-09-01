@@ -71,6 +71,24 @@ var historyMigrations = []string{
 	`ALTER TABLE llm_conversation ADD COLUMN completion_tokens INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE llm_message ADD COLUMN prompt_tokens INTEGER`,
 	`ALTER TABLE llm_message ADD COLUMN completion_tokens INTEGER`,
+	`ALTER TABLE llm_conversation ADD COLUMN owner TEXT NOT NULL DEFAULT ''`, // U2
+}
+
+// scope limits a conversation query to a user ("" = all, single-user).
+func hscope(owner string) (string, []any) {
+	if owner == "" {
+		return "", nil
+	}
+	return " AND (owner = ? OR owner = '')", []any{owner}
+}
+
+// ClaimOrphans assigns unowned conversations to owner (first-admin bootstrap).
+func (h *History) ClaimOrphans(owner string) error {
+	if owner == "" {
+		return nil
+	}
+	_, err := h.db.Exec(`UPDATE llm_conversation SET owner = ? WHERE owner = ''`, owner)
+	return err
 }
 
 // NewHistory applies the history schema on the shared llm.db handle.
@@ -88,8 +106,16 @@ func NewHistory(db *sql.DB) (*History, error) {
 
 // Save inserts a new conversation (id generated) or replaces an existing one's
 // messages (when meta.ID is set). Returns the id.
-func (h *History) Save(meta Conversation, msgs []StoredMessage) (string, error) {
+func (h *History) Save(owner string, meta Conversation, msgs []StoredMessage) (string, error) {
 	now := time.Now().UnixMilli()
+
+	// Ownership check before the transaction — the pool is single-conn.
+	if meta.ID != "" {
+		if _, _, err := h.Get(owner, meta.ID); err != nil {
+			return "", err
+		}
+	}
+
 	tx, err := h.db.Begin()
 	if err != nil {
 		return "", err
@@ -113,14 +139,14 @@ func (h *History) Save(meta Conversation, msgs []StoredMessage) (string, error) 
 
 	_, err = tx.Exec(
 		`INSERT INTO llm_conversation
-		   (id,title,conn_id,model,task_id,pinned,prompt_tokens,completion_tokens,created_at,updated_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?)
+		   (id,title,conn_id,model,task_id,pinned,prompt_tokens,completion_tokens,created_at,updated_at,owner)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   title=excluded.title, model=excluded.model,
 		   prompt_tokens=excluded.prompt_tokens, completion_tokens=excluded.completion_tokens,
 		   updated_at=excluded.updated_at`,
 		meta.ID, meta.Title, meta.ConnID, meta.Model, meta.TaskID, b2i(meta.Pinned),
-		meta.PromptTokens, meta.CompletionTokens, meta.CreatedAt, meta.UpdatedAt,
+		meta.PromptTokens, meta.CompletionTokens, meta.CreatedAt, meta.UpdatedAt, owner,
 	)
 	if err != nil {
 		return "", err
@@ -152,10 +178,11 @@ func (h *History) Save(meta Conversation, msgs []StoredMessage) (string, error) 
 }
 
 // List returns conversation metadata, pinned first then newest.
-func (h *History) List() ([]Conversation, error) {
+func (h *History) List(owner string) ([]Conversation, error) {
+	where, args := hscope(owner)
 	rows, err := h.db.Query(
 		`SELECT id,title,conn_id,model,task_id,pinned,prompt_tokens,completion_tokens,created_at,updated_at
-		 FROM llm_conversation ORDER BY pinned DESC, updated_at DESC`)
+		 FROM llm_conversation WHERE 1=1`+where+` ORDER BY pinned DESC, updated_at DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -175,12 +202,13 @@ func (h *History) List() ([]Conversation, error) {
 }
 
 // Get loads a conversation and its messages.
-func (h *History) Get(id string) (*Conversation, []StoredMessage, error) {
+func (h *History) Get(owner, id string) (*Conversation, []StoredMessage, error) {
+	where, args := hscope(owner)
 	var c Conversation
 	var pinned int
 	err := h.db.QueryRow(
 		`SELECT id,title,conn_id,model,task_id,pinned,prompt_tokens,completion_tokens,created_at,updated_at
-		 FROM llm_conversation WHERE id = ?`, id,
+		 FROM llm_conversation WHERE id = ?`+where, append([]any{id}, args...)...,
 	).Scan(&c.ID, &c.Title, &c.ConnID, &c.Model, &c.TaskID, &pinned,
 		&c.PromptTokens, &c.CompletionTokens, &c.CreatedAt, &c.UpdatedAt)
 	if err == sql.ErrNoRows {
@@ -216,8 +244,8 @@ func (h *History) Get(id string) (*Conversation, []StoredMessage, error) {
 	return &c, msgs, rows.Err()
 }
 
-// Patch updates the title and/or pinned flag.
-func (h *History) Patch(id string, title *string, pinned *bool) error {
+// Patch updates the title and/or pinned flag of one of the caller's rows.
+func (h *History) Patch(owner, id string, title *string, pinned *bool) error {
 	sets, args := []string{}, []any{}
 	if title != nil {
 		sets = append(sets, "title = ?")
@@ -232,7 +260,8 @@ func (h *History) Patch(id string, title *string, pinned *bool) error {
 	}
 	sets = append(sets, "updated_at = ?")
 	args = append(args, time.Now().UnixMilli(), id)
-	res, err := h.db.Exec(`UPDATE llm_conversation SET `+strings.Join(sets, ", ")+` WHERE id = ?`, args...)
+	where, wargs := hscope(owner)
+	res, err := h.db.Exec(`UPDATE llm_conversation SET `+strings.Join(sets, ", ")+` WHERE id = ?`+where, append(args, wargs...)...)
 	if err != nil {
 		return err
 	}
@@ -242,8 +271,11 @@ func (h *History) Patch(id string, title *string, pinned *bool) error {
 	return nil
 }
 
-// Delete removes a conversation and its messages.
-func (h *History) Delete(id string) error {
+// Delete removes one of the caller's conversations and its messages.
+func (h *History) Delete(owner, id string) error {
+	if _, _, err := h.Get(owner, id); err != nil {
+		return err
+	}
 	if _, err := h.db.Exec(`DELETE FROM llm_message WHERE conv_id = ?`, id); err != nil {
 		return err
 	}

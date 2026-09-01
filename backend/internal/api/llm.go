@@ -84,11 +84,11 @@ func llmErr(w http.ResponseWriter, err error) {
 }
 
 // ListConnections: GET /llm/connections
-func (h *LLMHandlers) ListConnections(w http.ResponseWriter, _ *http.Request) {
+func (h *LLMHandlers) ListConnections(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	list, err := h.Store.ListConnections()
+	list, err := h.Store.ListConnections(owner(r))
 	if err != nil {
 		llmErr(w, err)
 		return
@@ -109,7 +109,7 @@ func (h *LLMHandlers) PutConnection(w http.ResponseWriter, r *http.Request) {
 	if id := chi.URLParam(r, "id"); id != "" {
 		c.ID = id
 	}
-	saved, err := h.Store.PutConnection(c)
+	saved, err := h.Store.PutConnection(owner(r), c)
 	if err != nil {
 		llmErr(w, err)
 		return
@@ -124,7 +124,7 @@ func (h *LLMHandlers) DeleteConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
-	if err := h.Store.DeleteConnection(id); err != nil {
+	if err := h.Store.DeleteConnection(owner(r), id); err != nil {
 		llmErr(w, err)
 		return
 	}
@@ -198,11 +198,11 @@ func (h *LLMHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 // --- tasks --------------------------------------------------------
 
 // ListTasks: GET /llm/tasks
-func (h *LLMHandlers) ListTasks(w http.ResponseWriter, _ *http.Request) {
+func (h *LLMHandlers) ListTasks(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	tasks, err := h.Store.ListTasks()
+	tasks, err := h.Store.ListTasks(owner(r))
 	if err != nil {
 		llmErr(w, err)
 		return
@@ -223,7 +223,7 @@ func (h *LLMHandlers) PutTask(w http.ResponseWriter, r *http.Request) {
 	if id := chi.URLParam(r, "id"); id != "" {
 		t.ID = id
 	}
-	saved, err := h.Store.PutTask(t)
+	saved, err := h.Store.PutTask(owner(r), t)
 	if err != nil {
 		llmErr(w, err)
 		return
@@ -236,7 +236,7 @@ func (h *LLMHandlers) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	if err := h.Store.DeleteTask(chi.URLParam(r, "id")); err != nil {
+	if err := h.Store.DeleteTask(owner(r), chi.URLParam(r, "id")); err != nil {
 		llmErr(w, err)
 		return
 	}
@@ -281,7 +281,7 @@ func (h *LLMHandlers) TaskRunStream(w http.ResponseWriter, r *http.Request) {
 	// (playground-style) overrides it.
 	toolSpec := q.Get("tools")
 	if toolSpec == "" {
-		if t, err := h.Store.GetTask(chi.URLParam(r, "id")); err == nil && len(t.Tools) > 0 {
+		if t, err := h.Store.GetTask(owner(r), chi.URLParam(r, "id")); err == nil && len(t.Tools) > 0 {
 			toolSpec = strings.Join(t.Tools, ",")
 		}
 	}
@@ -383,7 +383,7 @@ func (h *LLMHandlers) SaveConversation(w http.ResponseWriter, r *http.Request) {
 		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
-	id, err := h.History.Save(b.Conversation, b.Messages)
+	id, err := h.History.Save(owner(r), b.Conversation, b.Messages)
 	if err != nil {
 		llmErr(w, err)
 		return
@@ -392,11 +392,11 @@ func (h *LLMHandlers) SaveConversation(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListConversations: GET /llm/conversations
-func (h *LLMHandlers) ListConversations(w http.ResponseWriter, _ *http.Request) {
+func (h *LLMHandlers) ListConversations(w http.ResponseWriter, r *http.Request) {
 	if !h.historyGuard(w) {
 		return
 	}
-	list, err := h.History.List()
+	list, err := h.History.List(owner(r))
 	if err != nil {
 		llmErr(w, err)
 		return
@@ -409,7 +409,7 @@ func (h *LLMHandlers) GetConversation(w http.ResponseWriter, r *http.Request) {
 	if !h.historyGuard(w) {
 		return
 	}
-	conv, msgs, err := h.History.Get(chi.URLParam(r, "id"))
+	conv, msgs, err := h.History.Get(owner(r), chi.URLParam(r, "id"))
 	if err != nil {
 		llmErr(w, err)
 		return
@@ -430,7 +430,7 @@ func (h *LLMHandlers) PatchConversation(w http.ResponseWriter, r *http.Request) 
 		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
-	if err := h.History.Patch(chi.URLParam(r, "id"), b.Title, b.Pinned); err != nil {
+	if err := h.History.Patch(owner(r), chi.URLParam(r, "id"), b.Title, b.Pinned); err != nil {
 		llmErr(w, err)
 		return
 	}
@@ -442,7 +442,7 @@ func (h *LLMHandlers) DeleteConversation(w http.ResponseWriter, r *http.Request)
 	if !h.historyGuard(w) {
 		return
 	}
-	if err := h.History.Delete(chi.URLParam(r, "id")); err != nil {
+	if err := h.History.Delete(owner(r), chi.URLParam(r, "id")); err != nil {
 		llmErr(w, err)
 		return
 	}
@@ -463,7 +463,7 @@ func (h *LLMHandlers) UsageReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	since := time.Now().Add(-time.Duration(days) * 24 * time.Hour).UnixMilli()
-	groups, err := h.Usage.Aggregate(since, r.URL.Query().Get("groupBy"))
+	groups, err := h.Usage.Aggregate(owner(r), since, r.URL.Query().Get("groupBy"))
 	if err != nil {
 		apierr.Write(w, apierr.Internal(err.Error()))
 		return

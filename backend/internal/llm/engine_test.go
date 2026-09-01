@@ -35,7 +35,7 @@ func TestStreamStopsWhenClientGone(t *testing.T) {
 	defer srv.Close()
 
 	s := newStore(t)
-	conn, _ := s.PutConnection(Connection{Name: "L", Provider: ProviderOllama, BaseURL: srv.URL})
+	conn, _ := s.PutConnection("", Connection{Name: "L", Provider: ProviderOllama, BaseURL: srv.URL})
 	eng := NewEngine(s, nil)
 
 	// tiny unbuffered channel, and we stop reading after the first message
@@ -106,7 +106,7 @@ func TestPerConnectionConcurrencyCap(t *testing.T) {
 	defer srv.Close()
 
 	s := newStore(t)
-	conn, _ := s.PutConnection(Connection{Name: "L", Provider: ProviderOllama, BaseURL: srv.URL})
+	conn, _ := s.PutConnection("", Connection{Name: "L", Provider: ProviderOllama, BaseURL: srv.URL})
 	eng := NewEngine(s, nil)
 	eng.SetMaxConcurrentPerConn(2)
 

@@ -7,7 +7,16 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/infrakit/backend/internal/apierr"
+	"github.com/infrakit/backend/internal/userctx"
 )
+
+// owns verifies the context user may address server id (U2). A cached session
+// is keyed only by id, so entry points that don't already go through
+// store.Get must call this first.
+func (m *Manager) owns(ctx context.Context, id string) error {
+	_, err := m.store.Get(userctx.From(ctx), id)
+	return err
+}
 
 // rpCacheTTL matches toolCacheTTL — resources/prompts lists are cheap but a
 // server that lists slowly shouldn't be hit on every keystroke.
@@ -110,7 +119,7 @@ func (m *Manager) refreshRP(ctx context.Context, id string, cfg *ServerConfig, c
 // rpFor returns the cached resources/prompts for a server, refreshing if the
 // cache is cold or stale.
 func (m *Manager) rpFor(ctx context.Context, id string) (*conn, *ServerConfig, error) {
-	cfg, err := m.store.Get(id)
+	cfg, err := m.store.Get(userctx.From(ctx), id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -154,7 +163,7 @@ func (m *Manager) Prompts(ctx context.Context, id string) ([]PromptSpec, error) 
 // AggregateResources lists resources + templates across every enabled server.
 // A server that fails is skipped (its error surfaces only if all fail).
 func (m *Manager) AggregateResources(ctx context.Context) ([]ResourceSpec, []ResourceTemplateSpec, error) {
-	servers, err := m.store.List()
+	servers, err := m.store.List(userctx.From(ctx))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -185,7 +194,7 @@ func (m *Manager) AggregateResources(ctx context.Context) ([]ResourceSpec, []Res
 
 // AggregatePrompts lists prompts across every enabled server.
 func (m *Manager) AggregatePrompts(ctx context.Context) ([]PromptSpec, error) {
-	servers, err := m.store.List()
+	servers, err := m.store.List(userctx.From(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -214,6 +223,9 @@ func (m *Manager) AggregatePrompts(ctx context.Context) ([]PromptSpec, error) {
 
 // ReadResource fetches one resource's text content, capped.
 func (m *Manager) ReadResource(ctx context.Context, id, uri string) (ResourceRead, error) {
+	if err := m.owns(ctx, id); err != nil {
+		return ResourceRead{}, err
+	}
 	c, err := m.ensure(ctx, id)
 	if err != nil {
 		return ResourceRead{}, err
@@ -241,6 +253,9 @@ func (m *Manager) ReadResource(ctx context.Context, id, uri string) (ResourceRea
 
 // GetPrompt renders a server prompt with the given string arguments.
 func (m *Manager) GetPrompt(ctx context.Context, id, name string, args map[string]string) (PromptResult, error) {
+	if err := m.owns(ctx, id); err != nil {
+		return PromptResult{}, err
+	}
 	c, err := m.ensure(ctx, id)
 	if err != nil {
 		return PromptResult{}, err

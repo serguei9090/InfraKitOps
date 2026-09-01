@@ -145,6 +145,22 @@ func main() {
 			log.Fatalf("auth: %v", err)
 		}
 		authSvc = svc
+		// When the first admin is created, claim every pre-auth row for them
+		// so existing single-user data isn't stranded (U2).
+		svc.OnBootstrap = func(adminID string) {
+			if llmStore != nil {
+				_ = llmStore.ClaimOrphans(adminID)
+			}
+			if llmHistory != nil {
+				_ = llmHistory.ClaimOrphans(adminID)
+			}
+			if llmUsage != nil {
+				_ = llmUsage.ClaimOrphans(adminID)
+			}
+			if mcpManager != nil {
+				_ = mcpManager.Store().ClaimOrphans(adminID)
+			}
+		}
 		if tok := svc.SetupToken(); tok != "" {
 			fmt.Printf("SETUP-TOKEN %s\n", tok)
 		}

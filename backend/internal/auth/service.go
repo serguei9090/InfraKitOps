@@ -17,6 +17,10 @@ type Service struct {
 
 	setupMu    sync.Mutex
 	setupToken string // one-time; set at construction iff no users exist
+
+	// OnBootstrap, if set, runs with the new admin's id right after the first
+	// account is created — used to claim pre-auth data (U2). Best-effort.
+	OnBootstrap func(adminID string)
 }
 
 // NewService wires a Service over an open auth.db. If the store has no users
@@ -75,6 +79,9 @@ func (s *Service) Bootstrap(token, username, password, userAgent string) (string
 		return "", nil, err
 	}
 	s.setupToken = "" // spent
+	if s.OnBootstrap != nil {
+		s.OnBootstrap(u.ID)
+	}
 	sess, err := s.store.CreateSession(u.ID, userAgent)
 	if err != nil {
 		return "", nil, err

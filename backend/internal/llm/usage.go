@@ -1,10 +1,14 @@
 package llm
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/infrakit/backend/internal/userctx"
 )
 
 // A3c — token-usage accounting. One row per completed stream. No message
@@ -22,6 +26,10 @@ CREATE TABLE IF NOT EXISTS llm_usage (
 );
 CREATE INDEX IF NOT EXISTS idx_llm_usage_at ON llm_usage(at);
 `
+
+var usageMigrations = []string{
+	`ALTER TABLE llm_usage ADD COLUMN owner TEXT NOT NULL DEFAULT ''`, // U2
+}
 
 // UsageGroup is one aggregated bucket.
 type UsageGroup struct {
@@ -51,19 +59,34 @@ func NewUsageStore(db *sql.DB) (*UsageStore, error) {
 	if _, err := db.Exec(usageSchema); err != nil {
 		return nil, fmt.Errorf("apply usage schema: %w", err)
 	}
+	for _, m := range usageMigrations {
+		if _, err := db.Exec(m); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return nil, fmt.Errorf("usage migration %q: %w", m, err)
+		}
+	}
 	return &UsageStore{db: db, cache: map[string]usageCacheEntry{}}, nil
 }
 
+// ClaimOrphans assigns unowned usage rows to owner (first-admin bootstrap).
+func (u *UsageStore) ClaimOrphans(owner string) error {
+	if owner == "" {
+		return nil
+	}
+	_, err := u.db.Exec(`UPDATE llm_usage SET owner = ? WHERE owner = ''`, owner)
+	return err
+}
+
 // Record satisfies the engine's UsageRecorder. Best-effort: a write error is
-// swallowed (usage accounting must never break a chat).
-func (u *UsageStore) Record(connID, taskID, model string, prompt, completion int) {
+// swallowed (usage accounting must never break a chat). The owner comes from
+// the context (userctx).
+func (u *UsageStore) Record(ctx context.Context, connID, taskID, model string, prompt, completion int) {
 	if prompt == 0 && completion == 0 {
 		return
 	}
 	_, _ = u.db.Exec(
-		`INSERT INTO llm_usage (conn_id,task_id,model,prompt_tokens,completion_tokens,at)
-		 VALUES (?,?,?,?,?,?)`,
-		connID, taskID, model, prompt, completion, time.Now().UnixMilli(),
+		`INSERT INTO llm_usage (conn_id,task_id,model,prompt_tokens,completion_tokens,at,owner)
+		 VALUES (?,?,?,?,?,?,?)`,
+		connID, taskID, model, prompt, completion, time.Now().UnixMilli(), userctx.From(ctx),
 	)
 	u.mu.Lock()
 	u.cache = map[string]usageCacheEntry{}
@@ -72,7 +95,7 @@ func (u *UsageStore) Record(connID, taskID, model string, prompt, completion int
 
 // Aggregate returns usage grouped by "day", "model" or "task" (anything else
 // → "model"), over the window [sinceMillis, now]. Cached ~30s.
-func (u *UsageStore) Aggregate(sinceMillis int64, groupBy string) ([]UsageGroup, error) {
+func (u *UsageStore) Aggregate(owner string, sinceMillis int64, groupBy string) ([]UsageGroup, error) {
 	col := "model"
 	switch groupBy {
 	case "day":
@@ -80,7 +103,7 @@ func (u *UsageStore) Aggregate(sinceMillis int64, groupBy string) ([]UsageGroup,
 	case "task":
 		col = "COALESCE(NULLIF(task_id,''),'(playground)')"
 	}
-	key := fmt.Sprintf("%d|%s", sinceMillis, groupBy)
+	key := fmt.Sprintf("%s|%d|%s", owner, sinceMillis, groupBy)
 
 	u.mu.Lock()
 	if e, ok := u.cache[key]; ok && time.Since(e.at) < usageCacheTTL {
@@ -93,12 +116,17 @@ func (u *UsageStore) Aggregate(sinceMillis int64, groupBy string) ([]UsageGroup,
 	if col == "day" {
 		sel = `strftime('%Y-%m-%d', at/1000, 'unixepoch', 'localtime')`
 	}
+	where, wargs := "", []any{sinceMillis}
+	if owner != "" {
+		where = " AND (owner = ? OR owner = '')"
+		wargs = append(wargs, owner)
+	}
 	q := fmt.Sprintf(
 		`SELECT %s AS k, COUNT(*), COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0)
-		 FROM llm_usage WHERE at >= ? GROUP BY k ORDER BY (SUM(prompt_tokens)+SUM(completion_tokens)) DESC`,
-		sel,
+		 FROM llm_usage WHERE at >= ?%s GROUP BY k ORDER BY (SUM(prompt_tokens)+SUM(completion_tokens)) DESC`,
+		sel, where,
 	)
-	rows, err := u.db.Query(q, sinceMillis)
+	rows, err := u.db.Query(q, wargs...)
 	if err != nil {
 		return nil, err
 	}

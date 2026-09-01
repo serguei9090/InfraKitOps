@@ -15,6 +15,7 @@ import (
 
 	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/templating"
+	"github.com/infrakit/backend/internal/userctx"
 )
 
 // Manager owns a live session per connected server and the tool cache.
@@ -129,7 +130,7 @@ const connectTimeout = 60 * time.Second
 // Connect opens (or reuses) a session to server id and refreshes its tool
 // cache. Idempotent.
 func (m *Manager) Connect(ctx context.Context, id string) ([]ToolSpec, error) {
-	cfg, err := m.store.Get(id)
+	cfg, err := m.store.Get(userctx.From(ctx), id)
 	if err != nil {
 		return nil, err
 	}
@@ -216,6 +217,9 @@ func (m *Manager) Tools(ctx context.Context, id string) ([]ToolSpec, error) {
 	c := m.conns[id]
 	m.mu.Unlock()
 	if c != nil && time.Since(c.at) < toolCacheTTL {
+		if err := m.owns(ctx, id); err != nil {
+			return nil, err
+		}
 		return c.tools, nil
 	}
 	return m.Connect(ctx, id)
@@ -226,7 +230,7 @@ const toolCacheTTL = 60 * time.Second
 // AggregateTools lists tools across every ENABLED server. A server that fails
 // to connect is skipped (its error is returned alongside if all fail).
 func (m *Manager) AggregateTools(ctx context.Context) ([]ToolSpec, error) {
-	servers, err := m.store.List()
+	servers, err := m.store.List(userctx.From(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -253,6 +257,9 @@ func (m *Manager) AggregateTools(ctx context.Context) ([]ToolSpec, error) {
 
 // Call invokes a tool on a server. Used by the engine (A4b).
 func (m *Manager) Call(ctx context.Context, serverID, tool string, args map[string]any) (ToolResult, error) {
+	if err := m.owns(ctx, serverID); err != nil {
+		return ToolResult{}, err
+	}
 	m.mu.Lock()
 	c := m.conns[serverID]
 	m.mu.Unlock()
