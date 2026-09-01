@@ -35,12 +35,16 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 ## Killed (won't build)
 
 - **A3d** embeddings — no DB, no RAG consumer, and this is a standalone app.
-- **S3e** cross-device settings sync — standalone app, no account layer wanted.
 
 ## Remaining
 
 All 15 numbered items + A4f + S3f done. Only parked items left (above).
-**Next: a user-management module** — plan not written yet.
+**Next: user management module** — design approved, phased plan in
+[`USER_MANAGEMENT_PLAN.md`](USER_MANAGEMENT_PLAN.md) (U0–U6, multi-tenant,
+opt-in `--auth on`, off by default). Not started.
+
+- **S3e** cross-device settings sync — unpark only if requested; the U-module
+  account layer would make it buildable.
 
 ## Done
 
