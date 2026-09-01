@@ -1,4 +1,18 @@
-import { KJUR, X509, zulutodate } from 'jsrsasign'
+import { AsnParser } from '@peculiar/asn1-schema'
+import {
+  Certificate,
+  CRLDistributionPoints,
+  ExtendedKeyUsage,
+  BasicConstraints,
+  KeyUsage,
+  SubjectAlternativeName,
+  type GeneralName,
+} from '@peculiar/asn1-x509'
+import { RSAPublicKey } from '@peculiar/asn1-rsa'
+import { ECParameters } from '@peculiar/asn1-ecc'
+import { md5, sha1 } from '@noble/hashes/legacy.js'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 import type { IToolUseCase } from '../ports/IToolUseCase'
 
 /** Where a certificate sits relative to its validity window right now. */
@@ -6,17 +20,9 @@ export type CertificateValidityStatus = 'notYetValid' | 'valid' | 'expiringSoon'
 
 /** One relative distinguished name component, e.g. `CN=example.com`. */
 export interface DistinguishedNameEntry {
-  /**
-   * The short label jsrsasign resolves at parse time (`CN`, `O`, `OU`, `C`,
-   * `E` for emailAddress, …), or the raw dotted OID when jsrsasign does not
-   * recognise it. Unlike the Dart reference (which keys its DN map by OID
-   * and maps a handful of well-known ones back to short labels itself),
-   * jsrsasign's `X509#getSubject()`/`getIssuer()` already return the
-   * resolved short label directly and do not separately expose the OID, so
-   * `oid` mirrors `shortName` here rather than being a distinct dotted
-   * string — a library-shape difference, not a missing feature.
-   */
+  /** The dotted OID of the attribute type (e.g. `2.5.4.3`). */
   oid: string
+  /** Short label (`CN`, `O`, `E`, …) or the raw OID when it isn't a known one. */
   shortName: string
   value: string
 }
@@ -46,7 +52,7 @@ export function distinguishedNameIsEmpty(dn: DistinguishedName): boolean {
 /**
  * Everything this tool can report about one certificate. Deliberately a
  * plain data object holding only TS primitive types, so the UI layer never
- * has to import `jsrsasign`.
+ * has to import a certificate-parsing library.
  */
 export interface CertificateInfo {
   /** 0-based position within the parsed bundle. */
@@ -72,11 +78,7 @@ export interface CertificateInfo {
   /** `timeUntilExpiryMs` in whole days; negative once expired. */
   daysUntilExpiry: number
 
-  /**
-   * Readable name for the signature algorithm (e.g. `sha256WithRSAEncryption`)
-   * where this port's small local OID table recognises jsrsasign's algorithm
-   * name, otherwise jsrsasign's own name (e.g. `SHA256withRSA`) verbatim.
-   */
+  /** Readable name, e.g. `sha256WithRSAEncryption`; falls back to the raw OID. */
   signatureAlgorithm: string
   signatureAlgorithmOid: string
 
@@ -98,10 +100,10 @@ export interface CertificateInfo {
   sha256Fingerprint: string
   md5Fingerprint: string
 
-  /** SANs as jsrsasign reports them (DNS names and IP addresses). */
+  /** SANs (DNS names, IP addresses, URIs, emails). */
   subjectAlternativeNames: string[]
 
-  /** The `cA` flag of the basic constraints extension. Null when the extension is absent. */
+  /** The `cA` flag of the basic constraints extension. Null when the extension is absent or carries no explicit value. */
   isCertificateAuthority: boolean | null
 
   /** `pathLenConstraint` of the basic constraints extension, when present. */
@@ -181,35 +183,56 @@ const END_MARKER = '-----END CERTIFICATE-----'
 /** A certificate inside this window of its `notAfter` is reported as `expiringSoon`. */
 const EXPIRING_SOON_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000
 
-/**
- * jsrsasign keys its DN entries by short label already (e.g. `CN`, `O`,
- * `E` for emailAddress) rather than by OID, so -- unlike the Dart reference,
- * which keeps its own OID -> short-label table -- there is no separate
- * mapping step here. This is just the conventional `openssl`-style ordering
- * for the one-line rendering. `E` (jsrsasign's short label for
- * emailAddress) sits where Dart's `emailAddress` did.
- */
+/** Conventional `openssl`-style ordering for the one-line DN rendering. */
 const DN_ORDER: readonly string[] = ['C', 'ST', 'L', 'STREET', 'O', 'OU', 'CN', 'E']
 
-/**
- * Best-effort local table mapping jsrsasign's `getSignatureAlgorithmField()`
- * names (e.g. `SHA256withRSA`) to the OpenSSL-style readable name and OID
- * `openssl x509 -text` prints (e.g. `sha256WithRSAEncryption`). jsrsasign
- * does not expose the AlgorithmIdentifier OID as a simple getter the way
- * Dart's `basic_utils` does, so this small table covers the common RSA/ECDSA
- * combinations; anything outside it falls back to jsrsasign's own name
- * verbatim (see `resolveSignatureAlgorithm`).
- */
-const SIGNATURE_ALGORITHM_INFO: Record<string, { name: string; oid: string }> = {
-  MD5withRSA: { name: 'md5WithRSAEncryption', oid: '1.2.840.113549.1.1.4' },
-  SHA1withRSA: { name: 'sha1WithRSAEncryption', oid: '1.2.840.113549.1.1.5' },
-  SHA256withRSA: { name: 'sha256WithRSAEncryption', oid: '1.2.840.113549.1.1.11' },
-  SHA384withRSA: { name: 'sha384WithRSAEncryption', oid: '1.2.840.113549.1.1.12' },
-  SHA512withRSA: { name: 'sha512WithRSAEncryption', oid: '1.2.840.113549.1.1.13' },
-  SHA1withECDSA: { name: 'ecdsa-with-SHA1', oid: '1.2.840.10045.4.1' },
-  SHA256withECDSA: { name: 'ecdsa-with-SHA256', oid: '1.2.840.10045.4.3.2' },
-  SHA384withECDSA: { name: 'ecdsa-with-SHA384', oid: '1.2.840.10045.4.3.3' },
-  SHA512withECDSA: { name: 'ecdsa-with-SHA512', oid: '1.2.840.10045.4.3.4' },
+/** X.500 attribute-type OID → short label. Unknown OIDs pass through verbatim. */
+const DN_OID_TO_SHORT: Record<string, string> = {
+  '2.5.4.3': 'CN',
+  '2.5.4.4': 'SN',
+  '2.5.4.5': 'serialNumber',
+  '2.5.4.6': 'C',
+  '2.5.4.7': 'L',
+  '2.5.4.8': 'ST',
+  '2.5.4.9': 'STREET',
+  '2.5.4.10': 'O',
+  '2.5.4.11': 'OU',
+  '2.5.4.12': 'T',
+  '2.5.4.42': 'GN',
+  '0.9.2342.19200300.100.1.25': 'DC',
+  '1.2.840.113549.1.9.1': 'E',
+}
+
+/** Signature-algorithm OID → `openssl x509 -text` style name. */
+const SIG_OID_TO_NAME: Record<string, string> = {
+  '1.2.840.113549.1.1.4': 'md5WithRSAEncryption',
+  '1.2.840.113549.1.1.5': 'sha1WithRSAEncryption',
+  '1.2.840.113549.1.1.10': 'rsassaPss',
+  '1.2.840.113549.1.1.11': 'sha256WithRSAEncryption',
+  '1.2.840.113549.1.1.12': 'sha384WithRSAEncryption',
+  '1.2.840.113549.1.1.13': 'sha512WithRSAEncryption',
+  '1.2.840.10045.4.1': 'ecdsa-with-SHA1',
+  '1.2.840.10045.4.3.2': 'ecdsa-with-SHA256',
+  '1.2.840.10045.4.3.3': 'ecdsa-with-SHA384',
+  '1.2.840.10045.4.3.4': 'ecdsa-with-SHA512',
+}
+
+/** Named-curve OID → (name, field size in bits). */
+const CURVE_OID: Record<string, { name: string; bits: number }> = {
+  '1.2.840.10045.3.1.7': { name: 'prime256v1', bits: 256 },
+  '1.3.132.0.10': { name: 'secp256k1', bits: 256 },
+  '1.3.132.0.34': { name: 'secp384r1', bits: 384 },
+  '1.3.132.0.35': { name: 'secp521r1', bits: 521 },
+}
+
+/** Extended-key-usage OID → name. */
+const EKU_OID: Record<string, string> = {
+  '1.3.6.1.5.5.7.3.1': 'serverAuth',
+  '1.3.6.1.5.5.7.3.2': 'clientAuth',
+  '1.3.6.1.5.5.7.3.3': 'codeSigning',
+  '1.3.6.1.5.5.7.3.4': 'emailProtection',
+  '1.3.6.1.5.5.7.3.8': 'timeStamping',
+  '1.3.6.1.5.5.7.3.9': 'ocspSigning',
 }
 
 const RSA_ENCRYPTION_OID = '1.2.840.113549.1.1.1'
@@ -221,20 +244,15 @@ const EC_PUBLIC_KEY_OID = '1.2.840.10045.2.1'
  * expires, how it is keyed, its fingerprints, and its SAN / key-usage
  * extensions.
  *
- * Ported from `lib/core/utility/x509_inspector.dart`, which was backed by
- * `package:basic_utils`. This port is backed by `jsrsasign`'s `X509` class
- * instead (the closest browser-safe equivalent among this batch's allowed
- * packages) — every value is still copied into the plain data objects above
- * so no `jsrsasign` type escapes the core. See the field-level doc comments
- * above for the handful of places the two libraries' output shapes genuinely
- * differ (DN short-label spelling for emailAddress, signature-algorithm
- * naming, EC key introspection).
+ * Backed by `@peculiar/asn1-x509` (structure) + `@noble/hashes` (fingerprints)
+ * — every value is copied into the plain data objects above so no parser type
+ * escapes the core.
  *
  * A PEM bundle containing a full chain is parsed member by member; one bad
  * block does not discard the rest.
  *
  * Note this inspects a certificate in isolation. It does not verify the
- * signature, check the chain against a trust store, or consult CRL/OCSP --
+ * signature, check the chain against a trust store, or consult CRL/OCSP —
  * `CertificateInfo.isSelfSigned` is a DN comparison, nothing more.
  */
 export class X509Inspector implements IToolUseCase<X509InspectInput, X509InspectResult> {
@@ -304,7 +322,7 @@ export class X509Inspector implements IToolUseCase<X509InspectInput, X509Inspect
     return X509Inspector.derToPem(der)
   }
 
-  /** Wraps raw DER bytes in PEM armour so `X509` can read them. */
+  /** Wraps raw DER bytes in PEM armour. */
   static derToPem(der: Uint8Array): string {
     const body = bytesToBase64(der)
     const lines = [BEGIN_MARKER]
@@ -349,10 +367,12 @@ export class X509Inspector implements IToolUseCase<X509InspectInput, X509Inspect
   }
 
   private inspectOne(pem: string, index: number, now: Date): CertificateInfo {
-    const x = new X509(pem)
+    const der = pemBodyToBytes(pem)
+    const cert = AsnParser.parse(der, Certificate)
+    const tbs = cert.tbsCertificate
 
-    const notBefore = zulutodate(x.getNotBefore())
-    const notAfter = zulutodate(x.getNotAfter())
+    const notBefore = timeToDate(tbs.validity.notBefore)
+    const notAfter = timeToDate(tbs.validity.notAfter)
 
     const timeUntilExpiryMs = notAfter.getTime() - now.getTime()
     let status: CertificateValidityStatus
@@ -366,22 +386,19 @@ export class X509Inspector implements IToolUseCase<X509InspectInput, X509Inspect
       status = 'valid'
     }
 
-    const subject = dnFrom(x.getSubject())
-    const issuer = dnFrom(x.getIssuer())
+    const subject = dnFrom(tbs.subject)
+    const issuer = dnFrom(tbs.issuer)
 
-    const serialNumberHex = x.getSerialNumberHex().toUpperCase()
+    const serialNumberHex = bytesToHex(new Uint8Array(tbs.serialNumber)).replace(/^0+(?=.)/, '').toUpperCase() || '0'
     const serialNumberDecimal = BigInt(`0x${serialNumberHex}`).toString(10)
 
-    const sigAlgRaw = x.getSignatureAlgorithmField()
-    const sigAlgInfo = SIGNATURE_ALGORITHM_INFO[sigAlgRaw] ?? { name: sigAlgRaw, oid: sigAlgRaw }
+    const sigOid = cert.signatureAlgorithm.algorithm
+    const signatureAlgorithm = SIG_OID_TO_NAME[sigOid] ?? sigOid
 
-    const pubkeyInfo = publicKeyInfoFrom(x)
+    const pubkeyInfo = publicKeyInfoFrom(tbs.subjectPublicKeyInfo)
 
-    const bc = x.getExtBasicConstraints()
-    const ku = x.getExtKeyUsage()
-    const eku = x.getExtExtKeyUsage()
-    const san = x.getExtSubjectAltName()
-    const cdp = x.getExtCRLDistributionPoints()
+    const ext = new ExtensionSet(tbs.extensions ?? [])
+    const bc = ext.basicConstraints()
 
     const subjectFormatted = distinguishedNameFormatted(subject)
     const issuerFormatted = distinguishedNameFormatted(issuer)
@@ -390,7 +407,7 @@ export class X509Inspector implements IToolUseCase<X509InspectInput, X509Inspect
     const isExpired = status === 'expired'
     const isCurrentlyValid = status === 'valid' || status === 'expiringSoon'
 
-    const subjectAlternativeNames = subjectAltNamesFrom(san)
+    const subjectAlternativeNames = ext.subjectAltNames()
 
     const commonName = distinguishedNameCommonName(subject)
     const displayName =
@@ -402,34 +419,36 @@ export class X509Inspector implements IToolUseCase<X509InspectInput, X509Inspect
             ? subjectAlternativeNames[0]
             : `Certificate ${index + 1}`
 
+    const derFull = new Uint8Array(der)
+
     return {
       index,
       subject,
       issuer,
       serialNumberHex,
       serialNumberDecimal,
-      version: x.getVersion(),
+      version: (tbs.version ?? 0) + 1,
       notBefore,
       notAfter,
       status,
       timeUntilExpiryMs,
       daysUntilExpiry,
-      signatureAlgorithm: sigAlgInfo.name,
-      signatureAlgorithmOid: sigAlgInfo.oid,
+      signatureAlgorithm,
+      signatureAlgorithmOid: sigOid,
       publicKeyAlgorithm: pubkeyInfo.algorithm,
       publicKeyOid: pubkeyInfo.oid,
       publicKeyBits: pubkeyInfo.bits,
       publicKeyCurve: pubkeyInfo.curve,
       publicKeyExponent: pubkeyInfo.exponent,
-      sha1Fingerprint: colonHex(KJUR.crypto.Util.hashHex(x.hex, 'sha1')),
-      sha256Fingerprint: colonHex(KJUR.crypto.Util.hashHex(x.hex, 'sha256')),
-      md5Fingerprint: colonHex(KJUR.crypto.Util.hashHex(x.hex, 'md5')),
+      sha1Fingerprint: colonHex(bytesToHex(sha1(derFull))),
+      sha256Fingerprint: colonHex(bytesToHex(sha256(derFull))),
+      md5Fingerprint: colonHex(bytesToHex(md5(derFull))),
       subjectAlternativeNames,
-      isCertificateAuthority: bc?.cA ?? null,
-      pathLengthConstraint: bc?.pathLen ?? null,
-      keyUsage: ku?.names ?? [],
-      extendedKeyUsage: eku?.array ?? [],
-      crlDistributionPoints: crlUrisFrom(cdp),
+      isCertificateAuthority: bc.ca,
+      pathLengthConstraint: bc.pathLen,
+      keyUsage: ext.keyUsage(),
+      extendedKeyUsage: ext.extendedKeyUsage(),
+      crlDistributionPoints: ext.crlDistributionPoints(),
       isSelfSigned: subjectFormatted.length > 0 && subjectFormatted === issuerFormatted,
       pem,
       isExpired,
@@ -447,44 +466,150 @@ interface PublicKeyInfo {
   exponent: number | null
 }
 
-/**
- * Discriminates RSA vs. EC public keys off the shape jsrsasign hands back
- * (`RSAKey` instances expose `n`/`e`; `KJUR.crypto.ECDSA` instances expose
- * `curveName`). The EC branch has no test fixture in this batch to verify
- * against (no EC certificate was supplied) -- flagged as best-effort.
- */
-function publicKeyInfoFrom(x: X509): PublicKeyInfo {
-  const pk = x.getPublicKey() as unknown as {
-    n?: { bitLength(): number }
-    e?: number
-    curveName?: string
+function publicKeyInfoFrom(spki: {
+  algorithm: { algorithm: string; parameters?: ArrayBuffer | null }
+  subjectPublicKey: ArrayBuffer
+}): PublicKeyInfo {
+  const oid = spki.algorithm.algorithm
+
+  if (oid === RSA_ENCRYPTION_OID) {
+    let bits: number | null = null
+    let exponent: number | null = null
+    try {
+      const rsa = AsnParser.parse(spki.subjectPublicKey, RSAPublicKey)
+      bits = bigIntFromBytes(new Uint8Array(rsa.modulus)).toString(2).length
+      const e = bigIntFromBytes(new Uint8Array(rsa.publicExponent))
+      exponent = e <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(e) : null
+    } catch {
+      /* leave nulls */
+    }
+    return { algorithm: 'rsaEncryption', oid: RSA_ENCRYPTION_OID, bits, curve: null, exponent }
   }
 
-  if (pk.n != null && typeof pk.n.bitLength === 'function') {
-    return {
-      algorithm: 'rsaEncryption',
-      oid: RSA_ENCRYPTION_OID,
-      bits: pk.n.bitLength(),
-      curve: null,
-      exponent: pk.e ?? null,
+  if (oid === EC_PUBLIC_KEY_OID) {
+    let curve: string | null = null
+    let bits: number | null = null
+    if (spki.algorithm.parameters) {
+      try {
+        const params = AsnParser.parse(spki.algorithm.parameters, ECParameters)
+        if (params.namedCurve) {
+          const info = CURVE_OID[params.namedCurve]
+          curve = info?.name ?? params.namedCurve
+          bits = info?.bits ?? null
+        }
+      } catch {
+        /* leave nulls */
+      }
+    }
+    return { algorithm: 'ecPublicKey', oid: EC_PUBLIC_KEY_OID, bits, curve, exponent: null }
+  }
+
+  return { algorithm: oid, oid, bits: null, curve: null, exponent: null }
+}
+
+/** Wraps the extension list with typed accessors. */
+class ExtensionSet {
+  private byOid = new Map<string, ArrayBuffer>()
+
+  constructor(exts: Array<{ extnID: string; extnValue: { buffer: ArrayBuffer } | ArrayBuffer }>) {
+    for (const e of exts) {
+      const v = e.extnValue
+      this.byOid.set(e.extnID, 'buffer' in v ? v.buffer : v)
     }
   }
 
-  return {
-    algorithm: 'ecPublicKey',
-    oid: EC_PUBLIC_KEY_OID,
-    bits: null,
-    curve: pk.curveName ?? null,
-    exponent: null,
+  basicConstraints(): { ca: boolean | null; pathLen: number | null } {
+    const raw = this.byOid.get('2.5.29.19')
+    if (!raw) return { ca: null, pathLen: null }
+    const bytes = new Uint8Array(raw)
+    // An empty `SEQUENCE {}` (30 00) means cA carried no explicit value — a
+    // leaf's basicConstraints. Report that as null rather than the DEFAULT.
+    const empty = bytes.length === 2 && bytes[0] === 0x30 && bytes[1] === 0x00
+    try {
+      const bc = AsnParser.parse(raw, BasicConstraints)
+      return {
+        ca: empty ? null : (bc.cA ?? false),
+        pathLen: bc.pathLenConstraint ?? null,
+      }
+    } catch {
+      return { ca: null, pathLen: null }
+    }
+  }
+
+  keyUsage(): string[] {
+    const raw = this.byOid.get('2.5.29.15')
+    if (!raw) return []
+    try {
+      return AsnParser.parse(raw, KeyUsage).toJSON()
+    } catch {
+      return []
+    }
+  }
+
+  extendedKeyUsage(): string[] {
+    const raw = this.byOid.get('2.5.29.37')
+    if (!raw) return []
+    try {
+      return [...AsnParser.parse(raw, ExtendedKeyUsage)].map((o) => EKU_OID[o] ?? o)
+    } catch {
+      return []
+    }
+  }
+
+  subjectAltNames(): string[] {
+    const raw = this.byOid.get('2.5.29.17')
+    if (!raw) return []
+    try {
+      return AsnParser.parse(raw, SubjectAlternativeName).map(generalNameToString).filter((s): s is string => s != null)
+    } catch {
+      return []
+    }
+  }
+
+  crlDistributionPoints(): string[] {
+    const raw = this.byOid.get('2.5.29.31')
+    if (!raw) return []
+    try {
+      const out: string[] = []
+      for (const point of AsnParser.parse(raw, CRLDistributionPoints)) {
+        for (const gn of point.distributionPoint?.fullName ?? []) {
+          const s = generalNameToString(gn)
+          if (s != null) out.push(s)
+        }
+      }
+      return out
+    } catch {
+      return []
+    }
   }
 }
 
-function dnFrom(parsed: { array: Array<Array<{ type: string; value: string }>> }): DistinguishedName {
+function generalNameToString(gn: GeneralName): string | null {
+  if (gn.dNSName != null) return gn.dNSName
+  if (gn.iPAddress != null) return typeof gn.iPAddress === 'string' ? gn.iPAddress : ipFromBytes(gn.iPAddress)
+  if (gn.rfc822Name != null) return gn.rfc822Name
+  if (gn.uniformResourceIdentifier != null) return gn.uniformResourceIdentifier
+  return null
+}
+
+function ipFromBytes(buf: ArrayBuffer): string {
+  const b = new Uint8Array(buf)
+  if (b.length === 4) return b.join('.')
+  if (b.length === 16) {
+    const parts: string[] = []
+    for (let i = 0; i < 16; i += 2) parts.push(((b[i] << 8) | b[i + 1]).toString(16))
+    return parts.join(':')
+  }
+  return bytesToHex(b)
+}
+
+function dnFrom(name: Array<Array<{ type: string; value: { toString(): string } }>>): DistinguishedName {
   const entries: DistinguishedNameEntry[] = []
-  for (const group of parsed.array) {
-    for (const ava of group) {
-      if (ava.value == null || ava.value.length === 0) continue
-      entries.push({ oid: ava.type, shortName: ava.type, value: ava.value })
+  for (const rdn of name) {
+    for (const atv of rdn) {
+      const value = atv.value.toString()
+      if (value.length === 0) continue
+      entries.push({ oid: atv.type, shortName: DN_OID_TO_SHORT[atv.type] ?? atv.type, value })
     }
   }
 
@@ -500,53 +625,17 @@ function dnFrom(parsed: { array: Array<Array<{ type: string; value: string }>> }
   return { entries }
 }
 
-/**
- * jsrsasign's own `GeneralName` type (see `@types/jsrsasign`'s `X509.d.ts`)
- * is a discriminated union of single-key objects — and, since a `GeneralName`
- * slot can be empty, `undefined` is one of its members. `Record<string,
- * string>` can't structurally match that (an object type never accepts a
- * bare `undefined`), so this mirrors the real union shape instead.
- */
-type GeneralNameLike =
-  | { dns: string }
-  | { ip: string }
-  | { rfc822: string }
-  | { uri: string }
-  | { dn: unknown }
-  | { other: unknown }
-  | undefined
-
-function subjectAltNamesFrom(san: { array: GeneralNameLike[] } | undefined): string[] {
-  if (san == null) return []
-  const out: string[] = []
-  for (const entry of san.array) {
-    if (entry == null) continue
-    if ('dns' in entry) out.push(entry.dns)
-    else if ('ip' in entry) out.push(entry.ip)
-    else if ('rfc822' in entry) out.push(entry.rfc822)
-    else if ('uri' in entry) out.push(entry.uri)
-  }
-  return out
+function timeToDate(t: { utcTime?: Date | null; generalTime?: Date | null }): Date {
+  return t.utcTime ?? t.generalTime ?? new Date(NaN)
 }
 
-function crlUrisFrom(
-  cdp: { array: Array<{ dpname?: { full?: GeneralNameLike[] } }> } | undefined,
-): string[] {
-  if (cdp == null) return []
-  const out: string[] = []
-  for (const point of cdp.array) {
-    for (const gn of point.dpname?.full ?? []) {
-      if (gn != null && 'uri' in gn) out.push(gn.uri)
-    }
-  }
-  return out
+function bigIntFromBytes(bytes: Uint8Array): bigint {
+  let n = 0n
+  for (const b of bytes) n = (n << 8n) | BigInt(b)
+  return n
 }
 
-/**
- * jsrsasign's `KJUR.crypto.Util.hashHex` returns thumbprints as unbroken
- * lowercase hex; insert the colons and uppercase operators expect when
- * comparing against `openssl` output.
- */
+/** Colon-separated uppercase hex, as `openssl x509 -fingerprint` prints. */
 function colonHex(hex: string): string {
   if (hex.length === 0) return ''
   const upper = hex.toUpperCase()
@@ -555,6 +644,17 @@ function colonHex(hex: string): string {
     pairs.push(upper.slice(i, i + 2))
   }
   return pairs.join(':')
+}
+
+function pemBodyToBytes(pem: string): Uint8Array {
+  const body = pem
+    .replace(BEGIN_MARKER, '')
+    .replace(END_MARKER, '')
+    .replace(/\s+/g, '')
+  const binary = atob(body)
+  const out = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i)
+  return out
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
