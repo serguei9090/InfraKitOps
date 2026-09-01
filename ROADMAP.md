@@ -11,7 +11,7 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 | 2 | **E3a** retry-from-toast ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3a) | done `e823421` — `{ retry }` opt on `reportError`, Retry button on retryable toasts, wired into llmStore mutations | S | ✅ |
 | 3 | **A4e-1** MCP `list_changed` live refresh ([AI_MCP_PLAN](AI_MCP_PLAN.md) §A4e) | done `e690581` — `ToolListChangedHandler` zeroes the cache-at so the next list re-fetches | S | ✅ |
 | 4 | **A3e** reliability polish ([AI_MODULE_PLAN](AI_MODULE_PLAN.md) §A3e) | done `090b0fc` — Anthropic `cache_control` on long system blocks · per-conn concurrency cap (default 4) · abort-releases-upstream confirmed | S–M | ✅ |
-| 5 | **A3c** token-usage aggregation ([AI_MODULE_PLAN](AI_MODULE_PLAN.md) §A3c) | `llm_usage` table + engine `UsageRecorder` + `GET /llm/usage` grouped + AI Hub "Usage" view. **No cost/dollars.** | M | ☐ |
+| 5 | **A3c** token-usage aggregation ([AI_MODULE_PLAN](AI_MODULE_PLAN.md) §A3c) | done `4215a74` — `llm_usage` + `UsageRecorder` + `GET /llm/usage` grouped + AI Hub "Usage" tab (in/out bars, model/day/task). No cost. | M | ✅ |
 | 6 | **A4e-3** per-server MCP log / last-error ([AI_MCP_PLAN](AI_MCP_PLAN.md) §A4e) | surface a server's connection log + last error in the MCP view | M | ☐ |
 | 7 | **E3b** error-history drawer ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3b) | `errorStore` history ring (cap 50) + a shell drawer with a count badge | M | ☐ |
 | 8 | **S3a** per-section settings reset ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | "Reset this section" per panel — backend defaults + client clears | M | ☐ |

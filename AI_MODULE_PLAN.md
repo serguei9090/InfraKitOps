@@ -443,7 +443,7 @@ auto read-only / confirm writes, per-task opt-in).
 - **Not done**: a global auto-save default in Settings → AI (currently
   per-device localStorage). Fine to leave.
 
-#### A3c — Token-usage aggregation view (**no cost — decided 2026-09-01**)
+#### A3c — Token-usage aggregation view — **DONE 2026-09-01** (`4215a74`, no cost)
 - `Usage{promptTokens, completionTokens}` already comes back per stream (and,
   for the MCP agent loop, `stream()` already sums it across iterations).
   Persist a lightweight `llm_usage` row per call — `connId, taskId?, model,
