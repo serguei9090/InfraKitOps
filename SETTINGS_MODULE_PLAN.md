@@ -233,29 +233,23 @@ Small, mostly-frontend. Order below is by value; each is one commit.
 - Simpler than the planned `SettingsSectionDef.onReset` — the button lives in
   the section component, not the scaffold.
 
-#### S3b — Export / import all settings
-- `core/settings/settingsIo.ts` (framework-free) — a versioned envelope
-  `{ version, exportedAt, local: {...}, backend: {...} }`.
-- Export: read every local store + `GET /llm/settings` + `GET
-  /runbook-settings` + custom `llm_task` rows → one JSON download.
-- Import: validate `version`, show a diff-ish summary ("theme, 4 module
-  positions, 2 AI prompts, Runbooks retention"), apply on confirm — local
-  stores directly, backend via the existing `PUT` endpoints.
-- Secrets (`vault.enc`) are **never** in this file — it already has its own
-  export (`/vault/export`). Connection API keys live in the vault → not
-  exported here either; connections export as metadata only.
-**DoD**: export on machine A, import on a fresh profile → theme + module
-layout + AI prompts + Runbooks numbers all match; no secret material in the
-file (grep the export in the test).
+#### S3b — Export / import all settings — **DONE 2026-09-01** (`e7d182a`)
+- `adapters/ui/settings/settingsBackup.ts` — `{ version:1, exportedAt,
+  client:{theme,modules,network}, ai?, runbooks? }`. `buildBackup()` reads
+  the local stores + `GET /llm/settings` + `/runbook-settings`;
+  `applyBackup()` is a merge (theme/modules via `store.setState`, network via
+  `.update`, backend via the `PUT`s). `downloadBackup()` → a dated `.json`.
+- **No secrets**: MaxMind key + proxy user/password stripped from the network
+  blob; Vault + connection keys were never in scope. (Custom `llm_task`
+  overrides not included — reset/edit per-task instead. Fine.)
+- UI: **General → "Backup"** group, Export + Import (file picker) + a
+  backend-off note.
 
-#### S3c — Settings search
-- Build a static index at module load from the `SETTINGS_SECTIONS` registry —
-  each section contributes `{ label, keywords[] }` (and ideally per-field
-  labels).
-- A search box above the left menu filters the menu + deep-links to
-  `/settings/{section}` (and, stretch, scrolls to / highlights the field via
-  an anchor).
-**DoD**: typing "concurrency" jumps to Runbooks; "prompt" surfaces AI.
+#### S3c — Settings search — **DONE 2026-09-01** (`a20663e`)
+- `SettingsSectionDef.keywords?: string[]`; each section carries ~10 terms.
+- Search box in the left nav filters the menu (label + keyword substring).
+  No per-field anchors / deep-link-to-field — menu filter only.
+- Verified: "proxy" → Network, "gemini" → AI.
 
 #### S3d — Keyboard-shortcut editor
 - Today ⌘S / ⌘↵ are hard-coded in Prompt Library + Runbooks editors.
