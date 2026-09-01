@@ -17,6 +17,11 @@ import (
 // -ldflags "-X github.com/infrakit/backend/internal/api.Version=...".
 var Version = "dev"
 
+// AuthMode is "off" (single-user, static bearer token) or "on" (multi-user
+// sessions). Set once by internal/server at startup. The frontend reads it
+// from /health to decide whether to show the login layer.
+var AuthMode = "off"
+
 var startedAt = time.Now()
 
 // hostname is this machine's name, used as the history "target" for
@@ -51,6 +56,7 @@ type healthResponse struct {
 	UptimeSec int64  `json:"uptimeSec"`
 	Elevated  bool   `json:"elevated"`
 	OS        string `json:"os"`
+	AuthMode  string `json:"authMode"`
 }
 
 // Health reports liveness plus the facts the frontend needs to decide which
@@ -63,5 +69,6 @@ func Health(w http.ResponseWriter, _ *http.Request) {
 		UptimeSec: int64(time.Since(startedAt).Seconds()),
 		Elevated:  privilege.IsElevated(),
 		OS:        runtime.GOOS,
+		AuthMode:  AuthMode,
 	})
 }

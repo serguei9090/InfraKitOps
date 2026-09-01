@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/infrakit/backend/internal/api"
+	"github.com/infrakit/backend/internal/auth"
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/mcp"
@@ -49,6 +50,8 @@ func main() {
 	vaultPath := flag.String("vault", "", `vault file path ("" = OS config dir, "off" = disabled)`)
 	vaultAutoLock := flag.Duration("vault-autolock", 15*time.Minute, "lock the vault after this idle time (0 = never)")
 	maxConcurrentRuns := flag.Int("max-concurrent-runs", 4, "cap on runbooks executing at once (0 = unlimited)")
+	authMode := flag.String("auth", "off", `"off" = single-user static token; "on" = multi-user sessions`)
+	authDBPath := flag.String("auth-db", "", `auth database path ("" = OS config dir)`)
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -127,6 +130,24 @@ func main() {
 	}
 	defer iperf.StopServer() // kill any managed `iperf3 -s` child
 
+	var authSvc *auth.Service
+	if *authMode == "on" {
+		authStore := openAuth(*authDBPath)
+		if authStore == nil {
+			log.Fatal("auth: --auth on but the auth database could not be opened")
+		}
+		defer authStore.Close()
+		svc, err := auth.NewService(authStore)
+		if err != nil {
+			log.Fatalf("auth: %v", err)
+		}
+		authSvc = svc
+		if tok := svc.SetupToken(); tok != "" {
+			fmt.Printf("SETUP-TOKEN %s\n", tok)
+		}
+		log.Printf("auth: multi-user mode ON")
+	}
+
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
 		log.Fatalf("bind %s: %v", *addr, err)
@@ -142,6 +163,7 @@ func main() {
 	wd := server.NewWatchdog(*idleTimeout, *parentPID)
 	handler := server.NewRouter(server.Options{
 		Token:         tok,
+		Auth:          authSvc,
 		OnActivity:    wd.Touch,
 		History:       store,
 		Orchestrator:  orch,
@@ -267,6 +289,26 @@ func openLLM(path string) *llm.Store {
 		return nil
 	}
 	log.Printf("llm: %s", path)
+	return s
+}
+
+// openAuth resolves the auth DB path and opens the store. Fatal on failure —
+// --auth on with no usable store is a misconfiguration, not a soft-degrade.
+func openAuth(path string) *auth.Store {
+	if path == "" {
+		d, err := appDataDir()
+		if err != nil {
+			log.Printf("auth: config dir: %v", err)
+			return nil
+		}
+		path = filepath.Join(d, "auth.db")
+	}
+	s, err := auth.Open("file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	if err != nil {
+		log.Printf("auth: open %s: %v", path, err)
+		return nil
+	}
+	log.Printf("auth: %s", path)
 	return s
 }
 

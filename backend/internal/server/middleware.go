@@ -1,10 +1,14 @@
 package server
 
 import (
+	"context"
 	"crypto/subtle"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/infrakit/backend/internal/apierr"
+	"github.com/infrakit/backend/internal/auth"
 )
 
 // tauriOrigins are the exact browser origins the desktop webview reports.
@@ -52,6 +56,111 @@ func bearerAuth(token string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// --- multi-user mode (USER_MANAGEMENT_PLAN.md U0) --------------------
+
+type ctxKey int
+
+const userKey ctxKey = 0
+
+// UserFrom returns the authenticated user attached by sessionAuth, or nil in
+// single-user mode.
+func UserFrom(ctx context.Context) *auth.User {
+	u, _ := ctx.Value(userKey).(*auth.User)
+	return u
+}
+
+// bearerToken pulls the credential from the Authorization header or the
+// ?token= query param (EventSource can't set headers).
+func bearerToken(r *http.Request) string {
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		return strings.TrimPrefix(h, "Bearer ")
+	}
+	return r.URL.Query().Get("token")
+}
+
+// authExempt is the set of paths reachable without a session.
+func authExempt(p string) bool {
+	switch p {
+	case "/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/bootstrap", "/api/v1/auth/setup-status":
+		return true
+	}
+	return false
+}
+
+// sessionAuth replaces bearerAuth when --auth on: every request outside
+// authExempt needs a valid session token; the user is put on the context.
+func sessionAuth(svc *auth.Service) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodOptions || authExempt(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			u, err := svc.Validate(bearerToken(r))
+			if err != nil || u == nil {
+				apierr.Write(w, apierr.Auth("session invalid or expired"))
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
+		})
+	}
+}
+
+// moduleOf maps a request path to the rail module that owns it, or "" for
+// cross-cutting / ungated endpoints.
+func moduleOf(path string) string {
+	p := strings.TrimPrefix(path, "/api/v1")
+	switch {
+	case strings.HasPrefix(p, "/llm") || strings.HasPrefix(p, "/mcp"):
+		return "ai"
+	case strings.HasPrefix(p, "/runbooks") || strings.HasPrefix(p, "/runs") ||
+		strings.HasPrefix(p, "/ssh-nodes") || strings.HasPrefix(p, "/runbook-") ||
+		strings.HasPrefix(p, "/packages") || strings.HasPrefix(p, "/library"):
+		return "runbook"
+	case strings.HasPrefix(p, "/sntp"), strings.HasPrefix(p, "/whois"), strings.HasPrefix(p, "/dns-lookup"),
+		strings.HasPrefix(p, "/ip-geolocation"), strings.HasPrefix(p, "/connections"),
+		strings.HasPrefix(p, "/wake-on-lan"), strings.HasPrefix(p, "/port-scanner"),
+		strings.HasPrefix(p, "/ping-monitor"), strings.HasPrefix(p, "/traceroute"),
+		strings.HasPrefix(p, "/network-scanner"), strings.HasPrefix(p, "/snmp"),
+		strings.HasPrefix(p, "/neighbor-table"), strings.HasPrefix(p, "/hosts"),
+		strings.HasPrefix(p, "/firewall"), strings.HasPrefix(p, "/iperf3"),
+		strings.HasPrefix(p, "/interfaces"):
+		return "network"
+	}
+	return ""
+}
+
+// accessGuard enforces role write-access and per-user module access. It runs
+// after sessionAuth, so a nil user here means single-user mode → allow.
+func accessGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u := UserFrom(r.Context())
+		if u == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		writing := r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions
+		if writing && !u.Role.CanWrite() && !strings.HasPrefix(r.URL.Path, "/api/v1/auth/") {
+			apierr.Write(w, apierr.Permission("your role is read-only"))
+			return
+		}
+		if mod := moduleOf(r.URL.Path); mod != "" && u.AllowedModules != nil {
+			allowed := false
+			for _, m := range u.AllowedModules {
+				if m == mod {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				apierr.Write(w, apierr.Permission("the "+mod+" module is not enabled for your account"))
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // cors allows the known app origins (and same-origin / non-browser callers that

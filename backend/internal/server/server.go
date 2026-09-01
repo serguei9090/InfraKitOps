@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/infrakit/backend/internal/api"
+	"github.com/infrakit/backend/internal/auth"
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/mcp"
@@ -20,8 +21,12 @@ import (
 
 // Options configures the router.
 type Options struct {
-	// Token is the per-launch bearer token required on every request.
+	// Token is the per-launch bearer token required on every request in
+	// single-user mode (Auth == nil).
 	Token string
+	// Auth, when set, switches the service into multi-user mode: session
+	// tokens instead of the static Token, plus /auth + /users + /audit.
+	Auth *auth.Service
 	// OnActivity, if set, is called once per request so an idle watchdog can
 	// reset its timer.
 	OnActivity func()
@@ -56,7 +61,12 @@ func NewRouter(opts Options) http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(cors)
 	r.Use(activity(opts.OnActivity))
-	r.Use(bearerAuth(opts.Token))
+	if opts.Auth != nil {
+		r.Use(sessionAuth(opts.Auth))
+		r.Use(accessGuard)
+	} else {
+		r.Use(bearerAuth(opts.Token))
+	}
 
 	hist := &api.HistoryHandlers{
 		Store:         opts.History,
@@ -70,9 +80,34 @@ func NewRouter(opts Options) http.Handler {
 		History: opts.LLMHistory, Usage: opts.LLMUsage,
 	}
 	mh := &api.MCPHandlers{Manager: opts.MCP}
+	ah := &api.AuthHandlers{
+		Service: opts.Auth,
+		UserOf:  func(r *http.Request) *auth.User { return UserFrom(r.Context()) },
+	}
+	if opts.Auth != nil {
+		api.AuthMode = "on"
+	}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", api.Health)
+
+		if opts.Auth != nil {
+			r.Route("/auth", func(r chi.Router) {
+				r.Get("/setup-status", ah.SetupStatus)
+				r.Post("/bootstrap", ah.Bootstrap)
+				r.Post("/login", ah.Login)
+				r.Post("/logout", ah.Logout)
+				r.Get("/me", ah.Me)
+				r.Post("/change-password", ah.ChangePassword)
+			})
+			r.Route("/users", func(r chi.Router) {
+				r.Get("/", ah.ListUsers)
+				r.Post("/", ah.CreateUser)
+				r.Patch("/{id}", ah.PatchUser)
+				r.Delete("/{id}", ah.DeleteUser)
+			})
+			r.Get("/audit", ah.ListAudit)
+		}
 		r.Get("/capabilities", api.Capabilities)
 		r.Get("/interfaces", api.Interfaces)
 
