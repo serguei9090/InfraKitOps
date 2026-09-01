@@ -3,10 +3,14 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/infrakit/backend/internal/sse"
 )
 
 func readJSON(r *http.Request, v any) error {
@@ -138,5 +142,51 @@ func TestGeminiSchemaStripsUnsupportedKeys(t *testing.T) {
 	// preserved
 	if out["type"] != "object" || props["q"].(map[string]any)["type"] != "string" {
 		t.Fatalf("real fields lost: %+v", out)
+	}
+}
+
+// TestGeminiEchoesThoughtSignature: a Gemini "thinking" model returns a
+// thoughtSignature with its functionCall; the follow-up request must echo it
+// back on the model turn or Gemini 400s.
+func TestGeminiEchoesThoughtSignature(t *testing.T) {
+	var round int
+	var round2Body string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		round++
+		fl := w.(http.Flusher)
+		if round == 1 {
+			fmt.Fprint(w, `data: {"candidates":[{"content":{"parts":[`+
+				`{"functionCall":{"name":"srv1__do","args":{}},"thoughtSignature":"SIG-ABC"}`+
+				`]}}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":1}}`+"\n\n")
+			fl.Flush()
+			return
+		}
+		round2Body = string(raw)
+		fmt.Fprint(w, `data: {"candidates":[{"content":{"parts":[{"text":"done"}]}}],"usageMetadata":{"promptTokenCount":9,"candidatesTokenCount":1}}`+"\n\n")
+		fl.Flush()
+	}))
+	defer srv.Close()
+
+	s := newStore(t)
+	conn, _ := s.PutConnection(Connection{Name: "G", Provider: ProviderGemini, BaseURL: srv.URL, AuthSecretID: ""})
+	eng := NewEngine(s, nil)
+	eng.SetToolRunner(&fakeRunner{})
+
+	out := make(chan sse.Message, 64)
+	req := ChatRequest{
+		Model:    "gemini-x",
+		Messages: []ChatMessage{{Role: "user", Content: "go"}},
+		Tools:    []ToolDef{{Name: "srv1__do", Description: "d", Parameters: map[string]any{"type": "object"}, ReadOnly: true}},
+	}
+	go func() { eng.stream(context.Background(), conn.ID, req, OutputText, out); close(out) }()
+	for range out { //nolint:revive
+	}
+
+	if round != 2 {
+		t.Fatalf("rounds = %d", round)
+	}
+	if !strings.Contains(round2Body, "SIG-ABC") || !strings.Contains(round2Body, "thoughtSignature") {
+		t.Fatalf("round 2 did not echo the thoughtSignature: %s", round2Body)
 	}
 }

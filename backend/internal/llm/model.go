@@ -59,6 +59,10 @@ type ToolCall struct {
 	ID   string         `json:"id"`
 	Name string         `json:"name"`
 	Args map[string]any `json:"args"`
+	// Signature is opaque provider round-trip data that must be echoed back
+	// with the tool result. Gemini's "thinking" models put a thoughtSignature
+	// here and 400 the follow-up call without it. Other providers leave it "".
+	Signature string `json:"signature,omitempty"`
 }
 
 // ChatRequest is a resolved completion request (connection + key already picked).

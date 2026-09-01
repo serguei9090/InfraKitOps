@@ -136,7 +136,12 @@ func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr 
 				if args == nil {
 					args = map[string]any{}
 				}
-				parts = append(parts, map[string]any{"functionCall": map[string]any{"name": c.Name, "args": args}})
+				part := map[string]any{"functionCall": map[string]any{"name": c.Name, "args": args}}
+				if c.Signature != "" {
+					// echo the thoughtSignature back or newer Gemini models 400
+					part["thoughtSignature"] = c.Signature
+				}
+				parts = append(parts, part)
 			}
 			contents = append(contents, map[string]any{"role": "model", "parts": parts})
 
@@ -209,6 +214,7 @@ func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr 
 							Name string         `json:"name"`
 							Args map[string]any `json:"args"`
 						} `json:"functionCall"`
+						ThoughtSignature string `json:"thoughtSignature"`
 					} `json:"parts"`
 				} `json:"content"`
 			} `json:"candidates"`
@@ -227,9 +233,10 @@ func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr 
 				}
 				if pt.FunctionCall != nil && pt.FunctionCall.Name != "" {
 					calls = append(calls, ToolCall{
-						ID:   fmt.Sprintf("call_%d", len(calls)),
-						Name: pt.FunctionCall.Name,
-						Args: pt.FunctionCall.Args,
+						ID:        fmt.Sprintf("call_%d", len(calls)),
+						Name:      pt.FunctionCall.Name,
+						Args:      pt.FunctionCall.Args,
+						Signature: pt.ThoughtSignature,
 					})
 				}
 			}
