@@ -48,7 +48,10 @@ func (h *MCPHandlers) ListServers(w http.ResponseWriter, _ *http.Request) {
 		mcpErr(w, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{"servers": list})
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"servers":  list,
+		"statuses": h.Manager.Statuses(),
+	})
 }
 
 // PutServer: POST /mcp/servers  or  PUT /mcp/servers/{id}

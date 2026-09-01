@@ -3,12 +3,14 @@
  * `BackendUnavailableError` with no backend. See AI_MCP_PLAN.md §5.
  */
 import { backendGet, backendRequest } from './backendClient'
-import type { McpServer, McpTestResult, McpTool } from '@/core/mcp/mcpModel'
+import type { McpServer, McpServerStatus, McpTestResult, McpTool } from '@/core/mcp/mcpModel'
 
 const arr = <T,>(v: T[] | null | undefined): T[] => v ?? []
 
 export const listServers = () =>
-  backendGet<{ servers: McpServer[] | null }>('/mcp/servers').then((r) => arr(r.servers))
+  backendGet<{ servers: McpServer[] | null; statuses: Record<string, McpServerStatus> | null }>(
+    '/mcp/servers',
+  ).then((r) => ({ servers: arr(r.servers), statuses: r.statuses ?? {} }))
 
 export const putServer = (s: Partial<McpServer>) =>
   backendRequest<{ id: string }>(s.id ? 'PUT' : 'POST', s.id ? `/mcp/servers/${s.id}` : '/mcp/servers', s).then(

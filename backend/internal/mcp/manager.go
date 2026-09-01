@@ -25,6 +25,9 @@ type Manager struct {
 
 	mu    sync.Mutex
 	conns map[string]*conn
+
+	statusMu sync.Mutex
+	status   map[string]*ServerStatus
 }
 
 type conn struct {
@@ -32,6 +35,15 @@ type conn struct {
 	cancel  context.CancelFunc
 	tools   []ToolSpec
 	at      time.Time
+}
+
+// ServerStatus is the last-known health of one server (A4e-3).
+type ServerStatus struct {
+	Connected   bool   `json:"connected"`
+	ToolCount   int    `json:"toolCount"`
+	ConnectedAt int64  `json:"connectedAt,omitempty"`
+	LastError   string `json:"lastError,omitempty"`
+	LastErrorAt int64  `json:"lastErrorAt,omitempty"`
 }
 
 // NewManager builds a manager. secrets may be nil (then {{secret:}} refs and
@@ -42,7 +54,46 @@ func NewManager(store *Store, secrets SecretResolver, version string) *Manager {
 		secrets: secrets,
 		impl:    &sdk.Implementation{Name: "infrakit-studio", Version: version},
 		conns:   map[string]*conn{},
+		status:  map[string]*ServerStatus{},
 	}
+}
+
+func (m *Manager) markOK(id string, tools int) {
+	m.statusMu.Lock()
+	m.status[id] = &ServerStatus{Connected: true, ToolCount: tools, ConnectedAt: time.Now().UnixMilli()}
+	m.statusMu.Unlock()
+}
+
+func (m *Manager) markErr(id string, err error) {
+	m.statusMu.Lock()
+	s := m.status[id]
+	if s == nil {
+		s = &ServerStatus{}
+		m.status[id] = s
+	}
+	s.Connected = false
+	s.LastError = err.Error()
+	s.LastErrorAt = time.Now().UnixMilli()
+	m.statusMu.Unlock()
+}
+
+func (m *Manager) markDown(id string) {
+	m.statusMu.Lock()
+	if s := m.status[id]; s != nil {
+		s.Connected = false
+	}
+	m.statusMu.Unlock()
+}
+
+// Statuses returns a snapshot of every known server status.
+func (m *Manager) Statuses() map[string]ServerStatus {
+	m.statusMu.Lock()
+	defer m.statusMu.Unlock()
+	out := make(map[string]ServerStatus, len(m.status))
+	for id, s := range m.status {
+		out[id] = *s
+	}
+	return out
 }
 
 // Store exposes the registry (handlers use it directly for CRUD).
@@ -69,7 +120,9 @@ func (m *Manager) Connect(ctx context.Context, id string) ([]ToolSpec, error) {
 
 	tr, err := m.transport(*cfg)
 	if err != nil {
-		return nil, apierr.Validation(err.Error())
+		e := apierr.Validation(err.Error())
+		m.markErr(id, e)
+		return nil, e
 	}
 
 	// The session outlives this request — give it its own cancelable context.
@@ -91,7 +144,9 @@ func (m *Manager) Connect(ctx context.Context, id string) ([]ToolSpec, error) {
 	session, err := client.Connect(dialCtx, tr, nil)
 	if err != nil {
 		cancel()
-		return nil, classifyDial(err)
+		e := classifyDial(err)
+		m.markErr(id, e)
+		return nil, e
 	}
 
 	c := &conn{session: session, cancel: cancel}
@@ -119,6 +174,7 @@ func (m *Manager) Disconnect(id string) {
 		_ = c.session.Close()
 		c.cancel()
 	}
+	m.markDown(id)
 }
 
 // Tools returns the cached tool list for a server, connecting if needed.
@@ -218,7 +274,9 @@ func (m *Manager) refreshTools(ctx context.Context, id string, cfg *ServerConfig
 	if err != nil {
 		// session is probably dead — drop it so the next call reconnects
 		m.Disconnect(id)
-		return nil, apierr.Upstream("mcp tools/list: " + err.Error())
+		e := apierr.Upstream("mcp tools/list: " + err.Error())
+		m.markErr(id, e)
+		return nil, e
 	}
 	out := make([]ToolSpec, 0, len(list.Tools))
 	for _, t := range list.Tools {
@@ -243,6 +301,7 @@ func (m *Manager) refreshTools(ctx context.Context, id string, cfg *ServerConfig
 	c.tools = out
 	c.at = time.Now()
 	m.mu.Unlock()
+	m.markOK(id, len(out))
 	return out, nil
 }
 

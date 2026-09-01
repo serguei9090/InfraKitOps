@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Boxes, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, Boxes, CircleCheck, Plus, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useMcpStore } from '@/stores/mcpStore'
@@ -8,8 +8,17 @@ import { McpServerDialog } from './McpServerDialog'
 
 type Draft = Partial<McpServer>
 
+function ago(ms?: number): string {
+  if (!ms) return ''
+  const s = Math.round((Date.now() - ms) / 1000)
+  if (s < 60) return `${s}s ago`
+  if (s < 3600) return `${Math.round(s / 60)}m ago`
+  return `${Math.round(s / 3600)}h ago`
+}
+
 export function McpView() {
   const servers = useMcpStore((s) => s.servers)
+  const statuses = useMcpStore((s) => s.statuses)
   const loaded = useMcpStore((s) => s.loaded)
   const refresh = useMcpStore((s) => s.refresh)
   const removeServer = useMcpStore((s) => s.removeServer)
@@ -40,7 +49,9 @@ export function McpView() {
         </p>
       ) : (
         <ul className="flex flex-col gap-1">
-          {servers.map((s) => (
+          {servers.map((s) => {
+            const st = statuses[s.id]
+            return (
             <li key={s.id} className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2 text-sm">
               <div className="min-w-0 flex-1">
                 <span className="font-medium">{s.name}</span>{' '}
@@ -55,6 +66,21 @@ export function McpView() {
                 <div className="truncate font-mono text-[11px] text-muted-foreground">
                   {s.transport === 'stdio' ? [s.command, ...(s.args ?? [])].join(' ') : s.url}
                 </div>
+                {st?.connected ? (
+                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500">
+                    <CircleCheck className="size-3" /> connected · {st.toolCount} tool
+                    {st.toolCount === 1 ? '' : 's'} · {ago(st.connectedAt)}
+                  </div>
+                ) : st?.lastError ? (
+                  <div className="mt-0.5 flex items-start gap-1 text-[11px] text-destructive">
+                    <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+                    <span className="min-w-0 break-words">
+                      {st.lastError} <span className="text-muted-foreground">· {ago(st.lastErrorAt)}</span>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">not connected yet</div>
+                )}
               </div>
               <Button size="xs" variant="ghost" onClick={() => setEditing(s)}>
                 Edit
@@ -68,7 +94,8 @@ export function McpView() {
                 <Trash2 className="size-4" />
               </button>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
 

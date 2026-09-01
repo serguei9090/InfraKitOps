@@ -34,6 +34,15 @@ export interface McpTool {
   readOnly: boolean
 }
 
+/** Last-known health of a server (A4e-3). */
+export interface McpServerStatus {
+  connected: boolean
+  toolCount: number
+  connectedAt?: number
+  lastError?: string
+  lastErrorAt?: number
+}
+
 export interface McpTestResult {
   ok: boolean
   tools?: McpTool[]

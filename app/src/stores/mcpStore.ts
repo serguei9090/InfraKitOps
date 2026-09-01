@@ -5,12 +5,13 @@
 import { create } from 'zustand'
 import * as api from '@/adapters/backend/mcpClient'
 import { reportError } from '@/stores/errorStore'
-import type { McpServer } from '@/core/mcp/mcpModel'
+import type { McpServer, McpServerStatus } from '@/core/mcp/mcpModel'
 
 const SRC = 'AI Hub'
 
 interface McpStore {
   servers: McpServer[]
+  statuses: Record<string, McpServerStatus>
   loaded: boolean
 
   refresh: () => Promise<void>
@@ -20,11 +21,13 @@ interface McpStore {
 
 export const useMcpStore = create<McpStore>((set, get) => ({
   servers: [],
+  statuses: {},
   loaded: false,
 
   refresh: async () => {
     try {
-      set({ servers: await api.listServers(), loaded: true })
+      const { servers, statuses } = await api.listServers()
+      set({ servers, statuses, loaded: true })
     } catch (e) {
       set({ loaded: true })
       reportError(e, SRC)
