@@ -407,7 +407,7 @@ Library's `diffWordsWithSpace` view).
   tab zero console errors. Anthropic/Gemini live paths covered by unit tests
   (no keys on hand).
 
-### A3 — Advanced capabilities — **planned, not started (2026-09-01)**
+### A3 — Advanced capabilities — **A3b done 2026-09-01; A3c/A3d/A3e planned**
 
 Each sub-phase is independently useful; **A3b (history) is the one with the
 clearest user pull**, do it first unless a module concretely needs tools.
@@ -422,22 +422,26 @@ in training) — a loop, not a one-shot passthrough. `AI_MCP_PLAN.md` §2 has
 the resolved decisions (official `modelcontextprotocol/go-sdk`, stdio+http,
 auto read-only / confirm writes, per-task opt-in).
 
-#### A3b — Conversation history persistence (opt-in)
-- `llm.db` — `llm_conversation` (id, title, taskId?, connId, createdAt,
-  updatedAt) + `llm_message` (conversationId, idx, role, content, tokens?).
-- `Engine` stays stateless; a new `llm.History` store is written to by the
-  **API layer** after a stream completes, only when the request carried
-  `?save=1` (or a per-connection "always save" setting).
-- Endpoints: `GET /llm/conversations`, `GET /llm/conversations/{id}`,
-  `DELETE …`, `PATCH …` (rename/pin).
-- Frontend: `llmStore` gains a `conversations` list; Playground gets a
-  left rail of saved chats + a "save this conversation" toggle. `AiPanel`
-  `mode="chat"` unaffected (still ephemeral unless a host opts in).
-- **Privacy**: off by default (prompts carry sensitive context — §7 of this
-  plan). The toggle is per-conversation; a global default lives in Settings
-  → AI (S-follow-up).
-**DoD**: save a Playground chat → reload → it restores with full turn history;
-delete works; an unsaved chat leaves no rows. Commits: 2 (backend, frontend).
+#### A3b — Conversation history persistence (opt-in) — **DONE 2026-09-01** (`d585805`)
+- `internal/llm/history.go` — `History` store on the shared `llm.db`:
+  `llm_conversation` (id, title, conn_id, model, task_id, pinned, created_at,
+  updated_at) + `llm_message` (conv_id, idx, role, content, **steps** — an
+  opaque `ChatToolStep[]` blob so a saved chat keeps its MCP tool calls).
+  `Save` (create, or replace-messages when id set), `List` (pinned first),
+  `Get`, `Patch` (rename/pin), `Delete`. `history_test.go` round-trip.
+- The **client** owns the transcript (it renders it) → it POSTs the whole
+  conversation on Save / on stream-end when auto-save is on. **No engine or
+  handler teeing** — simpler than the original `?save=1` sketch.
+- `/llm/conversations` CRUD, `LLMHandlers.History`, `capabilities.llmHistory`.
+- FE: `llmStore` `conversations` + `autoSave` (localStorage) + `saveChat` /
+  `loadConversation` / `delete` / `patch`; Playground left rail (load / pin /
+  delete) + Save button + Auto-save toggle. `AiPanel` untouched (ephemeral).
+- **Privacy**: nothing stored unless the user hits Save or enables auto-save
+  (default off).
+- Verified in-browser with Gemini: send → Save → rail + backend → reload →
+  load back with both turns + "Saved" state.
+- **Not done**: a global auto-save default in Settings → AI (currently
+  per-device localStorage). Fine to leave.
 
 #### A3c — Token-usage aggregation view (**no cost — decided 2026-09-01**)
 - `Usage{promptTokens, completionTokens}` already comes back per stream (and,

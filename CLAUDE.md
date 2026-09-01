@@ -302,8 +302,13 @@ Assistant.
 - **AI Stop** (2026-09-01): `AiPanel` + Playground get a Stop button while
   generating (`useLlm.cancel` / new `llmStore.stopChat`); `llmStore` `busy`
   stays true for the whole stream so Stop shows during model spin-up too.
-- **A3 planned** (`AI_MODULE_PLAN.md` §A3): history persistence, token/cost,
-  embeddings, reliability. **A4 = MCP tools + tool-calling** — own plan
+- **A3b done 2026-09-01** (`d585805`): opt-in conversation history —
+  `internal/llm/history.go` (`History` on shared `llm.db`,
+  `llm_conversation`+`llm_message`, `steps` blob kept), `/llm/conversations`
+  CRUD, Playground left rail + Save + Auto-save toggle. Client owns the
+  transcript + POSTs it; nothing saved unless the user opts in. **A3c**
+  (token in/out totals, NO cost — owner cut pricing), **A3d** (embeddings, on
+  demand), **A3e** (reliability) still planned. **A4 = MCP tools + tool-calling** — own plan
   [`AI_MCP_PLAN.md`](AI_MCP_PLAN.md). **A4a done 2026-09-01**: `internal/mcp/`
   on `modelcontextprotocol/go-sdk` v1.7.0 (first new backend dep since the LLM
   module — MIT/Apache) — `mcp_server` registry in `llm.db`, `Manager`
