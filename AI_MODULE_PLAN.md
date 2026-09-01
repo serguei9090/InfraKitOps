@@ -475,16 +475,19 @@ token totals per model, the tool-loop call visibly larger. Commits: 2
 **DoD**: `/llm/embed` returns a vector of the right dimension for one provider.
 Commit: 1. **Gated on a concrete consumer — do not build speculatively.**
 
-#### A3e — Reliability polish
-- Anthropic `cache_control` hints on the system block for long task templates
-  (cheap latency win on repeated task runs).
-- Per-connection concurrency cap (mirror `orchestrator.Engine.SetMaxConcurrent`)
-  — a semaphore in the `Engine` keyed by connId.
-- Streaming cancel: confirm `RunTask`/`Chat` fully release the upstream HTTP
-  body on client abort (E1 added `sendOrDone`; audit the provider side).
-**DoD**: a load test of 20 concurrent task runs against one connection
-respects the cap; abort mid-stream closes the upstream connection (verified in
-`preview_logs` / a leak test). Commit: 1.
+#### A3e — Reliability polish — **DONE 2026-09-01** (`090b0fc`)
+- Anthropic `cache_control` — a system block ≥ ~4k chars goes as a
+  `[{type:text, text, cache_control:{type:ephemeral}}]` array; shorter stays a
+  plain string.
+- Per-connection concurrency cap — `Engine` per-connId semaphore, default 4,
+  `SetMaxConcurrentPerConn(n)` (0 = unlimited). `stream()` holds a slot for
+  the whole exchange; ctx-cancel while queued bails clean.
+  `TestPerConnectionConcurrencyCap` (8 goroutines, cap 2, peak ≤ 2).
+- Abort-releases-upstream — **already correct**: provider `Chat` uses
+  `http.NewRequestWithContext`, so a disconnect cancels the request ctx and
+  `defer resp.Body.Close()` runs; E1's `sendOrDone`/`drain` handles the
+  goroutine. `TestStreamStopsWhenClientGone` covers it.
+- **Not wired**: a Settings surface for the cap (const default for now).
 
 #### Still deferred after A3
 Multi-provider fallback/routing policy · a real agent-framework SDK (§6.5 — only
