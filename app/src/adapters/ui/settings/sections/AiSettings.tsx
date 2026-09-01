@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useBackendStore } from '@/stores/backendStore'
 import { useLlmStore } from '@/stores/llmStore'
+import { InstanceSettingsNotice } from '../InstanceSettingsNotice'
 import type { LlmTask } from '@/core/llm/llmModel'
 import { groupTasks } from '@/core/llm/taskGroups'
 import { TaskDialog } from '@/adapters/ui/ai/TaskDialog'
@@ -61,6 +62,7 @@ export function AiSettings() {
 
   return (
     <>
+      <InstanceSettingsNotice />
       <SettingsGroup
         title="Defaults"
         description="Used by every AI feature when it has no remembered pick and the task has no preference of its own."

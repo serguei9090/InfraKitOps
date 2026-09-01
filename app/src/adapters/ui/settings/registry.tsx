@@ -1,4 +1,4 @@
-import { Info, Network, Server, SlidersHorizontal, Sparkles, SquareTerminal, Users } from 'lucide-react'
+import { Info, Network, ScrollText, Server, SlidersHorizontal, Sparkles, SquareTerminal, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { GeneralSettings } from './sections/GeneralSettings'
@@ -7,6 +7,7 @@ import { RunbookSettings } from './sections/RunbookSettings'
 import { NetworkSettings } from './sections/NetworkSettings'
 import { BackendSettings } from './sections/BackendSettings'
 import { UsersSettings } from './sections/UsersSettings'
+import { AuditSettings } from './sections/AuditSettings'
 import { AboutSettings } from './sections/AboutSettings'
 
 export interface SettingsSectionDef {
@@ -74,8 +75,17 @@ export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     icon: Users,
     scope: 'global',
     adminOnly: true,
-    keywords: ['account', 'role', 'admin', 'operator', 'viewer', 'permission', 'access', 'password', 'audit', 'login'],
+    keywords: ['account', 'role', 'admin', 'operator', 'viewer', 'permission', 'access', 'password', 'login'],
     element: <UsersSettings />,
+  },
+  {
+    id: 'audit',
+    label: 'Audit log',
+    icon: ScrollText,
+    scope: 'info',
+    adminOnly: true,
+    keywords: ['audit', 'log', 'history', 'sign-in', 'security', 'trail', 'who'],
+    element: <AuditSettings />,
   },
   { id: 'about', label: 'About', icon: Info, scope: 'info', keywords: ['version', 'license', 'plan'], element: <AboutSettings /> },
 ]

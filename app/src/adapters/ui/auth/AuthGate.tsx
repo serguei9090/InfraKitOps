@@ -14,6 +14,58 @@ export function AuthGate() {
   return needsBootstrap ? <SetupForm /> : <LoginForm />
 }
 
+/**
+ * Blocks the app until a user with a reset password picks a new one (U5).
+ * Rendered by App when me.mustChangePw is set.
+ */
+export function ForcedPasswordChange() {
+  const changePassword = useAuthStore((s) => s.changePassword)
+  const logout = useAuthStore((s) => s.logout)
+  const busy = useAuthStore((s) => s.busy)
+  const error = useAuthStore((s) => s.error)
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const weak = next.length > 0 && next.length < 10
+  const mismatch = confirm.length > 0 && next !== confirm
+
+  return (
+    <Shell title="Set a new password" subtitle="Your password was reset by an administrator">
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (weak || mismatch) return
+          void changePassword(current, next)
+        }}
+      >
+        <div>
+          <Label className="text-xs">Temporary password</Label>
+          <Input type="password" autoFocus value={current} onChange={(e) => setCurrent(e.target.value)} />
+        </div>
+        <div>
+          <Label className="text-xs">New password (min 10)</Label>
+          <Input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
+        </div>
+        <div>
+          <Label className="text-xs">Confirm</Label>
+          <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
+        </div>
+        {weak && <p className="text-xs text-destructive">At least 10 characters.</p>}
+        {mismatch && <p className="text-xs text-destructive">Passwords don&rsquo;t match.</p>}
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <Button type="submit" disabled={busy || !current || weak || mismatch || !next}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+          Set password
+        </Button>
+        <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => void logout()}>
+          Sign out instead
+        </button>
+      </form>
+    </Shell>
+  )
+}
+
 function Shell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-background p-6 text-foreground">

@@ -106,6 +106,8 @@ func sessionAuth(svc *auth.Service) func(http.Handler) http.Handler {
 			}
 			ctx := context.WithValue(r.Context(), userKey, u)
 			ctx = userctx.With(ctx, u.ID) // low-level packages scope per user off this
+			ctx = userctx.WithRole(ctx, string(u.Role))
+			ctx = userctx.WithName(ctx, u.Username)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

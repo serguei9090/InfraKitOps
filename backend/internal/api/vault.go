@@ -87,6 +87,7 @@ func (h *VaultHandlers) Unlock(w http.ResponseWriter, r *http.Request) {
 		vaultErr(w, err)
 		return
 	}
+	audit(r, "vault_unlock", "", nil)
 	WriteJSON(w, http.StatusOK, h.v(r).Status())
 }
 
@@ -164,6 +165,7 @@ func (h *VaultHandlers) PutSecret(w http.ResponseWriter, r *http.Request) {
 		vaultErr(w, err)
 		return
 	}
+	audit(r, "vault_secret_write", b.Name, nil)
 	WriteJSON(w, http.StatusOK, map[string]string{"id": id})
 }
 

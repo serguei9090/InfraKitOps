@@ -325,6 +325,10 @@ func (h *RunbookHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !dryRun {
+		audit(r, "runbook_run", rb.Slug, map[string]any{"version": version})
+	}
+
 	sw, err := sse.New(w)
 	if err != nil {
 		return
@@ -380,6 +384,11 @@ func (h *RunbookHandlers) ApproveRun(w http.ResponseWriter, r *http.Request) {
 	err := h.Engine.ResumeRun(id, owner(r), b.Approved)
 	switch {
 	case err == nil:
+		act := "runbook_run_deny"
+		if b.Approved {
+			act = "runbook_run_approve"
+		}
+		audit(r, act, chi.URLParam(r, "id"), nil)
 		WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "approved": b.Approved})
 	case errors.Is(err, orchestrator.ErrApproveSelf()):
 		apierr.Write(w, apierr.Permission("a run must be approved by a different operator"))
@@ -502,7 +511,7 @@ func (h *RunbookHandlers) GetSettings(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *RunbookHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
-	if !h.guard(w) {
+	if !h.guard(w) || !requireAdmin(w, r) {
 		return
 	}
 	var body map[string]string

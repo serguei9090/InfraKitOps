@@ -4,6 +4,7 @@ import { useBackendStore } from '@/stores/backendStore'
 import { getRunbookSettings, putRunbookSettings } from '@/adapters/backend/runbookClient'
 import { SettingsGroup, SettingsRow } from '../SettingsScaffold'
 import { SettingsResetButton } from '../SettingsResetButton'
+import { InstanceSettingsNotice } from '../InstanceSettingsNotice'
 
 const DEFAULTS: Record<string, number> = {
   historyRetentionDays: 90,
@@ -54,6 +55,7 @@ export function RunbookSettings() {
 
   return (
     <>
+      <InstanceSettingsNotice />
       <SettingsGroup
         title="Run history"
         description="Applied on the next run's prune pass. Pinned runs are always kept."

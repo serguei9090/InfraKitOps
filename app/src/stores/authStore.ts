@@ -153,6 +153,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
         const r = await api.changePassword(current, next)
         applyToken(r.token)
         set({ busy: false })
+        await get().refreshMe() // picks up mustChangePw: false
         return true
       } catch (e) {
         set({ busy: false, error: e instanceof Error ? e.message : 'Could not change the password' })

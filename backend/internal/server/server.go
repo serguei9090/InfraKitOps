@@ -91,6 +91,7 @@ func NewRouter(opts Options) http.Handler {
 	}
 	if opts.Auth != nil {
 		api.AuthMode = "on"
+		api.SetAuditSink(opts.Auth.AuditRaw)
 	}
 
 	r.Route("/api/v1", func(r chi.Router) {

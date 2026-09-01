@@ -171,3 +171,11 @@ func (s *Service) Audit(actor *User, action, target string, meta any) {
 	}
 	_ = s.store.AddAudit(e)
 }
+
+// AuditRaw records an entry from an already-resolved user id + name (used by
+// the api layer, which reads them off the request context).
+func (s *Service) AuditRaw(userID, username, action, target string, meta any) {
+	_ = s.store.AddAudit(AuditEntry{
+		UserID: userID, Actor: username, Action: action, Target: target, Meta: jsonMeta(meta),
+	})
+}

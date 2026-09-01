@@ -34,6 +34,34 @@ func (h *AuthHandlers) me(r *http.Request) *auth.User {
 // single-user mode → the store treats it as "all rows".
 func owner(r *http.Request) string { return userctx.From(r.Context()) }
 
+// auditSink, when set (multi-user mode), records an audit entry. Set by the
+// server package from *auth.Service.
+var auditSink func(userID, username, action, target string, meta any)
+
+// SetAuditSink wires the audit recorder. Nil → audit() is a no-op.
+func SetAuditSink(fn func(userID, username, action, target string, meta any)) { auditSink = fn }
+
+// audit records an action against the request's user. No-op in single-user mode.
+func audit(r *http.Request, action, target string, meta any) {
+	if auditSink == nil {
+		return
+	}
+	uid := userctx.From(r.Context())
+	if uid == "" {
+		return
+	}
+	auditSink(uid, userctx.Name(r.Context()), action, target, meta)
+}
+
+// requireAdmin blocks a non-admin caller (U5). Single-user mode always passes.
+func requireAdmin(w http.ResponseWriter, r *http.Request) bool {
+	if userctx.IsAdmin(r.Context()) {
+		return true
+	}
+	apierr.Write(w, apierr.Permission("this is an instance-wide setting — admin only"))
+	return false
+}
+
 func clientIP(r *http.Request) string {
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return host

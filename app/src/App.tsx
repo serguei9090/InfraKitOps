@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { router } from './routes'
 import { useAuthStore } from './stores/authStore'
-import { AuthGate } from './adapters/ui/auth/AuthGate'
+import { AuthGate, ForcedPasswordChange } from './adapters/ui/auth/AuthGate'
 
 function App() {
   const ready = useAuthStore((s) => s.ready)
@@ -19,6 +19,7 @@ function App() {
   if (!ready) return null
 
   if (mode === 'on' && !me) return <AuthGate />
+  if (mode === 'on' && me?.mustChangePw) return <ForcedPasswordChange />
 
   return <RouterProvider router={router} />
 }

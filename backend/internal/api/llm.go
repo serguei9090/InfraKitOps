@@ -115,6 +115,7 @@ func (h *LLMHandlers) PutConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Engine.InvalidateCache(saved.ID)
+	audit(r, "llm_connection_write", saved.Name, map[string]any{"provider": saved.Provider})
 	WriteJSON(w, http.StatusOK, map[string]any{"connection": saved})
 }
 
@@ -180,8 +181,9 @@ func (h *LLMHandlers) GetSettings(w http.ResponseWriter, _ *http.Request) {
 }
 
 // PutSettings: PUT /llm/settings — merge-write, returns the merged map.
+// Instance-wide (default connection/model/temp) → admin only in multi-user.
 func (h *LLMHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
-	if !h.guard(w) {
+	if !h.guard(w) || !requireAdmin(w, r) {
 		return
 	}
 	var patch map[string]string
