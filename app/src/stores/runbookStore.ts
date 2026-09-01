@@ -7,6 +7,7 @@ import { create } from 'zustand'
 import * as api from '@/adapters/backend/runbookClient'
 import {
   emptySpec,
+  type Run,
   type Runbook,
   type RunSchedule,
   type RunStep,
@@ -18,13 +19,13 @@ import { reportError } from '@/stores/errorStore'
 
 const SRC = 'Runbooks'
 
-export type Section = 'library' | 'history' | 'schedules' | 'nodes' | 'packages' | 'assistant'
+export type Section = 'library' | 'history' | 'schedules' | 'nodes' | 'packages' | 'assistant' | 'approvals'
 
 /** A run currently streaming in the UI. */
 export interface LiveRun {
   runbookId: string
   runId: number | null
-  status: 'starting' | 'running' | 'ok' | 'failed' | 'partial' | 'error'
+  status: 'starting' | 'running' | 'awaiting_approval' | 'ok' | 'failed' | 'partial' | 'error'
   steps: RunStep[]
   /** free-flowing stdout/stderr lines as they arrive, per step index */
   log: { stepIndex: number; stream: 'stdout' | 'stderr'; text: string }[]
@@ -39,12 +40,15 @@ interface RunbookStore {
   runbooks: Runbook[]
   nodes: SshNode[]
   schedules: RunSchedule[]
+  pendingApprovals: Run[]
   loaded: boolean
   error: string | null
   live: LiveRun | null
 
   setSection: (s: Section) => void
   refresh: () => Promise<void>
+  refreshPendingApprovals: () => Promise<void>
+  approveRun: (id: number, approved: boolean) => Promise<void>
   refreshNodes: () => Promise<void>
   putNode: (n: Partial<SshNode>) => Promise<void>
   deleteNode: (id: string) => Promise<void>
@@ -71,11 +75,29 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
   runbooks: [],
   nodes: [],
   schedules: [],
+  pendingApprovals: [],
   loaded: false,
   error: null,
   live: null,
 
   setSection: (section) => set({ section }),
+
+  refreshPendingApprovals: async () => {
+    try {
+      set({ pendingApprovals: await api.listPendingApprovals() })
+    } catch {
+      /* endpoint 503 in single-user or no runbook store — ignore */
+    }
+  },
+
+  approveRun: async (id, approved) => {
+    try {
+      await api.approveRun(id, approved)
+      await get().refreshPendingApprovals()
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
 
   refresh: async () => {
     try {
@@ -192,6 +214,13 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
               next.runId = (d.runId as number) ?? null
               next.status = 'running'
               break
+            case 'approval-required':
+              next.runId = (d.runId as number) ?? next.runId
+              next.status = 'awaiting_approval'
+              break
+            case 'approval-granted':
+              next.status = 'running'
+              break
             case 'step-start':
               // placeholder row so the UI shows the step immediately
               next.steps.push({
@@ -222,10 +251,12 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
               else next.steps.push(rs)
               break
             }
-            case 'run-end':
-              next.status =
-                (d.dryRun ? 'ok' : (d.status as LiveRun['status'])) ?? 'ok'
+            case 'run-end': {
+              const st = d.dryRun ? 'ok' : ((d.status as string) ?? 'ok')
+              next.status = st === 'cancelled' ? 'failed' : (st as LiveRun['status'])
+              if (st === 'cancelled' && d.reason) next.error = String(d.reason)
               break
+            }
             case 'preview':
               // dry-run payload; the RunPanel reads it off `live` if needed
               break

@@ -98,6 +98,9 @@ type Spec struct {
 	Tags                 []string   `json:"tags"`
 	Args                 []ArgSpec  `json:"args"`
 	Steps                []StepSpec `json:"steps"`
+	// RequiresApproval gates a real (non-dry) run behind a second operator's
+	// OK in multi-user mode (USER_MANAGEMENT_PLAN U3). Ignored with --auth off.
+	RequiresApproval bool `json:"requiresApproval,omitempty"`
 }
 
 // Version is an immutable saved snapshot.
@@ -114,6 +117,7 @@ type Runbook struct {
 	ID        string    `json:"id"`
 	Slug      string    `json:"slug"`
 	Published bool      `json:"published"`
+	Owner     string    `json:"owner,omitempty"` // U3 — author; drafts are owner-only
 	Versions  []Version `json:"versions"`
 	Draft     *Spec     `json:"draft"`
 	CreatedAt int64     `json:"createdAt"`
@@ -223,8 +227,12 @@ type Run struct {
 	Status         string            `json:"status"`
 	DryRun         bool              `json:"dryRun"`
 	TriggeredBy    string            `json:"triggeredBy"`
+	Owner          string            `json:"owner,omitempty"` // U3 — who started it
 	StartedAt      int64             `json:"startedAt"`
 	FinishedAt     int64             `json:"finishedAt"`
 	Args           map[string]string `json:"args"` // secret-typed already replaced with ‹secret:NAME›
 	Steps          []RunStep         `json:"steps"`
 }
+
+// StatusAwaitingApproval marks a run parked for a second operator (U3).
+const StatusAwaitingApproval = "awaiting_approval"

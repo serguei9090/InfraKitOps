@@ -1,10 +1,11 @@
 import { useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Boxes, CalendarClock, History, Lock, LockOpen, Network, Package, Plus, Sparkles } from 'lucide-react'
+import { Boxes, CalendarClock, History, Lock, LockOpen, Network, Package, Plus, ShieldQuestion, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useBackendStore } from '@/stores/backendStore'
 import { useRunbookStore, type Section } from '@/stores/runbookStore'
 import { useVaultStore } from '@/stores/vaultStore'
+import { useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
 import { BackendUnavailable } from '@/adapters/ui/network/BackendUnavailable'
 import { LibraryView } from './LibraryView'
@@ -12,6 +13,7 @@ import { HistoryView } from './HistoryView'
 import { SshNodesView } from './SshNodesView'
 import { PackagesView } from './PackagesView'
 import { SchedulesView } from './SchedulesView'
+import { ApprovalsView } from './ApprovalsView'
 import { AssistantView } from './AssistantView'
 import { VaultDialog } from './VaultDialog'
 import { LibrarySyncDialog } from './LibrarySyncDialog'
@@ -48,6 +50,9 @@ export function RunbookConsoleScaffold() {
   const section = useRunbookStore((s) => s.section)
   const setSection = useRunbookStore((s) => s.setSection)
   const refresh = useRunbookStore((s) => s.refresh)
+  const pendingCount = useRunbookStore((s) => s.pendingApprovals.length)
+  const refreshApprovals = useRunbookStore((s) => s.refreshPendingApprovals)
+  const multiUser = useAuthStore((s) => s.mode === 'on')
   const refreshNodes = useRunbookStore((s) => s.refreshNodes)
   const refreshSchedules = useRunbookStore((s) => s.refreshSchedules)
   const createBlank = useRunbookStore((s) => s.createBlank)
@@ -72,8 +77,9 @@ export function RunbookConsoleScaffold() {
       void refreshNodes()
       void refreshSchedules()
       void refreshVault()
+      if (multiUser) void refreshApprovals()
     }
-  }, [status, refresh, refreshNodes, refreshSchedules, refreshVault])
+  }, [status, refresh, refreshNodes, refreshSchedules, refreshVault, multiUser, refreshApprovals])
 
   if (status === 'unavailable' || status === 'connecting' || status === 'unknown') {
     return (
@@ -106,6 +112,26 @@ export function RunbookConsoleScaffold() {
               {n.label}
             </button>
           ))}
+          {multiUser && (
+            <button
+              type="button"
+              onClick={() => setSection('approvals')}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm',
+                section === 'approvals'
+                  ? 'bg-primary/15 text-primary font-medium'
+                  : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
+              )}
+            >
+              <ShieldQuestion className="size-4" />
+              Approvals
+              {pendingCount > 0 && (
+                <span className="rounded-full bg-amber-500 px-1.5 text-[10px] font-semibold text-white">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          )}
         </nav>
         <div className="flex-1" />
         <VaultDialog />
@@ -122,6 +148,7 @@ export function RunbookConsoleScaffold() {
         {section === 'nodes' && <SshNodesView />}
         {section === 'packages' && <PackagesView />}
         {section === 'assistant' && <AssistantView />}
+        {section === 'approvals' && <ApprovalsView />}
       </div>
 
       <div className="flex h-8 shrink-0 items-center gap-3 border-t border-border/60 bg-card px-4 text-xs text-muted-foreground">

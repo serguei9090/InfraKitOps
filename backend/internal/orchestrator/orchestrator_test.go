@@ -64,7 +64,7 @@ func newStore(t *testing.T) *Store {
 
 func TestRunbookCRUDAndVersions(t *testing.T) {
 	s := newStore(t)
-	rb, err := s.CreateRunbook(Spec{Name: "Restart svc", DefaultTimeoutSec: 30, Steps: []StepSpec{{Executor: executor.KindBash, Script: "systemctl restart {{SVC}}"}}})
+	rb, err := s.CreateRunbook("", Spec{Name: "Restart svc", DefaultTimeoutSec: 30, Steps: []StepSpec{{Executor: executor.KindBash, Script: "systemctl restart {{SVC}}"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestRunbookCRUDAndVersions(t *testing.T) {
 		t.Fatalf("delete v1: %v", err)
 	}
 
-	list, _ := s.ListRunbooks()
+	list, _ := s.ListRunbooks("")
 	if len(list) != 1 {
 		t.Fatalf("list = %d", len(list))
 	}
@@ -107,7 +107,7 @@ func TestRunbookCRUDAndVersions(t *testing.T) {
 
 func TestEnginePreviewValidation(t *testing.T) {
 	s := newStore(t)
-	rb, _ := s.CreateRunbook(Spec{
+	rb, _ := s.CreateRunbook("", Spec{
 		Name: "P", DefaultTimeoutSec: 5,
 		Args:  []ArgSpec{{Name: "PORT", Type: ArgNumber, Required: true, ValidationPreset: "port"}},
 		Steps: []StepSpec{{Executor: executor.KindBash, Script: "echo {{PORT}}"}},
@@ -136,7 +136,7 @@ func TestEngineRunBash(t *testing.T) {
 		t.Skip("bash path unreliable on windows CI")
 	}
 	s := newStore(t)
-	rb, _ := s.CreateRunbook(Spec{
+	rb, _ := s.CreateRunbook("", Spec{
 		Name: "Two step", DefaultTimeoutSec: 5,
 		Args: []ArgSpec{{Name: "MSG", Type: ArgString, Required: true}},
 		Steps: []StepSpec{
@@ -156,7 +156,7 @@ func TestEngineRunBash(t *testing.T) {
 	if runID == 0 {
 		t.Fatal("run id 0")
 	}
-	run, err := s.GetRun(runID)
+	run, err := s.GetRun("", runID)
 	if err != nil {
 		t.Fatal(err)
 	}

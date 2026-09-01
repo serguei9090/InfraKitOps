@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -63,6 +64,27 @@ CREATE INDEX IF NOT EXISTS ix_run_tool_target_time ON run(tool, target, started_
 CREATE INDEX IF NOT EXISTS ix_run_target_time      ON run(target, started_at DESC);
 `
 
+// U3 — owner scoping. "" = pre-auth / single-user row.
+var migrations = []string{
+	`ALTER TABLE run ADD COLUMN owner TEXT NOT NULL DEFAULT ''`,
+}
+
+func hscope(owner string) (string, []any) {
+	if owner == "" {
+		return "", nil
+	}
+	return " AND (owner = ? OR owner = '')", []any{owner}
+}
+
+// ClaimOrphans assigns unowned history rows to owner (first-admin bootstrap).
+func (s *Store) ClaimOrphans(owner string) error {
+	if owner == "" {
+		return nil
+	}
+	_, err := s.db.Exec(`UPDATE run SET owner = ? WHERE owner = ''`, owner)
+	return err
+}
+
 // Open opens (creating if needed) the history database at dsn. Use
 // "file::memory:?cache=shared" for tests. Applies the schema.
 func Open(dsn string) (*Store, error) {
@@ -74,6 +96,12 @@ func Open(dsn string) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	for _, m := range migrations {
+		if _, err := db.Exec(m); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			_ = db.Close()
+			return nil, fmt.Errorf("migrate (%s): %w", m, err)
+		}
 	}
 	return &Store{db: db}, nil
 }
@@ -88,7 +116,7 @@ type PrunePolicy struct {
 
 // Save stores one run and then prunes its (tool, target) group per policy.
 // Returns the new row id.
-func (s *Store) Save(env envelope.Envelope, appVersion string, policy PrunePolicy) (int64, error) {
+func (s *Store) Save(owner string, env envelope.Envelope, appVersion string, policy PrunePolicy) (int64, error) {
 	if env.Tool == "" || env.Target == "" {
 		return 0, errors.New("envelope needs tool and target")
 	}
@@ -103,10 +131,10 @@ func (s *Store) Save(env envelope.Envelope, appVersion string, policy PrunePolic
 	}
 
 	res, err := s.db.Exec(
-		`INSERT INTO run (tool, target, started_at, finished_at, status, params_json, result_shape, result_json, summary_json, app_version)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO run (tool, target, started_at, finished_at, status, params_json, result_shape, result_json, summary_json, app_version, owner)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		env.Tool, env.Target, env.StartedAt, nullZero(env.FinishedAt), string(env.Status),
-		string(params), string(env.ResultShape), string(result), nullBytes(summary), appVersion,
+		string(params), string(env.ResultShape), string(result), nullBytes(summary), appVersion, owner,
 	)
 	if err != nil {
 		return 0, err
@@ -121,7 +149,7 @@ func (s *Store) Save(env envelope.Envelope, appVersion string, policy PrunePolic
 }
 
 // List returns run summaries, newest first. Empty tool/target widen the query.
-func (s *Store) List(tool, target string, limit int) ([]RunSummary, error) {
+func (s *Store) List(owner, tool, target string, limit int) ([]RunSummary, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
@@ -134,6 +162,10 @@ func (s *Store) List(tool, target string, limit int) ([]RunSummary, error) {
 	if target != "" {
 		q += " AND target = ?"
 		args = append(args, target)
+	}
+	if w, wa := hscope(owner); w != "" {
+		q += w
+		args = append(args, wa...)
 	}
 	q += " ORDER BY started_at DESC LIMIT ?"
 	args = append(args, limit)
@@ -167,10 +199,12 @@ func (s *Store) List(tool, target string, limit int) ([]RunSummary, error) {
 	return out, rows.Err()
 }
 
-// Get returns one full run by id, or (nil, nil) if it does not exist.
-func (s *Store) Get(id int64) (*Run, error) {
+// Get returns one of the caller's runs by id, or (nil, nil) if not found.
+func (s *Store) Get(owner string, id int64) (*Run, error) {
+	w, wa := hscope(owner)
 	row := s.db.QueryRow(
-		`SELECT id, tool, target, started_at, finished_at, status, params_json, result_shape, result_json, summary_json, pinned, label FROM run WHERE id = ?`, id)
+		`SELECT id, tool, target, started_at, finished_at, status, params_json, result_shape, result_json, summary_json, pinned, label FROM run WHERE id = ?`+w,
+		append([]any{id}, wa...)...)
 	var r Run
 	var finished sql.NullInt64
 	var params, result string
@@ -197,20 +231,23 @@ func (s *Store) Get(id int64) (*Run, error) {
 }
 
 // SetPinned flags/unflags a run so pruning never removes it.
-func (s *Store) SetPinned(id int64, pinned bool) error {
-	_, err := s.db.Exec(`UPDATE run SET pinned = ? WHERE id = ?`, boolInt(pinned), id)
+func (s *Store) SetPinned(owner string, id int64, pinned bool) error {
+	w, wa := hscope(owner)
+	_, err := s.db.Exec(`UPDATE run SET pinned = ? WHERE id = ?`+w, append([]any{boolInt(pinned), id}, wa...)...)
 	return err
 }
 
 // SetLabel attaches a user note (also exempts the run from pruning).
-func (s *Store) SetLabel(id int64, label string) error {
-	_, err := s.db.Exec(`UPDATE run SET label = ? WHERE id = ?`, nullString(label), id)
+func (s *Store) SetLabel(owner string, id int64, label string) error {
+	w, wa := hscope(owner)
+	_, err := s.db.Exec(`UPDATE run SET label = ? WHERE id = ?`+w, append([]any{nullString(label), id}, wa...)...)
 	return err
 }
 
-// Delete removes one run.
-func (s *Store) Delete(id int64) error {
-	_, err := s.db.Exec(`DELETE FROM run WHERE id = ?`, id)
+// Delete removes one of the caller's runs.
+func (s *Store) Delete(owner string, id int64) error {
+	w, wa := hscope(owner)
+	_, err := s.db.Exec(`DELETE FROM run WHERE id = ?`+w, append([]any{id}, wa...)...)
 	return err
 }
 

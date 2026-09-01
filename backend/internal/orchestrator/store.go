@@ -70,6 +70,14 @@ CREATE TABLE IF NOT EXISTS runbook_schedule (
 CREATE INDEX IF NOT EXISTS ix_schedule_runbook ON runbook_schedule(runbook_id);
 `
 
+// U3 — owner scoping. "" = pre-auth / single-user row.
+var migrations = []string{
+	`ALTER TABLE runbook ADD COLUMN owner TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE run ADD COLUMN owner TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE ssh_node ADD COLUMN owner TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE runbook_schedule ADD COLUMN owner TEXT NOT NULL DEFAULT ''`,
+}
+
 // Store is the orchestrator database handle.
 type Store struct{ db *sql.DB }
 
@@ -84,10 +92,55 @@ func Open(dsn string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
+	for _, m := range migrations {
+		if _, err := db.Exec(m); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			_ = db.Close()
+			return nil, fmt.Errorf("migrate (%s): %w", m, err)
+		}
+	}
 	return &Store{db: db}, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
+
+// canView reports whether viewer may see runbook row (published, own, orphan,
+// or single-user). Used by handlers; internal Store calls stay unscoped.
+func canView(viewer, owner string, published bool) bool {
+	return viewer == "" || owner == "" || published || owner == viewer
+}
+
+// canEdit reports whether editor may mutate a row owned by owner.
+func canEdit(editor, owner string) bool {
+	return editor == "" || owner == "" || owner == editor
+}
+
+// scopeOwner returns the WHERE fragment limiting a blob table to a user.
+func scopeOwner(owner string) (string, []any) {
+	if owner == "" {
+		return "", nil
+	}
+	return " AND (owner = ? OR owner = '')", []any{owner}
+}
+
+// ClaimOrphans assigns every unowned row to owner (first-admin bootstrap, U3).
+func (s *Store) ClaimOrphans(owner string) error {
+	if owner == "" {
+		return nil
+	}
+	for _, t := range []string{"runbook", "run", "ssh_node", "runbook_schedule"} {
+		if _, err := s.db.Exec(`UPDATE `+t+` SET owner = ? WHERE owner = ''`, owner); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RunbookOwner returns a runbook's owner ("" if unowned / not found).
+func (s *Store) RunbookOwner(id string) string {
+	var owner string
+	_ = s.db.QueryRow(`SELECT owner FROM runbook WHERE id = ?`, id).Scan(&owner)
+	return owner
+}
 
 // --- runbooks -------------------------------------------------------------
 
@@ -104,11 +157,11 @@ func slugify(name string) string {
 
 // CreateRunbook makes a new runbook seeded with `spec` as a draft (no version
 // yet — mirrors the Prompt Library: v1 lands on the first Save).
-func (s *Store) CreateRunbook(spec Spec) (*Runbook, error) {
+func (s *Store) CreateRunbook(owner string, spec Spec) (*Runbook, error) {
 	now := time.Now().UnixMilli()
-	rb := &Runbook{ID: newID("rb"), Slug: slugify(spec.Name), CreatedAt: now, UpdatedAt: now, Draft: &spec}
-	if _, err := s.db.Exec(`INSERT INTO runbook (id, slug, published, created_at, updated_at) VALUES (?,?,?,?,?)`,
-		rb.ID, rb.Slug, 0, now, now); err != nil {
+	rb := &Runbook{ID: newID("rb"), Slug: slugify(spec.Name), Owner: owner, CreatedAt: now, UpdatedAt: now, Draft: &spec}
+	if _, err := s.db.Exec(`INSERT INTO runbook (id, slug, published, created_at, updated_at, owner) VALUES (?,?,?,?,?,?)`,
+		rb.ID, rb.Slug, 0, now, now, owner); err != nil {
 		return nil, err
 	}
 	raw, _ := json.Marshal(spec)
@@ -123,8 +176,8 @@ func (s *Store) CreateRunbook(spec Spec) (*Runbook, error) {
 func (s *Store) GetRunbook(id string) (*Runbook, error) {
 	rb := &Runbook{ID: id}
 	var pub int
-	err := s.db.QueryRow(`SELECT slug, published, created_at, updated_at FROM runbook WHERE id = ?`, id).
-		Scan(&rb.Slug, &pub, &rb.CreatedAt, &rb.UpdatedAt)
+	err := s.db.QueryRow(`SELECT slug, published, created_at, updated_at, owner FROM runbook WHERE id = ?`, id).
+		Scan(&rb.Slug, &pub, &rb.CreatedAt, &rb.UpdatedAt, &rb.Owner)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -163,8 +216,9 @@ func (s *Store) GetRunbook(id string) (*Runbook, error) {
 	return rb, nil
 }
 
-// ListRunbooks returns every runbook (full, with versions) newest-updated first.
-func (s *Store) ListRunbooks() ([]*Runbook, error) {
+// ListRunbooks returns the runbooks viewer may see (published ∪ own ∪ orphan),
+// newest-updated first.
+func (s *Store) ListRunbooks(viewer string) ([]*Runbook, error) {
 	rows, err := s.db.Query(`SELECT id FROM runbook ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
@@ -184,6 +238,9 @@ func (s *Store) ListRunbooks() ([]*Runbook, error) {
 		rb, err := s.GetRunbook(id)
 		if err != nil {
 			return nil, err
+		}
+		if !canView(viewer, rb.Owner, rb.Published) {
+			continue
 		}
 		out = append(out, rb)
 	}
@@ -288,9 +345,11 @@ func (s *Store) DeleteRunbook(id string) error {
 
 // --- schedules --------------------------------------------------------
 
-// ListSchedules returns every schedule, newest first.
-func (s *Store) ListSchedules() ([]RunSchedule, error) {
-	rows, err := s.db.Query(`SELECT schedule_json FROM runbook_schedule ORDER BY created_at DESC`)
+// ListSchedules returns the caller's schedules, newest first. owner "" (the
+// scheduler / single-user) sees all.
+func (s *Store) ListSchedules(owner string) ([]RunSchedule, error) {
+	w, wa := scopeOwner(owner)
+	rows, err := s.db.Query(`SELECT schedule_json FROM runbook_schedule WHERE 1=1`+w+` ORDER BY created_at DESC`, wa...)
 	if err != nil {
 		return nil, err
 	}
@@ -308,10 +367,11 @@ func (s *Store) ListSchedules() ([]RunSchedule, error) {
 	return out, rows.Err()
 }
 
-// GetSchedule loads one schedule.
-func (s *Store) GetSchedule(id string) (*RunSchedule, error) {
+// GetSchedule loads one of the caller's schedules.
+func (s *Store) GetSchedule(owner, id string) (*RunSchedule, error) {
+	w, wa := scopeOwner(owner)
 	var j string
-	err := s.db.QueryRow(`SELECT schedule_json FROM runbook_schedule WHERE id = ?`, id).Scan(&j)
+	err := s.db.QueryRow(`SELECT schedule_json FROM runbook_schedule WHERE id = ?`+w, append([]any{id}, wa...)...).Scan(&j)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -325,7 +385,7 @@ func (s *Store) GetSchedule(id string) (*RunSchedule, error) {
 
 // PutSchedule upserts a schedule. The cron expression is validated and
 // NextRunAt is (re)computed from now whenever the schedule is enabled.
-func (s *Store) PutSchedule(sc RunSchedule) (RunSchedule, error) {
+func (s *Store) PutSchedule(owner string, sc RunSchedule) (RunSchedule, error) {
 	expr, err := ParseCron(sc.Cron)
 	if err != nil {
 		return sc, err
@@ -336,10 +396,12 @@ func (s *Store) PutSchedule(sc RunSchedule) (RunSchedule, error) {
 	if sc.ID == "" {
 		sc.ID = newID("sched")
 		sc.CreatedAt = time.Now().UnixMilli()
-	} else if sc.CreatedAt == 0 {
-		if existing, err := s.GetSchedule(sc.ID); err == nil {
+	} else if existing, err := s.GetSchedule(owner, sc.ID); err == nil {
+		if sc.CreatedAt == 0 {
 			sc.CreatedAt = existing.CreatedAt
 		}
+	} else if err == ErrNotFound {
+		return sc, ErrNotFound
 	}
 	if sc.Args == nil {
 		sc.Args = map[string]string{}
@@ -352,16 +414,23 @@ func (s *Store) PutSchedule(sc RunSchedule) (RunSchedule, error) {
 		sc.NextRunAt = 0
 	}
 	raw, _ := json.Marshal(sc)
-	_, err = s.db.Exec(`INSERT INTO runbook_schedule (id, runbook_id, schedule_json, created_at) VALUES (?,?,?,?)
+	_, err = s.db.Exec(`INSERT INTO runbook_schedule (id, runbook_id, schedule_json, created_at, owner) VALUES (?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET schedule_json = excluded.schedule_json, runbook_id = excluded.runbook_id`,
-		sc.ID, sc.RunbookID, string(raw), sc.CreatedAt)
+		sc.ID, sc.RunbookID, string(raw), sc.CreatedAt, owner)
 	return sc, err
 }
 
-// DeleteSchedule removes a schedule.
-func (s *Store) DeleteSchedule(id string) error {
-	_, err := s.db.Exec(`DELETE FROM runbook_schedule WHERE id = ?`, id)
-	return err
+// DeleteSchedule removes one of the caller's schedules.
+func (s *Store) DeleteSchedule(owner, id string) error {
+	w, wa := scopeOwner(owner)
+	res, err := s.db.Exec(`DELETE FROM runbook_schedule WHERE id = ?`+w, append([]any{id}, wa...)...)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // saveScheduleRaw persists a schedule without touching NextRunAt — used by the
@@ -378,10 +447,10 @@ func (s *Store) saveScheduleRaw(sc RunSchedule) error {
 func (s *Store) InsertRun(r *Run) (int64, error) {
 	args, _ := json.Marshal(r.Args)
 	steps, _ := json.Marshal(r.Steps)
-	res, err := s.db.Exec(`INSERT INTO run (runbook_id, runbook_ver, status, dry_run, triggered_by, started_at, finished_at, args_json, steps_json)
-		VALUES (?,?,?,?,?,?,?,?,?)`,
+	res, err := s.db.Exec(`INSERT INTO run (runbook_id, runbook_ver, status, dry_run, triggered_by, started_at, finished_at, args_json, steps_json, owner)
+		VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		r.RunbookID, r.RunbookVersion, r.Status, b2i(r.DryRun), nz(r.TriggeredBy, "local"),
-		r.StartedAt, nullZero(r.FinishedAt), string(args), string(steps))
+		r.StartedAt, nullZero(r.FinishedAt), string(args), string(steps), r.Owner)
 	if err != nil {
 		return 0, err
 	}
@@ -397,16 +466,28 @@ func (s *Store) FinishRun(id int64, status string, steps []RunStep) error {
 	return err
 }
 
-// ListRuns returns run rows newest first (optionally filtered by runbook).
-func (s *Store) ListRuns(runbookID string, limit int) ([]Run, error) {
+// SetRunStatus flips just the status (approval flow).
+func (s *Store) SetRunStatus(id int64, status string) error {
+	_, err := s.db.Exec(`UPDATE run SET status = ? WHERE id = ?`, status, id)
+	return err
+}
+
+const runCols = `id, runbook_id, runbook_ver, status, dry_run, triggered_by, started_at, finished_at, args_json, steps_json, owner`
+
+// ListRuns returns the caller's run rows newest first (optionally by runbook).
+func (s *Store) ListRuns(owner, runbookID string, limit int) ([]Run, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	q := `SELECT id, runbook_id, runbook_ver, status, dry_run, triggered_by, started_at, finished_at, args_json, steps_json FROM run`
+	q := `SELECT ` + runCols + ` FROM run WHERE 1=1`
 	var args []any
 	if runbookID != "" {
-		q += ` WHERE runbook_id = ?`
+		q += ` AND runbook_id = ?`
 		args = append(args, runbookID)
+	}
+	if w, wa := scopeOwner(owner); w != "" {
+		q += w
+		args = append(args, wa...)
 	}
 	q += ` ORDER BY started_at DESC LIMIT ?`
 	args = append(args, limit)
@@ -426,10 +507,34 @@ func (s *Store) ListRuns(runbookID string, limit int) ([]Run, error) {
 	return out, rows.Err()
 }
 
-// GetRun returns one run by id.
-func (s *Store) GetRun(id int64) (*Run, error) {
-	row := s.db.QueryRow(`SELECT id, runbook_id, runbook_ver, status, dry_run, triggered_by, started_at, finished_at, args_json, steps_json FROM run WHERE id = ?`, id)
-	r, err := scanRun(row)
+// ListPendingApprovals returns every run parked awaiting approval (U3). Any
+// operator+ may see these regardless of owner — that's the point.
+func (s *Store) ListPendingApprovals() ([]Run, error) {
+	rows, err := s.db.Query(`SELECT `+runCols+` FROM run WHERE status = ? ORDER BY started_at DESC`, StatusAwaitingApproval)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Run{}
+	for rows.Next() {
+		r, err := scanRun(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// GetRun returns one of the caller's runs by id.
+func (s *Store) GetRun(owner string, id int64) (*Run, error) {
+	q := `SELECT ` + runCols + ` FROM run WHERE id = ?`
+	args := []any{id}
+	if w, wa := scopeOwner(owner); w != "" {
+		q += w
+		args = append(args, wa...)
+	}
+	r, err := scanRun(s.db.QueryRow(q, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -449,7 +554,7 @@ func scanRun(sc scanner) (Run, error) {
 	var finished sql.NullInt64
 	var argsJSON, stepsJSON string
 	if err := sc.Scan(&r.ID, &r.RunbookID, &r.RunbookVersion, &r.Status, &dry, &r.TriggeredBy,
-		&r.StartedAt, &finished, &argsJSON, &stepsJSON); err != nil {
+		&r.StartedAt, &finished, &argsJSON, &stepsJSON, &r.Owner); err != nil {
 		return r, err
 	}
 	r.DryRun = dry == 1
@@ -477,8 +582,9 @@ func (s *Store) PruneRuns(runbookID string, retentionDays, maxPer int) {
 
 // --- ssh nodes --------------------------------------------------------
 
-func (s *Store) ListNodes() ([]SSHNode, error) {
-	rows, err := s.db.Query(`SELECT node_json FROM ssh_node ORDER BY created_at DESC`)
+func (s *Store) ListNodes(owner string) ([]SSHNode, error) {
+	w, wa := scopeOwner(owner)
+	rows, err := s.db.Query(`SELECT node_json FROM ssh_node WHERE 1=1`+w+` ORDER BY created_at DESC`, wa...)
 	if err != nil {
 		return nil, err
 	}
@@ -496,28 +602,38 @@ func (s *Store) ListNodes() ([]SSHNode, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) PutNode(n SSHNode) (SSHNode, error) {
+func (s *Store) PutNode(owner string, n SSHNode) (SSHNode, error) {
 	if n.ID == "" {
 		n.ID = newID("node")
 		n.CreatedAt = time.Now().UnixMilli()
+	} else if _, err := s.GetNode(owner, n.ID); err == ErrNotFound {
+		return n, ErrNotFound // not the caller's node
 	}
 	if n.Port == 0 {
 		n.Port = 22
 	}
 	raw, _ := json.Marshal(n)
-	_, err := s.db.Exec(`INSERT INTO ssh_node (id, node_json, created_at) VALUES (?,?,?)
-		ON CONFLICT(id) DO UPDATE SET node_json = excluded.node_json`, n.ID, string(raw), n.CreatedAt)
+	_, err := s.db.Exec(`INSERT INTO ssh_node (id, node_json, created_at, owner) VALUES (?,?,?,?)
+		ON CONFLICT(id) DO UPDATE SET node_json = excluded.node_json`, n.ID, string(raw), n.CreatedAt, owner)
 	return n, err
 }
 
-func (s *Store) DeleteNode(id string) error {
-	_, err := s.db.Exec(`DELETE FROM ssh_node WHERE id = ?`, id)
-	return err
+func (s *Store) DeleteNode(owner, id string) error {
+	w, wa := scopeOwner(owner)
+	res, err := s.db.Exec(`DELETE FROM ssh_node WHERE id = ?`+w, append([]any{id}, wa...)...)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
-func (s *Store) GetNode(id string) (*SSHNode, error) {
+func (s *Store) GetNode(owner, id string) (*SSHNode, error) {
+	w, wa := scopeOwner(owner)
 	var j string
-	err := s.db.QueryRow(`SELECT node_json FROM ssh_node WHERE id = ?`, id).Scan(&j)
+	err := s.db.QueryRow(`SELECT node_json FROM ssh_node WHERE id = ?`+w, append([]any{id}, wa...)...).Scan(&j)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}

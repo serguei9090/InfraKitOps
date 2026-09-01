@@ -71,6 +71,8 @@ export interface RunbookSpec {
   tags: string[]
   args: ArgSpec[]
   steps: StepSpec[]
+  /** multi-user: a real run waits for a second operator's OK (U3) */
+  requiresApproval?: boolean
 }
 
 export interface RunbookVersion {
@@ -140,7 +142,7 @@ export interface RunSchedule {
 
 // --- run / preview ---------------------------------------------------------
 
-export type RunStatus = 'running' | 'ok' | 'failed' | 'partial'
+export type RunStatus = 'running' | 'awaiting_approval' | 'ok' | 'failed' | 'partial'
 
 export interface RunStep {
   index: number
@@ -163,6 +165,7 @@ export interface Run {
   status: RunStatus
   dryRun: boolean
   triggeredBy: string
+  owner?: string
   startedAt: number
   finishedAt: number
   args: Record<string, string>

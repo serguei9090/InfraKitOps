@@ -90,6 +90,13 @@ export const listRuns = (runbookId?: string, limit = 100) =>
 export const getRun = (id: number) =>
   backendGet<{ run: Run }>(`/runs/${id}`).then((r) => normRun(r.run))
 
+// U3 — multi-user approval gate
+export const listPendingApprovals = () =>
+  backendGet<{ runs: Run[] | null }>('/runs/pending-approvals').then((r) => arr(r.runs).map(normRun))
+
+export const approveRun = (id: number, approved: boolean) =>
+  backendRequest<{ status: string; approved: boolean }>('POST', `/runs/${id}/approve`, { approved })
+
 /** Open the run stream. Returns an abort function. */
 export function openRunStream(
   runbookId: string,

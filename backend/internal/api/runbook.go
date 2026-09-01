@@ -64,12 +64,27 @@ func writeStoreErr(w http.ResponseWriter, err error) {
 	apierr.Write(w, apierr.Validation(err.Error()))
 }
 
+// canEditRunbook checks the caller may mutate runbook id. In single-user mode
+// (owner "") every check passes. Writes the 404 and returns false on failure.
+func (h *RunbookHandlers) canEditRunbook(w http.ResponseWriter, r *http.Request, id string) bool {
+	me := owner(r)
+	if me == "" {
+		return true
+	}
+	rbOwner := h.Store.RunbookOwner(id)
+	if rbOwner == "" || rbOwner == me {
+		return true
+	}
+	apierr.Write(w, apierr.NotFound("not found"))
+	return false
+}
+
 // ListRunbooks: GET /runbooks
-func (h *RunbookHandlers) List(w http.ResponseWriter, _ *http.Request) {
+func (h *RunbookHandlers) List(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	list, err := h.Store.ListRunbooks()
+	list, err := h.Store.ListRunbooks(owner(r))
 	if err != nil {
 		writeStoreErr(w, err)
 		return
@@ -92,7 +107,7 @@ func (h *RunbookHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	if body.Spec.Name == "" {
 		body.Spec.Name = "Untitled runbook"
 	}
-	rb, err := h.Store.CreateRunbook(body.Spec)
+	rb, err := h.Store.CreateRunbook(owner(r), body.Spec)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
@@ -110,12 +125,19 @@ func (h *RunbookHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		writeStoreErr(w, err)
 		return
 	}
+	if me := owner(r); me != "" && rb.Owner != "" && rb.Owner != me && !rb.Published {
+		apierr.Write(w, apierr.NotFound("not found"))
+		return
+	}
 	WriteJSON(w, http.StatusOK, map[string]any{"runbook": rb})
 }
 
 // SaveDraft: PUT /runbooks/{id}/draft   { spec }
 func (h *RunbookHandlers) SaveDraft(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
+		return
+	}
+	if !h.canEditRunbook(w, r, chi.URLParam(r, "id")) {
 		return
 	}
 	var body struct {
@@ -137,6 +159,9 @@ func (h *RunbookHandlers) DiscardDraft(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
+	if !h.canEditRunbook(w, r, chi.URLParam(r, "id")) {
+		return
+	}
 	if err := h.Store.DiscardDraft(chi.URLParam(r, "id")); err != nil {
 		writeStoreErr(w, err)
 		return
@@ -147,6 +172,9 @@ func (h *RunbookHandlers) DiscardDraft(w http.ResponseWriter, r *http.Request) {
 // SaveVersion: POST /runbooks/{id}/versions   { note }
 func (h *RunbookHandlers) SaveVersion(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
+		return
+	}
+	if !h.canEditRunbook(w, r, chi.URLParam(r, "id")) {
 		return
 	}
 	var body struct {
@@ -165,6 +193,9 @@ func (h *RunbookHandlers) SaveVersion(w http.ResponseWriter, r *http.Request) {
 // DeleteVersion: DELETE /runbooks/{id}/versions/{n}
 func (h *RunbookHandlers) VersionAction(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
+		return
+	}
+	if !h.canEditRunbook(w, r, chi.URLParam(r, "id")) {
 		return
 	}
 	id := chi.URLParam(r, "id")
@@ -191,6 +222,9 @@ func (h *RunbookHandlers) DeleteVersion(w http.ResponseWriter, r *http.Request) 
 	if !h.guard(w) {
 		return
 	}
+	if !h.canEditRunbook(w, r, chi.URLParam(r, "id")) {
+		return
+	}
 	n, _ := strconv.Atoi(chi.URLParam(r, "n"))
 	if err := h.Store.DeleteVersion(chi.URLParam(r, "id"), n); err != nil {
 		writeStoreErr(w, err)
@@ -202,6 +236,9 @@ func (h *RunbookHandlers) DeleteVersion(w http.ResponseWriter, r *http.Request) 
 // Publish: POST /runbooks/{id}/publish  { published }
 func (h *RunbookHandlers) Publish(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
+		return
+	}
+	if !h.canEditRunbook(w, r, chi.URLParam(r, "id")) {
 		return
 	}
 	var body struct {
@@ -218,6 +255,9 @@ func (h *RunbookHandlers) Publish(w http.ResponseWriter, r *http.Request) {
 // Delete: DELETE /runbooks/{id}
 func (h *RunbookHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
+		return
+	}
+	if !h.canEditRunbook(w, r, chi.URLParam(r, "id")) {
 		return
 	}
 	if err := h.Store.DeleteRunbook(chi.URLParam(r, "id")); err != nil {
@@ -261,6 +301,10 @@ func (h *RunbookHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 		sse.RejectCoded(w, string(apierr.CodeNotFound), "runbook not found", "")
 		return
 	}
+	if me := owner(r); me != "" && rb.Owner != "" && rb.Owner != me && !rb.Published {
+		sse.RejectCoded(w, string(apierr.CodeNotFound), "runbook not found", "")
+		return
+	}
 	q := r.URL.Query()
 	version, _ := strconv.Atoi(q.Get("version"))
 	dryRun := q.Get("dryRun") == "1" || q.Get("dryRun") == "true"
@@ -301,12 +345,47 @@ func (h *RunbookHandlers) ListRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	runs, err := h.Store.ListRuns(r.URL.Query().Get("runbookId"), limit)
+	runs, err := h.Store.ListRuns(owner(r), r.URL.Query().Get("runbookId"), limit)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"runs": runs})
+}
+
+// PendingApprovals: GET /runs/pending-approvals — runs parked for a second
+// operator (U3). Visible to any operator+.
+func (h *RunbookHandlers) PendingApprovals(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	runs, err := h.Store.ListPendingApprovals()
+	if err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"runs": runs})
+}
+
+// ApproveRun: POST /runs/{id}/approve  { approved }
+func (h *RunbookHandlers) ApproveRun(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	var b struct {
+		Approved bool `json:"approved"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	err := h.Engine.ResumeRun(id, owner(r), b.Approved)
+	switch {
+	case err == nil:
+		WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "approved": b.Approved})
+	case errors.Is(err, orchestrator.ErrApproveSelf()):
+		apierr.Write(w, apierr.Permission("a run must be approved by a different operator"))
+	default:
+		apierr.Write(w, apierr.NotFound("no run is waiting for approval"))
+	}
 }
 
 // GetRun: GET /runs/{id}
@@ -315,7 +394,7 @@ func (h *RunbookHandlers) GetRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	run, err := h.Store.GetRun(id)
+	run, err := h.Store.GetRun(owner(r), id)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
@@ -325,11 +404,11 @@ func (h *RunbookHandlers) GetRun(w http.ResponseWriter, r *http.Request) {
 
 // --- ssh nodes ---------------------------------------------------------
 
-func (h *RunbookHandlers) ListNodes(w http.ResponseWriter, _ *http.Request) {
+func (h *RunbookHandlers) ListNodes(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	nodes, err := h.Store.ListNodes()
+	nodes, err := h.Store.ListNodes(owner(r))
 	if err != nil {
 		writeStoreErr(w, err)
 		return
@@ -349,7 +428,7 @@ func (h *RunbookHandlers) PutNode(w http.ResponseWriter, r *http.Request) {
 	if id := chi.URLParam(r, "id"); id != "" {
 		n.ID = id
 	}
-	saved, err := h.Store.PutNode(n)
+	saved, err := h.Store.PutNode(owner(r), n)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
@@ -361,7 +440,7 @@ func (h *RunbookHandlers) DeleteNode(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	if err := h.Store.DeleteNode(chi.URLParam(r, "id")); err != nil {
+	if err := h.Store.DeleteNode(owner(r), chi.URLParam(r, "id")); err != nil {
 		writeStoreErr(w, err)
 		return
 	}
@@ -374,7 +453,7 @@ func (h *RunbookHandlers) TestNode(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	n, err := h.Store.GetNode(chi.URLParam(r, "id"))
+	n, err := h.Store.GetNode(owner(r), chi.URLParam(r, "id"))
 	if err != nil {
 		writeStoreErr(w, err)
 		return
@@ -399,7 +478,7 @@ func (h *RunbookHandlers) TestNode(w http.ResponseWriter, r *http.Request) {
 
 	if hk.Learned && hk.Fingerprint != "" && n.HostKeyFP == "" {
 		n.HostKeyFP = hk.Fingerprint
-		_, _ = h.Store.PutNode(*n)
+		_, _ = h.Store.PutNode(owner(r), *n)
 	}
 	resp := map[string]any{
 		"ok":              terr == nil && !hk.Mismatch,
@@ -523,7 +602,7 @@ func (h *RunbookHandlers) LibraryImport(w http.ResponseWriter, r *http.Request) 
 		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
-	n, err := h.Store.ImportLibrary(b.Dir)
+	n, err := h.Store.ImportLibrary(owner(r), b.Dir)
 	if err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error(), "imported": n})
 		return
@@ -534,11 +613,11 @@ func (h *RunbookHandlers) LibraryImport(w http.ResponseWriter, r *http.Request) 
 // --- schedules -----------------------------------------------------
 
 // ListSchedules: GET /runbook-schedules
-func (h *RunbookHandlers) ListSchedules(w http.ResponseWriter, _ *http.Request) {
+func (h *RunbookHandlers) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	list, err := h.Store.ListSchedules()
+	list, err := h.Store.ListSchedules(owner(r))
 	if err != nil {
 		writeStoreErr(w, err)
 		return
@@ -559,7 +638,7 @@ func (h *RunbookHandlers) PutSchedule(w http.ResponseWriter, r *http.Request) {
 	if id := chi.URLParam(r, "id"); id != "" {
 		sc.ID = id
 	}
-	saved, err := h.Store.PutSchedule(sc)
+	saved, err := h.Store.PutSchedule(owner(r), sc)
 	if err != nil {
 		apierr.Write(w, apierr.Validation(err.Error()))
 		return
@@ -572,7 +651,7 @@ func (h *RunbookHandlers) DeleteSchedule(w http.ResponseWriter, r *http.Request)
 	if !h.guard(w) {
 		return
 	}
-	if err := h.Store.DeleteSchedule(chi.URLParam(r, "id")); err != nil {
+	if err := h.Store.DeleteSchedule(owner(r), chi.URLParam(r, "id")); err != nil {
 		writeStoreErr(w, err)
 		return
 	}

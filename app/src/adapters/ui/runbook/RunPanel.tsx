@@ -11,9 +11,11 @@ import { cn } from '@/lib/utils'
 export function RunPanel() {
   const live = useRunbookStore((s) => s.live)
   const clearLive = useRunbookStore((s) => s.clearLive)
+  const approveRun = useRunbookStore((s) => s.approveRun)
   if (!live) return null
 
   const done = live.status === 'ok' || live.status === 'failed' || live.status === 'partial' || live.status === 'error'
+  const waiting = live.status === 'awaiting_approval'
 
   return (
     <div className="absolute inset-x-0 bottom-8 z-20 mx-auto max-h-[55%] w-[min(900px,calc(100%-2rem))] overflow-hidden rounded-xl border border-border/60 bg-popover shadow-2xl">
@@ -27,6 +29,7 @@ export function RunPanel() {
         )}
         <span className="text-sm font-medium">
           {live.status === 'starting' && 'Starting…'}
+          {live.status === 'awaiting_approval' && 'Waiting for approval'}
           {live.status === 'running' && `Running (${live.steps.length} step${live.steps.length === 1 ? '' : 's'})`}
           {live.status === 'ok' && 'Completed'}
           {live.status === 'partial' && 'Completed with errors'}
@@ -35,6 +38,21 @@ export function RunPanel() {
         </span>
         {live.runId != null && <span className="text-xs text-muted-foreground">run #{live.runId}</span>}
         <div className="flex-1" />
+        {waiting && live.runId != null && (
+          <>
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() => void approveRun(live.runId!, true)}
+              title="If you started this run, another operator must approve it"
+            >
+              Approve
+            </Button>
+            <Button size="xs" variant="ghost" onClick={() => void approveRun(live.runId!, false)}>
+              Deny
+            </Button>
+          </>
+        )}
         {!done && (
           <Button size="xs" variant="outline" onClick={() => live.abort()}>
             Stop

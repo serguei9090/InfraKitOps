@@ -36,7 +36,7 @@ func sampleEnvelope(tool, target string, started int64) envelope.Envelope {
 
 func TestSaveAndGet(t *testing.T) {
 	s := testStore(t)
-	id, err := s.Save(sampleEnvelope("dns-lookup", "example.com", 1000), "test", PrunePolicy{})
+	id, err := s.Save("", sampleEnvelope("dns-lookup", "example.com", 1000), "test", PrunePolicy{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestSaveAndGet(t *testing.T) {
 		t.Fatal("expected a row id")
 	}
 
-	run, err := s.Get(id)
+	run, err := s.Get("", id)
 	if err != nil || run == nil {
 		t.Fatalf("Get: %v run=%v", err, run)
 	}
@@ -62,7 +62,7 @@ func TestSaveAndGet(t *testing.T) {
 
 func TestGetMissingReturnsNil(t *testing.T) {
 	s := testStore(t)
-	run, err := s.Get(4242)
+	run, err := s.Get("", 4242)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,15 +74,15 @@ func TestGetMissingReturnsNil(t *testing.T) {
 func TestListFiltersAndOrders(t *testing.T) {
 	s := testStore(t)
 	for i, tgt := range []string{"a.com", "a.com", "b.com"} {
-		if _, err := s.Save(sampleEnvelope("dns-lookup", tgt, int64(1000+i)), "test", PrunePolicy{}); err != nil {
+		if _, err := s.Save("", sampleEnvelope("dns-lookup", tgt, int64(1000+i)), "test", PrunePolicy{}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.Save(sampleEnvelope("whois", "a.com", 5000), "test", PrunePolicy{}); err != nil {
+	if _, err := s.Save("", sampleEnvelope("whois", "a.com", 5000), "test", PrunePolicy{}); err != nil {
 		t.Fatal(err)
 	}
 
-	all, _ := s.List("", "", 0)
+	all, _ := s.List("", "", "", 0)
 	if len(all) != 4 {
 		t.Fatalf("List all = %d, want 4", len(all))
 	}
@@ -90,7 +90,7 @@ func TestListFiltersAndOrders(t *testing.T) {
 		t.Fatal("list not newest-first")
 	}
 
-	dnsA, _ := s.List("dns-lookup", "a.com", 0)
+	dnsA, _ := s.List("", "dns-lookup", "a.com", 0)
 	if len(dnsA) != 2 {
 		t.Fatalf("List(dns-lookup,a.com) = %d, want 2", len(dnsA))
 	}
@@ -104,7 +104,7 @@ func TestPruneKeepsMaxPerTargetAndPinned(t *testing.T) {
 	policy := PrunePolicy{MaxPerTarget: 3}
 	var firstID int64
 	for i := 0; i < 10; i++ {
-		id, err := s.Save(sampleEnvelope("ping", "host", int64(1000+i)), "test", policy)
+		id, err := s.Save("", sampleEnvelope("ping", "host", int64(1000+i)), "test", policy)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -113,26 +113,26 @@ func TestPruneKeepsMaxPerTargetAndPinned(t *testing.T) {
 		}
 	}
 	// Only the 3 newest survive.
-	got, _ := s.List("ping", "host", 0)
+	got, _ := s.List("", "ping", "host", 0)
 	if len(got) != 3 {
 		t.Fatalf("after prune got %d, want 3", len(got))
 	}
 
 	// Pin the oldest, add more — the pinned one must persist.
-	if _, err := s.Save(sampleEnvelope("ping", "host2", 1), "test", PrunePolicy{}); err != nil {
+	if _, err := s.Save("", sampleEnvelope("ping", "host2", 1), "test", PrunePolicy{}); err != nil {
 		t.Fatal(err)
 	}
 	_ = firstID // the first run was already pruned above; assert pin protects a live one instead
-	live, _ := s.List("ping", "host", 1)
-	if err := s.SetPinned(live[0].ID, true); err != nil {
+	live, _ := s.List("", "ping", "host", 1)
+	if err := s.SetPinned("", live[0].ID, true); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 10; i++ {
-		if _, err := s.Save(sampleEnvelope("ping", "host", int64(9000+i)), "test", policy); err != nil {
+		if _, err := s.Save("", sampleEnvelope("ping", "host", int64(9000+i)), "test", policy); err != nil {
 			t.Fatal(err)
 		}
 	}
-	after, _ := s.List("ping", "host", 0)
+	after, _ := s.List("", "ping", "host", 0)
 	foundPinned := false
 	for _, r := range after {
 		if r.ID == live[0].ID {
@@ -150,14 +150,14 @@ func TestPruneRetentionDays(t *testing.T) {
 	recent := time.Now().Add(-1 * time.Hour).UnixMilli()
 	policy := PrunePolicy{RetentionDays: 30, MaxPerTarget: 1}
 
-	if _, err := s.Save(sampleEnvelope("sntp", "pool.ntp.org", old), "test", PrunePolicy{}); err != nil {
+	if _, err := s.Save("", sampleEnvelope("sntp", "pool.ntp.org", old), "test", PrunePolicy{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Save(sampleEnvelope("sntp", "pool.ntp.org", recent), "test", policy); err != nil {
+	if _, err := s.Save("", sampleEnvelope("sntp", "pool.ntp.org", recent), "test", policy); err != nil {
 		t.Fatal(err)
 	}
 
-	got, _ := s.List("sntp", "pool.ntp.org", 0)
+	got, _ := s.List("", "sntp", "pool.ntp.org", 0)
 	if len(got) != 1 || got[0].StartedAt != recent {
 		t.Fatalf("retention prune wrong: %+v", got)
 	}
@@ -165,18 +165,18 @@ func TestPruneRetentionDays(t *testing.T) {
 
 func TestDeleteAndLabel(t *testing.T) {
 	s := testStore(t)
-	id, _ := s.Save(sampleEnvelope("whois", "x.com", 1), "test", PrunePolicy{})
-	if err := s.SetLabel(id, "baseline"); err != nil {
+	id, _ := s.Save("", sampleEnvelope("whois", "x.com", 1), "test", PrunePolicy{})
+	if err := s.SetLabel("", id, "baseline"); err != nil {
 		t.Fatal(err)
 	}
-	run, _ := s.Get(id)
+	run, _ := s.Get("", id)
 	if run.Label != "baseline" {
 		t.Fatalf("label = %q", run.Label)
 	}
-	if err := s.Delete(id); err != nil {
+	if err := s.Delete("", id); err != nil {
 		t.Fatal(err)
 	}
-	run, _ = s.Get(id)
+	run, _ = s.Get("", id)
 	if run != nil {
 		t.Fatal("run still present after delete")
 	}

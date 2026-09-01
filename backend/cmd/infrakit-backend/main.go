@@ -160,6 +160,12 @@ func main() {
 			if mcpManager != nil {
 				_ = mcpManager.Store().ClaimOrphans(adminID)
 			}
+			if orch != nil {
+				_ = orch.ClaimOrphans(adminID)
+			}
+			if store != nil {
+				_ = store.ClaimOrphans(adminID)
+			}
 		}
 		if tok := svc.SetupToken(); tok != "" {
 			fmt.Printf("SETUP-TOKEN %s\n", tok)

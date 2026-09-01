@@ -46,7 +46,7 @@ func (h *HistoryHandlers) Save(w http.ResponseWriter, r *http.Request) {
 	if v := intParam(r, "maxPerTarget", -1); v >= 0 {
 		policy.MaxPerTarget = v
 	}
-	id, err := h.Store.Save(env, h.AppVersion, policy)
+	id, err := h.Store.Save(owner(r), env, h.AppVersion, policy)
 	if err != nil {
 		apierr.Write(w, apierr.Validation(err.Error()))
 		return
@@ -59,7 +59,7 @@ func (h *HistoryHandlers) List(w http.ResponseWriter, r *http.Request) {
 	if h.unavailable(w) {
 		return
 	}
-	runs, err := h.Store.List(r.URL.Query().Get("tool"), r.URL.Query().Get("target"), intParam(r, "limit", 0))
+	runs, err := h.Store.List(owner(r), r.URL.Query().Get("tool"), r.URL.Query().Get("target"), intParam(r, "limit", 0))
 	if err != nil {
 		apierr.Write(w, apierr.Internal(err.Error()))
 		return
@@ -76,7 +76,7 @@ func (h *HistoryHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	run, err := h.Store.Get(id)
+	run, err := h.Store.Get(owner(r), id)
 	if err != nil {
 		apierr.Write(w, apierr.Internal(err.Error()))
 		return
@@ -106,13 +106,13 @@ func (h *HistoryHandlers) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Pinned != nil {
-		if err := h.Store.SetPinned(id, *body.Pinned); err != nil {
+		if err := h.Store.SetPinned(owner(r), id, *body.Pinned); err != nil {
 			apierr.Write(w, apierr.Internal(err.Error()))
 			return
 		}
 	}
 	if body.Label != nil {
-		if err := h.Store.SetLabel(id, *body.Label); err != nil {
+		if err := h.Store.SetLabel(owner(r), id, *body.Label); err != nil {
 			apierr.Write(w, apierr.Internal(err.Error()))
 			return
 		}
@@ -129,7 +129,7 @@ func (h *HistoryHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.Store.Delete(id); err != nil {
+	if err := h.Store.Delete(owner(r), id); err != nil {
 		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}

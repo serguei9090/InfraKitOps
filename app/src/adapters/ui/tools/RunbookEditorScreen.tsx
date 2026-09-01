@@ -208,6 +208,19 @@ export function RunbookEditorScreen() {
           />
           s
         </div>
+        <label
+          className="flex items-center gap-1.5 text-xs text-muted-foreground"
+          title="A real run waits for a second operator's approval (multi-user mode only)"
+        >
+          <input
+            type="checkbox"
+            className="size-3.5 accent-primary"
+            checked={!!viewedSpec.requiresApproval}
+            disabled={readOnly}
+            onChange={(e) => patchSpec({ requiresApproval: e.target.checked })}
+          />
+          needs approval
+        </label>
         <div className="flex-1" />
         <Button
           variant={dirty ? 'default' : 'ghost'}

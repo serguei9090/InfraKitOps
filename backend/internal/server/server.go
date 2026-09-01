@@ -164,6 +164,8 @@ func NewRouter(opts Options) http.Handler {
 			r.Get("/{id}/run/stream", rbh.RunStream)
 		})
 		r.Get("/runs", rbh.ListRuns)
+		r.Get("/runs/pending-approvals", rbh.PendingApprovals)
+		r.Post("/runs/{id}/approve", rbh.ApproveRun)
 		r.Get("/runs/{id}", rbh.GetRun)
 		r.Route("/ssh-nodes", func(r chi.Router) {
 			r.Get("/", rbh.ListNodes)

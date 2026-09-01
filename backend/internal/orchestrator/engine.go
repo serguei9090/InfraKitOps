@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/infrakit/backend/internal/executor"
 	"github.com/infrakit/backend/internal/sse"
+	"github.com/infrakit/backend/internal/userctx"
 )
 
 // SecretResolver resolves secrets from the calling user's vault (by
@@ -30,14 +32,73 @@ type Engine struct {
 	// reference, so a swap never affects an in-flight run.
 	semMu sync.RWMutex
 	sem   chan struct{}
+
+	// pending run approvals (U3): runID → {ch, requester}.
+	apprMu   sync.Mutex
+	approves map[int64]pendingApproval
 }
+
+type pendingApproval struct {
+	ch        chan bool
+	requester string
+}
+
+// approvalTimeout is how long a run waits for a second operator's decision.
+const approvalTimeout = 30 * time.Minute
 
 // NewEngine builds an engine with a concurrency cap.
 func NewEngine(store *Store, secrets SecretResolver, maxConcurrent int) *Engine {
-	e := &Engine{Store: store, Secrets: secrets}
+	e := &Engine{Store: store, Secrets: secrets, approves: map[int64]pendingApproval{}}
 	e.SetMaxConcurrent(maxConcurrent)
 	return e
 }
+
+// awaitRunApproval blocks until a different operator approves runID, the
+// timeout elapses, or ctx ends. Returns true only on an explicit approval.
+func (e *Engine) awaitRunApproval(ctx context.Context, runID int64, requester string) bool {
+	ch := make(chan bool, 1)
+	e.apprMu.Lock()
+	e.approves[runID] = pendingApproval{ch: ch, requester: requester}
+	e.apprMu.Unlock()
+	defer func() {
+		e.apprMu.Lock()
+		delete(e.approves, runID)
+		e.apprMu.Unlock()
+	}()
+	select {
+	case ok := <-ch:
+		return ok
+	case <-time.After(approvalTimeout):
+		return false
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// ResumeRun delivers approver's decision for a parked run. Fails if the run
+// isn't awaiting approval, or the approver is the same person who started it.
+func (e *Engine) ResumeRun(runID int64, approverID string, approved bool) error {
+	e.apprMu.Lock()
+	p, ok := e.approves[runID]
+	e.apprMu.Unlock()
+	if !ok {
+		return ErrNotFound
+	}
+	if approverID != "" && approverID == p.requester {
+		return errApproveSelf
+	}
+	select {
+	case p.ch <- approved:
+		return nil
+	default:
+		return ErrNotFound
+	}
+}
+
+var errApproveSelf = errors.New("a run must be approved by a different operator")
+
+// ErrApproveSelf is exported for the handler to map to a 403.
+func ErrApproveSelf() error { return errApproveSelf }
 
 // SetMaxConcurrent resizes the concurrency cap (0 = unlimited). Runs already in
 // flight keep their old slot; only new runs see the new limit.
@@ -176,7 +237,7 @@ func (e *Engine) BuildPreview(ctx context.Context, rb *Runbook, version int, val
 			if st.SSH != nil {
 				host = st.SSH.InlineHost
 				if st.SSH.NodeID != "" {
-					if n, err := e.Store.GetNode(st.SSH.NodeID); err == nil {
+					if n, err := e.Store.GetNode(userctx.From(ctx), st.SSH.NodeID); err == nil {
 						host = n.Host
 					}
 				}
@@ -256,13 +317,31 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 	if triggeredBy == "" {
 		triggeredBy = "local"
 	}
+	me := userctx.From(ctx)
+	needsApproval := spec.RequiresApproval && me != "" && triggeredBy != "schedule"
+	initial := StatusRunning
+	if needsApproval {
+		initial = StatusAwaitingApproval
+	}
 	run := &Run{
-		RunbookID: rb.ID, RunbookVersion: ver, Status: StatusRunning, DryRun: false,
-		TriggeredBy: triggeredBy, StartedAt: time.Now().UnixMilli(),
+		RunbookID: rb.ID, RunbookVersion: ver, Status: initial, DryRun: false,
+		TriggeredBy: triggeredBy, Owner: me, StartedAt: time.Now().UnixMilli(),
 		Args: redactArgValues(spec, values), Steps: []RunStep{},
 	}
 	runID, _ := e.Store.InsertRun(run)
 	out <- sse.Message{Event: "run-start", Data: map[string]any{"runId": runID, "steps": len(spec.Steps)}}
+
+	if needsApproval {
+		out <- sse.Message{Event: "approval-required", Data: map[string]any{"runId": runID, "requestedBy": me}}
+		ok := e.awaitRunApproval(ctx, runID, me)
+		if !ok {
+			_ = e.Store.FinishRun(runID, StatusFailed, run.Steps)
+			out <- sse.Message{Event: "run-end", Data: map[string]any{"runId": runID, "status": "cancelled", "reason": "approval denied or timed out"}}
+			return runID
+		}
+		_ = e.Store.SetRunStatus(runID, StatusRunning)
+		out <- sse.Message{Event: "approval-granted", Data: map[string]any{"runId": runID}}
+	}
 
 	overall := StatusOK
 	var prev *RunStep
@@ -314,9 +393,9 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 			cancel()
 			// Persist a host key learned on first SSH connect.
 			if st.Executor == executor.KindSSH && st.SSH != nil && st.SSH.NodeID != "" && res.HostKeyLearned && res.HostKeyFP != "" {
-				if n, err := e.Store.GetNode(st.SSH.NodeID); err == nil && n.HostKeyFP == "" {
+				if n, err := e.Store.GetNode(userctx.From(ctx), st.SSH.NodeID); err == nil && n.HostKeyFP == "" {
 					n.HostKeyFP = res.HostKeyFP
-					_, _ = e.Store.PutNode(*n)
+					_, _ = e.Store.PutNode(userctx.From(ctx), *n)
 				}
 			}
 			rs.ExitCode = res.ExitCode
@@ -389,7 +468,7 @@ func (e *Engine) buildExecutorStep(
 		t := &executor.SSHTarget{User: st.SSH.User, Sudo: st.SSH.Sudo}
 		host := st.SSH.InlineHost
 		if st.SSH.NodeID != "" {
-			n, err := e.Store.GetNode(st.SSH.NodeID)
+			n, err := e.Store.GetNode(userctx.From(ctx), st.SSH.NodeID)
 			if err != nil {
 				return executor.Step{}, "", fmt.Errorf("ssh node not found")
 			}

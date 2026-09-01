@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/infrakit/backend/internal/userctx"
 )
 
 // exportFile is one runbook on disk. Secrets are never here — only `{{VAR}}` /
@@ -33,7 +35,7 @@ func (s *Store) ExportLibrary(ctx context.Context, dir string, gitCommit, gitPus
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	rbs, err := s.ListRunbooks()
+	rbs, err := s.ListRunbooks(userctx.From(ctx))
 	if err != nil {
 		return "", err
 	}
@@ -80,12 +82,12 @@ func (s *Store) ExportLibrary(ctx context.Context, dir string, gitCommit, gitPus
 // ImportLibrary reads every `*.runbook.json` under dir and creates a runbook
 // for each (new ids; a name that collides with an existing runbook gets
 // " (imported)"). Returns how many landed.
-func (s *Store) ImportLibrary(dir string) (int, error) {
+func (s *Store) ImportLibrary(owner, dir string) (int, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return 0, err
 	}
-	existing, _ := s.ListRunbooks()
+	existing, _ := s.ListRunbooks(owner)
 	taken := map[string]bool{}
 	for _, rb := range existing {
 		if sp := rb.currentSpec(); sp != nil {
@@ -114,7 +116,7 @@ func (s *Store) ImportLibrary(dir string) (int, error) {
 			spec.Name += " (imported)"
 		}
 		taken[spec.Name] = true
-		if _, err := s.CreateRunbook(spec); err != nil {
+		if _, err := s.CreateRunbook(owner, spec); err != nil {
 			return added, err
 		}
 		added++

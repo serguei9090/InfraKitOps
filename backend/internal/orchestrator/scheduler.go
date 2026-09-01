@@ -68,7 +68,7 @@ func (s *Scheduler) loop(ctx context.Context) {
 // whose time is far in the past (so a schedule that came due while the backend
 // was down runs once, promptly, rather than being skipped or storming).
 func (s *Scheduler) reanchor() {
-	list, err := s.store.ListSchedules()
+	list, err := s.store.ListSchedules("")
 	if err != nil {
 		return
 	}
@@ -91,7 +91,7 @@ func (s *Scheduler) reanchor() {
 }
 
 func (s *Scheduler) tick(ctx context.Context, now time.Time) {
-	list, err := s.store.ListSchedules()
+	list, err := s.store.ListSchedules("")
 	if err != nil {
 		return
 	}
@@ -152,7 +152,7 @@ func (s *Scheduler) fire(ctx context.Context, sc RunSchedule) {
 	runID := s.engine.Run(runCtx, rb, sc.Version, cloneArgs(sc.Args), false, "schedule", ch)
 	close(ch)
 
-	if run, err := s.store.GetRun(runID); err == nil && run != nil {
+	if run, err := s.store.GetRun("", runID); err == nil && run != nil {
 		sc.LastStatus = run.Status
 		sc.LastRunID = runID
 	} else {
