@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSearchQueryStore } from '@/stores/searchQueryStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { ErrorToaster } from '@/adapters/ui/errors/ErrorToaster'
+import { ErrorHistoryButton } from '@/adapters/ui/errors/ErrorHistoryDrawer'
 import { AppSidebar } from './AppSidebar'
 
 /**
@@ -46,6 +47,7 @@ export function AppShellScaffold() {
               className="h-9 pl-9"
             />
           </div>
+          <ErrorHistoryButton />
           <button
             type="button"
             aria-label="Toggle theme"

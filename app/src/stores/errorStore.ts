@@ -21,13 +21,20 @@ export interface ReportOpts {
 
 interface ErrorStore {
   errors: SurfacedError[]
+  /** E3b — every reported error, newest last, capped. Not touched by dismiss/clear. */
+  history: SurfacedError[]
+  /** timestamp the history drawer was last opened — unseen = `at` after this */
+  historySeenAt: number
   /** Classify `raw` and enqueue it. No-op for aborted operations. */
   report: (raw: unknown, source?: string, opts?: ReportOpts) => AppError | null
   dismiss: (id: string) => void
   clear: () => void
+  markHistorySeen: () => void
+  clearHistory: () => void
 }
 
 const DEDUP_MS = 4000
+const HISTORY_CAP = 50
 
 function newId(): string {
   return typeof crypto?.randomUUID === 'function'
@@ -37,6 +44,8 @@ function newId(): string {
 
 export const useErrorStore = create<ErrorStore>((set, get) => ({
   errors: [],
+  history: [],
+  historySeenAt: Date.now(),
 
   report: (raw, source, opts) => {
     if (isAborted(raw)) return null
@@ -47,12 +56,18 @@ export const useErrorStore = create<ErrorStore>((set, get) => ({
     )
     if (dup) return err
     const retry = err.retryable ? opts?.retry : undefined
-    set((s) => ({ errors: [...s.errors, { ...err, id: newId(), at: now, retry }].slice(-8) }))
+    const entry: SurfacedError = { ...err, id: newId(), at: now, retry }
+    set((s) => ({
+      errors: [...s.errors, entry].slice(-8),
+      history: [...s.history, entry].slice(-HISTORY_CAP),
+    }))
     return err
   },
 
   dismiss: (id) => set((s) => ({ errors: s.errors.filter((e) => e.id !== id) })),
   clear: () => set({ errors: [] }),
+  markHistorySeen: () => set({ historySeenAt: Date.now() }),
+  clearHistory: () => set({ history: [], historySeenAt: Date.now() }),
 }))
 
 /** Convenience for non-hook call sites (e.g. inside a Zustand action). */
