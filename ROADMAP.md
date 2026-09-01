@@ -18,7 +18,7 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 | 9 | **CS** `jsrsasign` &rarr; `@peculiar/asn1-x509` ([CODE_SPLITTING_PLAN](CODE_SPLITTING_PLAN.md)) | done `65f2996` — x509Inspector rewritten on peculiar asn1 + noble hashes; 32 tests green; chunk 303KB&rarr;124KB raw | L | ✅ |
 | 10 | **S3c** settings search ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | done `a20663e` — nav search box, per-section `keywords` | M | ✅ |
 | 11 | **S3b** export / import all settings ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | done `e7d182a` — `settingsBackup.ts` + General "Backup" group; no secrets, merge-on-import | M | ✅ |
-| 12 | **S3d** keyboard-shortcut editor ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | rebind UI + persisted map | M–L | ☐ |
+| 12 | **S3d** keyboard-shortcut editor ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | done `2f7eece` — `core/shortcuts/` registry + `useShortcut` + General "Keyboard shortcuts" rebind UI; migrated ⌘S/⌘↵ | M–L | ✅ |
 | 13 | **E3c** migrate ~70 endpoints to `apierr` ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3c) | 4 batches: network read · utility power-mode · runbook sync · history | L | ☐ |
 | 14 | **E3d** error wording / i18n scaffold ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3d) | one pass over `apierr` + `PRESETS` strings; extract to one file | M | ☐ |
 | 15 | **E3e** per-source toast rate-limit ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3e) | done `c26e2b0` — >3/5s from one source → one "Multiple errors" toast; history keeps all | S | ✅ |
@@ -34,7 +34,6 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 
 ## Remaining
 
-- **#12** S3d keyboard-shortcut editor — `core/shortcuts/` registry + rebind UI (M–L)
 - **#13** E3c migrate ~70 endpoints to `apierr` — 4 batches (L grind)
 - **#14** E3d error wording / i18n scaffold — one pass, extract `PRESETS` strings (M)
 

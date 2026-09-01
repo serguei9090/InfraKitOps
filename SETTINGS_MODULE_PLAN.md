@@ -251,14 +251,17 @@ Small, mostly-frontend. Order below is by value; each is one commit.
   No per-field anchors / deep-link-to-field — menu filter only.
 - Verified: "proxy" → Network, "gemini" → AI.
 
-#### S3d — Keyboard-shortcut editor
-- Today ⌘S / ⌘↵ are hard-coded in Prompt Library + Runbooks editors.
-- `core/shortcuts/` — a registry of `{ id, label, defaultCombo, scope }` +
-  a `useShortcut(id, handler)` hook reading overrides from a local store.
-- A **General → Shortcuts** subsection: list, click-to-rebind, reset.
-- Migrate the existing hard-coded handlers to `useShortcut`.
-**DoD**: rebind "Save" to ⌘⇧S in the editor, it works, survives reload;
-conflict detection warns on a dup combo.
+#### S3d — Keyboard-shortcut editor — **DONE 2026-09-01** (`2f7eece`)
+- `core/shortcuts/shortcuts.ts` — `SHORTCUTS` (`save`=Mod+S,
+  `primaryAction`=Mod+Enter), `comboFromEvent` / `eventMatchesCombo` /
+  `formatCombo`. `stores/shortcutStore.ts` — persisted overrides,
+  `combo(id)`, `conflicts(combo, exceptId)`. `hooks/useShortcut(id, handler,
+  enabled?)`.
+- Prompt Library + Runbook editor: the hard-coded keydown effects → two
+  `useShortcut` calls each.
+- **General → "Keyboard shortcuts"**: list, click-to-rebind (capture next
+  combo, Esc cancels), amber conflict warning, per-row + reset-all.
+- Verified: rebind Save → Ctrl+Shift+S, persists, resets.
 
 #### S3e — Cross-device sync — **stays deferred**
 Needs the account / auth layer that doesn't exist. When it does: the S3b
