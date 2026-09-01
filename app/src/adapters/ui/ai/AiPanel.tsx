@@ -48,7 +48,7 @@ export function AiPanel({
   const refreshSettings = useLlmStore((s) => s.refreshSettings)
 
   const task = useMemo(() => tasks.find((t) => t.id === taskId), [tasks, taskId])
-  const { running, text, parsed, error, usage, run, reset } = useLlm(taskId)
+  const { running, text, parsed, error, usage, run, reset, cancel } = useLlm(taskId)
 
   const [connId, setConnId] = useState('')
   const [model, setModel] = useState('')
@@ -222,9 +222,16 @@ export function AiPanel({
               placeholder={task?.inputLabel ?? 'Message… (⌘/Ctrl+Enter)'}
               className="min-h-9 flex-1 resize-y text-xs"
             />
-            <Button size="xs" onClick={sendChat} disabled={!connId || !model || !input.trim() || running}>
-              {running ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-            </Button>
+            {running ? (
+              <Button size="xs" variant="outline" onClick={cancel} aria-label="Stop">
+                <Loader2 className="size-3.5 animate-spin" />
+                <X className="size-3.5" />
+              </Button>
+            ) : (
+              <Button size="xs" onClick={sendChat} disabled={!connId || !model || !input.trim()} aria-label="Send">
+                <Send className="size-3.5" />
+              </Button>
+            )}
           </div>
           {turns.length > 0 && !running && (
             <Button
@@ -249,10 +256,17 @@ export function AiPanel({
             className="min-h-9 resize-y text-xs"
           />
           <div className="flex items-center gap-2">
-            <Button size="xs" onClick={runOnce} disabled={!connId || !model || running}>
-              {running ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-              {running ? 'Running…' : 'Run'}
-            </Button>
+            {running ? (
+              <Button size="xs" variant="outline" onClick={cancel}>
+                <Loader2 className="size-3.5 animate-spin" />
+                Stop
+              </Button>
+            ) : (
+              <Button size="xs" onClick={runOnce} disabled={!connId || !model}>
+                <Sparkles className="size-3.5" />
+                Run
+              </Button>
+            )}
             {(text || error) && !running && (
               <Button size="xs" variant="ghost" onClick={reset}>
                 Clear

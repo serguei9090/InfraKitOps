@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { RotateCcw, Send } from 'lucide-react'
+import { Loader2, RotateCcw, Send, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -16,6 +16,7 @@ export function PlaygroundView() {
   const chat = useLlmStore((s) => s.chat)
   const startChat = useLlmStore((s) => s.startChat)
   const sendMessage = useLlmStore((s) => s.sendMessage)
+  const stopChat = useLlmStore((s) => s.stopChat)
   const resetChat = useLlmStore((s) => s.resetChat)
 
   const [connId, setConnId] = useState('')
@@ -147,9 +148,16 @@ export function PlaygroundView() {
             placeholder="Message…  (⌘/Ctrl + Enter to send)"
             className="max-h-40 min-h-10 flex-1 resize-y text-sm"
           />
-          <Button size="sm" disabled={!connId || !model || !draft.trim() || chat?.busy} onClick={send}>
-            <Send className="size-4" />
-          </Button>
+          {chat?.busy ? (
+            <Button size="sm" variant="outline" onClick={() => stopChat()} aria-label="Stop">
+              <Loader2 className="size-4 animate-spin" />
+              <X className="size-4" />
+            </Button>
+          ) : (
+            <Button size="sm" disabled={!connId || !model || !draft.trim()} onClick={send} aria-label="Send">
+              <Send className="size-4" />
+            </Button>
+          )}
         </div>
       </div>
     </div>

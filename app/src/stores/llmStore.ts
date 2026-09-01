@@ -50,6 +50,8 @@ interface LlmStore {
 
   startChat: (connId: string, model: string) => void
   sendMessage: (text: string) => void
+  /** abort an in-flight reply, keeping whatever streamed so far */
+  stopChat: () => void
   resetChat: () => void
 }
 
@@ -192,18 +194,23 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
             const last = turns.length - 1
             if (last < 0) return s
             const cur = { ...turns[last] }
+            let done = false
             if (name === 'delta') cur.content += (d.text as string) ?? ''
             else if (name === 'end') {
               cur.state = 'done'
               const u = d.usage as TokenUsage | undefined
               if (u) cur.usage = u
+              done = true
             } else if (name === 'error') {
               cur.state = 'error'
               cur.error = (d.error as string) ?? 'chat failed'
+              done = true
             }
             turns[last] = cur
-            const stillBusy = name === 'delta'
-            return { chat: { ...s.chat, turns, busy: stillBusy } }
+            // Stay busy through the whole stream (incl. the gap before the
+            // first delta) so the Stop button is available — only `end`/`error`
+            // ends it.
+            return { chat: { ...s.chat, turns, busy: !done } }
           })
         },
         onClose: () => set((s) => (s.chat ? { chat: { ...s.chat, busy: false } } : s)),
@@ -218,6 +225,21 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
       },
     )
     set((s) => (s.chat ? { chat: { ...s.chat, abort } } : s))
+  },
+
+  stopChat: () => {
+    const c = get().chat
+    if (!c || !c.busy) return
+    c.abort()
+    set((s) => {
+      if (!s.chat) return s
+      const turns = [...s.chat.turns]
+      const last = turns.length - 1
+      if (last >= 0 && turns[last].state === 'streaming') {
+        turns[last] = { ...turns[last], state: 'done' }
+      }
+      return { chat: { ...s.chat, turns, busy: false } }
+    })
   },
 
   resetChat: () => {
