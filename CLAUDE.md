@@ -330,8 +330,13 @@ Assistant.
   2026-09-01**: `Task.Tools []string` (server ids / `["all"]`),
   `TaskRunStream` merges it, `TaskDialog` "MCP tools" checkboxes, `useLlm`
   tracks `steps[]` + `resume()`, `<AiPanel>` renders `<ToolSteps>` in both
-  modes. Built-ins ship tool-free; user opts a task in. **A4e deferred**
-  (tool transcript in saved convos, cost accounting, `list_changed` refresh).
+  modes. Built-ins ship tool-free; user opts a task in. **A4e done
+  2026-09-01** (`e690581`/`2ff4522`/`455bc8a`): `list_changed` cache drop ·
+  tool transcript + token totals in saved chats · per-server `ServerStatus`
+  (connected/toolCount/lastError) in McpView. **A4 complete** bar MCP
+  resources/prompts. Two Gemini tool-calling bugs fixed live: `geminiSchema()`
+  strips `$schema`/`additionalProperties` from MCP schemas (`ddcc1dc`);
+  `ToolCall.Signature` echoes Gemini's `thoughtSignature` (`5176918`).
   Lets the model look up commands/docs not in its training (Context7, web
   search). Note: Knowledge Hub's `McpServersScreen` is just a link list,
   unrelated.
