@@ -136,8 +136,60 @@ export class PromptRepository implements IPromptRepository {
   }
 }
 
-let cached: PromptRepository | null = null
+let cachedLocal: PromptRepository | null = null
+let cachedBackend: IPromptRepository | null = null
+
+/**
+ * Picks the repo per call by auth mode: multi-user → the server-side repo so
+ * prompts follow the user across devices and can be published; single-user →
+ * the local `IStoragePort` repo (unchanged). A dynamic import keeps the
+ * backend adapter out of the client-only bundle path.
+ */
 export function createPromptRepository(): IPromptRepository {
-  if (!cached) cached = new PromptRepository(createStoragePort())
-  return cached
+  return new ModeAwarePromptRepository()
+}
+
+class ModeAwarePromptRepository implements IPromptRepository {
+  private local(): PromptRepository {
+    if (!cachedLocal) cachedLocal = new PromptRepository(createStoragePort())
+    return cachedLocal
+  }
+
+  private async pick(): Promise<IPromptRepository> {
+    // Lazy so this file has no static dep on the auth store / backend client.
+    const { useAuthStore } = await import('@/stores/authStore')
+    if (useAuthStore.getState().mode === 'on') {
+      if (!cachedBackend) {
+        const { BackendPromptRepository } = await import('@/adapters/backend/promptClient')
+        cachedBackend = new BackendPromptRepository()
+      }
+      return cachedBackend
+    }
+    return this.local()
+  }
+
+  async loadLibrary() {
+    return (await this.pick()).loadLibrary()
+  }
+  async savePrompt(p: Parameters<IPromptRepository['savePrompt']>[0]) {
+    return (await this.pick()).savePrompt(p)
+  }
+  async deletePrompt(id: string) {
+    return (await this.pick()).deletePrompt(id)
+  }
+  async saveFolder(f: Parameters<IPromptRepository['saveFolder']>[0]) {
+    return (await this.pick()).saveFolder(f)
+  }
+  async deleteFolder(id: string, orphanTo: 'unfiled' | 'delete') {
+    return (await this.pick()).deleteFolder(id, orphanTo)
+  }
+  async listUserTemplates() {
+    return (await this.pick()).listUserTemplates()
+  }
+  async saveUserTemplate(t: Parameters<IPromptRepository['saveUserTemplate']>[0]) {
+    return (await this.pick()).saveUserTemplate(t)
+  }
+  async deleteUserTemplate(id: string) {
+    return (await this.pick()).deleteUserTemplate(id)
+  }
 }

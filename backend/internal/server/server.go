@@ -16,6 +16,7 @@ import (
 	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/mcp"
 	"github.com/infrakit/backend/internal/orchestrator"
+	"github.com/infrakit/backend/internal/promptstore"
 	"github.com/infrakit/backend/internal/vault"
 )
 
@@ -53,6 +54,9 @@ type Options struct {
 	LLMHistory *llm.History
 	// LLMUsage aggregates token counts (A3c). Nil → /llm/usage 503.
 	LLMUsage *llm.UsageStore
+	// Prompts is the server-side Prompt Library store (U4). Only set in
+	// multi-user mode; nil → /prompts* 503 and the client keeps its local repo.
+	Prompts *promptstore.Store
 }
 
 // NewRouter returns the fully wired API handler.
@@ -80,6 +84,7 @@ func NewRouter(opts Options) http.Handler {
 		History: opts.LLMHistory, Usage: opts.LLMUsage,
 	}
 	mh := &api.MCPHandlers{Manager: opts.MCP}
+	ph := &api.PromptHandlers{Store: opts.Prompts}
 	ah := &api.AuthHandlers{
 		Service: opts.Auth,
 		UserOf:  func(r *http.Request) *auth.User { return UserFrom(r.Context()) },
@@ -107,6 +112,20 @@ func NewRouter(opts Options) http.Handler {
 				r.Delete("/{id}", ah.DeleteUser)
 			})
 			r.Get("/audit", ah.ListAudit)
+
+			if opts.Prompts != nil {
+				r.Route("/prompts", func(r chi.Router) {
+					r.Get("/library", ph.Library)
+					r.Get("/templates", ph.Templates)
+					r.Put("/templates/{id}", ph.SaveTemplate)
+					r.Delete("/templates/{id}", ph.DeleteTemplate)
+					r.Put("/folders/{id}", ph.SaveFolder)
+					r.Delete("/folders/{id}", ph.DeleteFolder)
+					r.Put("/{id}", ph.SavePrompt)
+					r.Delete("/{id}", ph.DeletePrompt)
+					r.Post("/{id}/publish", ph.Publish)
+				})
+			}
 		}
 		r.Get("/capabilities", api.Capabilities)
 		r.Get("/interfaces", api.Interfaces)

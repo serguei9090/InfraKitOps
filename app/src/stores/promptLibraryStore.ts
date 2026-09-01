@@ -357,6 +357,7 @@ export const usePromptLibraryStore = create<PromptLibraryState>((set, get) => {
     },
 
     deleteFolder(id, orphanTo) {
+      const orphaned = get().prompts.filter((p) => p.folderId === id)
       set((s) => ({
         folders: s.folders.filter((f) => f.id !== id),
         prompts:
@@ -370,6 +371,11 @@ export const usePromptLibraryStore = create<PromptLibraryState>((set, get) => {
             : s.selectedPromptId,
       }))
       void repo.deleteFolder(id, orphanTo)
+      // The server-side repo can't re-parent blobs itself — persist the
+      // survivors explicitly (a redundant no-op for the local repo).
+      if (orphanTo === 'unfiled') {
+        for (const p of orphaned) void repo.savePrompt({ ...p, folderId: null })
+      }
     },
   }
 })

@@ -32,6 +32,7 @@ import (
 	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/mcp"
 	"github.com/infrakit/backend/internal/orchestrator"
+	"github.com/infrakit/backend/internal/promptstore"
 	"github.com/infrakit/backend/internal/server"
 	"github.com/infrakit/backend/internal/tools/iperf"
 	"github.com/infrakit/backend/internal/vault"
@@ -98,8 +99,17 @@ func main() {
 	var mcpManager *mcp.Manager
 	var llmHistory *llm.History
 	var llmUsage *llm.UsageStore
+	var promptStore *promptstore.Store
 	if llmStore != nil {
 		defer llmStore.Close()
+
+		if *authMode == "on" {
+			if ps, err := promptstore.New(llmStore.DB()); err != nil {
+				log.Printf("prompts: %v (server-side prompt library disabled)", err)
+			} else {
+				promptStore = ps
+			}
+		}
 		var secrets llm.SecretResolver
 		if vlt != nil {
 			secrets = vlt.Resolver()
@@ -166,6 +176,9 @@ func main() {
 			if store != nil {
 				_ = store.ClaimOrphans(adminID)
 			}
+			if promptStore != nil {
+				_ = promptStore.ClaimOrphans(adminID)
+			}
 		}
 		if tok := svc.SetupToken(); tok != "" {
 			fmt.Printf("SETUP-TOKEN %s\n", tok)
@@ -199,6 +212,7 @@ func main() {
 		MCP:           mcpManager,
 		LLMHistory:    llmHistory,
 		LLMUsage:      llmUsage,
+		Prompts:       promptStore,
 		AppVersion:    api.Version,
 		HistoryPolicy: history.PrunePolicy{
 			RetentionDays: *retentionDays,

@@ -118,6 +118,8 @@ func moduleOf(path string) string {
 	switch {
 	case strings.HasPrefix(p, "/llm") || strings.HasPrefix(p, "/mcp"):
 		return "ai"
+	case strings.HasPrefix(p, "/prompts"):
+		return "prompt"
 	case strings.HasPrefix(p, "/runbooks") || strings.HasPrefix(p, "/runs") ||
 		strings.HasPrefix(p, "/ssh-nodes") || strings.HasPrefix(p, "/runbook-") ||
 		strings.HasPrefix(p, "/packages") || strings.HasPrefix(p, "/library"):
