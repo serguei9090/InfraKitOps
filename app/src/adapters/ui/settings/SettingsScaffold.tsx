@@ -1,3 +1,5 @@
+import { useMemo, useState } from 'react'
+import { Search } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { DEFAULT_SECTION, SETTINGS_SECTIONS } from './registry'
@@ -10,15 +12,36 @@ import { DEFAULT_SECTION, SETTINGS_SECTIONS } from './registry'
 export function SettingsScaffold() {
   const { section } = useParams()
   const navigate = useNavigate()
+  const [q, setQ] = useState('')
   const activeId = SETTINGS_SECTIONS.some((s) => s.id === section) ? section! : DEFAULT_SECTION
   const active = SETTINGS_SECTIONS.find((s) => s.id === activeId)!
+
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    if (!needle) return SETTINGS_SECTIONS
+    return SETTINGS_SECTIONS.filter(
+      (s) =>
+        s.label.toLowerCase().includes(needle) ||
+        (s.keywords ?? []).some((k) => k.includes(needle)),
+    )
+  }, [q])
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl">
       <nav className="w-48 shrink-0 border-r border-border/60 p-3">
         <h1 className="mb-3 px-2 text-[15px] font-semibold tracking-tight">Settings</h1>
+        <div className="relative mb-2">
+          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search…"
+            className="h-7 w-full rounded-md border border-border/60 bg-transparent pl-7 pr-2 text-xs outline-none focus:border-primary/50"
+          />
+        </div>
         <ul className="flex flex-col gap-0.5">
-          {SETTINGS_SECTIONS.map((s) => (
+          {shown.length === 0 && <li className="px-2 py-2 text-xs text-muted-foreground">No match.</li>}
+          {shown.map((s) => (
             <li key={s.id}>
               <button
                 type="button"

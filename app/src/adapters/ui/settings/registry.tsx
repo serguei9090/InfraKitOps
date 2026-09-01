@@ -14,6 +14,8 @@ export interface SettingsSectionDef {
   icon: LucideIcon
   /** `local` = client IStoragePort · `global` = backend · `info` = read-only */
   scope: 'local' | 'global' | 'info'
+  /** extra terms the settings search matches against (S3c) */
+  keywords?: string[]
   element: ReactNode
 }
 
@@ -23,12 +25,47 @@ export interface SettingsSectionDef {
  * Network sections land in later phases (SETTINGS_MODULE_PLAN.md §6).
  */
 export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
-  { id: 'general', label: 'General', icon: SlidersHorizontal, scope: 'local', element: <GeneralSettings /> },
-  { id: 'ai', label: 'AI', icon: Sparkles, scope: 'global', element: <AiSettings /> },
-  { id: 'runbooks', label: 'Runbooks', icon: SquareTerminal, scope: 'global', element: <RunbookSettings /> },
-  { id: 'network', label: 'Network', icon: Network, scope: 'local', element: <NetworkSettings /> },
-  { id: 'backend', label: 'Backend', icon: Server, scope: 'info', element: <BackendSettings /> },
-  { id: 'about', label: 'About', icon: Info, scope: 'info', element: <AboutSettings /> },
+  {
+    id: 'general',
+    label: 'General',
+    icon: SlidersHorizontal,
+    scope: 'local',
+    keywords: ['theme', 'dark', 'light', 'appearance', 'sidebar', 'rail', 'module', 'order', 'hide', 'reorder'],
+    element: <GeneralSettings />,
+  },
+  {
+    id: 'ai',
+    label: 'AI',
+    icon: Sparkles,
+    scope: 'global',
+    keywords: ['llm', 'model', 'connection', 'provider', 'openai', 'anthropic', 'gemini', 'ollama', 'prompt', 'task', 'temperature', 'default'],
+    element: <AiSettings />,
+  },
+  {
+    id: 'runbooks',
+    label: 'Runbooks',
+    icon: SquareTerminal,
+    scope: 'global',
+    keywords: ['history', 'retention', 'concurrent', 'vault', 'auto-lock', 'autolock', 'execution'],
+    element: <RunbookSettings />,
+  },
+  {
+    id: 'network',
+    label: 'Network',
+    icon: Network,
+    scope: 'local',
+    keywords: ['proxy', 'dns', 'interface', 'timeout', 'retry', 'geo', 'maxmind', 'ipv4', 'ipv6'],
+    element: <NetworkSettings />,
+  },
+  {
+    id: 'backend',
+    label: 'Backend',
+    icon: Server,
+    scope: 'info',
+    keywords: ['sidecar', 'service', 'endpoint', 'token', 'reconnect', 'status', 'capabilities'],
+    element: <BackendSettings />,
+  },
+  { id: 'about', label: 'About', icon: Info, scope: 'info', keywords: ['version', 'license', 'plan'], element: <AboutSettings /> },
 ]
 
 export const DEFAULT_SECTION = 'general'
