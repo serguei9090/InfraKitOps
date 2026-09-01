@@ -299,6 +299,18 @@ Assistant.
   (`AssistantView`, `runbook.assistant` task, chat grounded on the spec) +
   editor "Generate step" (`runbook.gen-step` → append) + per-`StepCard`
   "Explain" (`command.explain`).
+- **AI Stop** (2026-09-01): `AiPanel` + Playground get a Stop button while
+  generating (`useLlm.cancel` / new `llmStore.stopChat`); `llmStore` `busy`
+  stays true for the whole stream so Stop shows during model spin-up too.
+- **A3 planned** (`AI_MODULE_PLAN.md` §A3): history persistence, token/cost,
+  embeddings, reliability. **A4 = MCP tools + tool-calling** — own plan
+  [`AI_MCP_PLAN.md`](AI_MCP_PLAN.md) (not started): `internal/mcp/` on the
+  official `modelcontextprotocol/go-sdk` (first new backend dep since the LLM
+  module), agent loop in `internal/llm/agent.go`, stdio+http transports,
+  auto-run read-only tools / confirm writes, per-task opt-in + Playground
+  toggle. Lets the model look up commands/docs not in its training (Context7,
+  web search). Note: Knowledge Hub's `McpServersScreen` is just a link list,
+  unrelated.
 ### Settings module (started 2026-08-31, S0–S2 done)
 
 `/settings` page (`adapters/ui/settings/`) — replaces the old rearrange-only

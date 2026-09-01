@@ -43,7 +43,7 @@ small mechanical change" rule.
 | Transport | JSON + **SSE** for streaming, matching the rest of `/api/v1`. |
 | Go deps | **Target zero.** All four providers are `net/http` + `encoding/json`; SSE-response parsing is hand-rolled (the pattern already exists in `internal/sse` consumers). |
 | Conversation history | Playground conversations are **ephemeral** in A0. Persisted history → A3. |
-| Tool / function calling | **Deferred to A3.** A0–A2 are text-in / text-out (+ structured output via response parsing). |
+| Tool / function calling | A0–A2 are text-in / text-out. Tool use + MCP clients + the agent loop → **A4, [`AI_MCP_PLAN.md`](AI_MCP_PLAN.md)** (adds one backend dep: `modelcontextprotocol/go-sdk`). |
 
 No open questions block A0.
 
@@ -412,22 +412,15 @@ Library's `diffWordsWithSpace` view).
 Each sub-phase is independently useful; **A3b (history) is the one with the
 clearest user pull**, do it first unless a module concretely needs tools.
 
-#### A3a — Tool / function-calling passthrough
-- `internal/llm/model.go` — `ChatRequest.Tools []ToolSpec` (name, description,
-  JSON-schema params) + `ChatMessage` gains `ToolCalls` / `ToolCallID` /
-  `role: "tool"`. `Delta` gains `ToolCallDelta`.
-- Per-adapter wire mapping (all 4 already have the request/response shapes
-  documented in §4): OpenAI `tools`/`tool_calls`, Anthropic `tools` +
-  `tool_use`/`tool_result` blocks, Gemini `functionDeclarations` /
-  `functionCall`, Ollama `tools` (newer models only — degrade gracefully:
-  `Provider.SupportsTools()` gate).
-- **No agent loop in the engine.** The engine streams tool-call deltas to the
-  caller; the *caller* (a module) executes the tool and sends the result back
-  as a follow-up turn. Keeps the engine thin (§6.5 rationale — no SDK).
-- First consumer: a Runbooks "assistant can propose running a step" flow, or
-  Network "assistant can call a diagnostic tool" — pick when building.
-**DoD**: a unit test drives a 2-turn tool exchange against a mock provider for
-each adapter; one real module wires one tool. Commits: 1–2.
+#### A3a — Tool / function-calling passthrough → **folded into A4 (MCP)**
+The tool-calling primitives (`ChatRequest.Tools`, per-adapter wire mapping,
+`role:"tool"` messages) are now A4b in **[`AI_MCP_PLAN.md`](AI_MCP_PLAN.md)**.
+Decision reversed there: the engine **does** run the agent loop (calling MCP
+tools and feeding results back), because the concrete driver turned out to be
+"let the model look things up" (web search / Context7 for commands & docs not
+in training) — a loop, not a one-shot passthrough. `AI_MCP_PLAN.md` §2 has
+the resolved decisions (official `modelcontextprotocol/go-sdk`, stdio+http,
+auto read-only / confirm writes, per-task opt-in).
 
 #### A3b — Conversation history persistence (opt-in)
 - `llm.db` — `llm_conversation` (id, title, taskId?, connId, createdAt,
@@ -485,6 +478,14 @@ respects the cap; abort mid-stream closes the upstream connection (verified in
 Multi-provider fallback/routing policy · a real agent-framework SDK (§6.5 — only
 if agentic loops become central) · fine-tune / batch APIs · image/audio
 modalities.
+
+### A4 — MCP tools & tool-calling → **[`AI_MCP_PLAN.md`](AI_MCP_PLAN.md)**
+
+Model calls tools mid-answer (web search, Context7 docs, filesystem…) to
+ground on things outside its training — a new CLI flag, current API docs.
+Own plan doc (2026-09-01). Backend `internal/mcp/` on the official
+`modelcontextprotocol/go-sdk`, agent loop in `internal/llm/agent.go`, "MCP"
+section in AI Hub, per-task opt-in. Supersedes A3a.
 
 ---
 
