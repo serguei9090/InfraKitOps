@@ -28,39 +28,62 @@ type Manager struct {
 
 	statusMu sync.Mutex
 	status   map[string]*ServerStatus
+
+	// dial builds the SDK transport for a server. Defaults to m.transport;
+	// overridden in tests to inject an in-memory transport.
+	dial func(ServerConfig) (sdk.Transport, error)
 }
 
 type conn struct {
 	session *sdk.ClientSession
 	cancel  context.CancelFunc
-	tools   []ToolSpec
-	at      time.Time
+
+	tools []ToolSpec
+	at    time.Time // tools cache stamp
+
+	resources []ResourceSpec
+	templates []ResourceTemplateSpec
+	prompts   []PromptSpec
+	rpAt      time.Time // resources+prompts cache stamp
 }
 
 // ServerStatus is the last-known health of one server (A4e-3).
 type ServerStatus struct {
-	Connected   bool   `json:"connected"`
-	ToolCount   int    `json:"toolCount"`
-	ConnectedAt int64  `json:"connectedAt,omitempty"`
-	LastError   string `json:"lastError,omitempty"`
-	LastErrorAt int64  `json:"lastErrorAt,omitempty"`
+	Connected     bool   `json:"connected"`
+	ToolCount     int    `json:"toolCount"`
+	ResourceCount int    `json:"resourceCount,omitempty"`
+	PromptCount   int    `json:"promptCount,omitempty"`
+	ConnectedAt   int64  `json:"connectedAt,omitempty"`
+	LastError     string `json:"lastError,omitempty"`
+	LastErrorAt   int64  `json:"lastErrorAt,omitempty"`
 }
 
 // NewManager builds a manager. secrets may be nil (then {{secret:}} refs and
 // http auth fail with a clear error).
 func NewManager(store *Store, secrets SecretResolver, version string) *Manager {
-	return &Manager{
+	m := &Manager{
 		store:   store,
 		secrets: secrets,
 		impl:    &sdk.Implementation{Name: "infrakit-studio", Version: version},
 		conns:   map[string]*conn{},
 		status:  map[string]*ServerStatus{},
 	}
+	m.dial = m.transport
+	return m
 }
 
 func (m *Manager) markOK(id string, tools int) {
 	m.statusMu.Lock()
 	m.status[id] = &ServerStatus{Connected: true, ToolCount: tools, ConnectedAt: time.Now().UnixMilli()}
+	m.statusMu.Unlock()
+}
+
+func (m *Manager) markRP(id string, resources, prompts int) {
+	m.statusMu.Lock()
+	if s := m.status[id]; s != nil {
+		s.ResourceCount = resources
+		s.PromptCount = prompts
+	}
 	m.statusMu.Unlock()
 }
 
@@ -118,7 +141,7 @@ func (m *Manager) Connect(ctx context.Context, id string) ([]ToolSpec, error) {
 	}
 	m.mu.Unlock()
 
-	tr, err := m.transport(*cfg)
+	tr, err := m.dial(*cfg)
 	if err != nil {
 		e := apierr.Validation(err.Error())
 		m.markErr(id, e)
@@ -132,14 +155,24 @@ func (m *Manager) Connect(ctx context.Context, id string) ([]ToolSpec, error) {
 
 	// A4e-1: when the server announces its tool list changed, drop our cache so
 	// the next Tools()/AggregateTools() re-lists instead of waiting out the TTL.
+	dropToolCache := func() {
+		m.mu.Lock()
+		if cc := m.conns[id]; cc != nil {
+			cc.at = time.Time{}
+		}
+		m.mu.Unlock()
+	}
+	dropRPCache := func() {
+		m.mu.Lock()
+		if cc := m.conns[id]; cc != nil {
+			cc.rpAt = time.Time{}
+		}
+		m.mu.Unlock()
+	}
 	client := sdk.NewClient(m.impl, &sdk.ClientOptions{
-		ToolListChangedHandler: func(context.Context, *sdk.ToolListChangedRequest) {
-			m.mu.Lock()
-			if cc := m.conns[id]; cc != nil {
-				cc.at = time.Time{}
-			}
-			m.mu.Unlock()
-		},
+		ToolListChangedHandler:     func(context.Context, *sdk.ToolListChangedRequest) { dropToolCache() },
+		ResourceListChangedHandler: func(context.Context, *sdk.ResourceListChangedRequest) { dropRPCache() },
+		PromptListChangedHandler:   func(context.Context, *sdk.PromptListChangedRequest) { dropRPCache() },
 	})
 	session, err := client.Connect(dialCtx, tr, nil)
 	if err != nil {

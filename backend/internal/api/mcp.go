@@ -129,3 +129,88 @@ func (h *MCPHandlers) ListTools(w http.ResponseWriter, r *http.Request) {
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"tools": tools})
 }
+
+// ListResources: GET /mcp/resources — aggregated across enabled servers (A4f).
+func (h *MCPHandlers) ListResources(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 75*time.Second)
+	defer cancel()
+	res, tmpl, err := h.Manager.AggregateResources(ctx)
+	if err != nil {
+		mcpErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"resources": res, "templates": tmpl})
+}
+
+// ReadResource: POST /mcp/resources/read { server, uri } (A4f).
+func (h *MCPHandlers) ReadResource(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var b struct {
+		Server string `json:"server"`
+		URI    string `json:"uri"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	if b.Server == "" || b.URI == "" {
+		apierr.Write(w, apierr.Validation("server and uri are required"))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 75*time.Second)
+	defer cancel()
+	out, err := h.Manager.ReadResource(ctx, b.Server, b.URI)
+	if err != nil {
+		mcpErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, out)
+}
+
+// ListPrompts: GET /mcp/prompts — aggregated across enabled servers (A4f).
+func (h *MCPHandlers) ListPrompts(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 75*time.Second)
+	defer cancel()
+	prompts, err := h.Manager.AggregatePrompts(ctx)
+	if err != nil {
+		mcpErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"prompts": prompts})
+}
+
+// GetPrompt: POST /mcp/prompts/get { server, name, args } (A4f).
+func (h *MCPHandlers) GetPrompt(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var b struct {
+		Server string            `json:"server"`
+		Name   string            `json:"name"`
+		Args   map[string]string `json:"args"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	if b.Server == "" || b.Name == "" {
+		apierr.Write(w, apierr.Validation("server and name are required"))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 75*time.Second)
+	defer cancel()
+	out, err := h.Manager.GetPrompt(ctx, b.Server, b.Name, b.Args)
+	if err != nil {
+		mcpErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, out)
+}

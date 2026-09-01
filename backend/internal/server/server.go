@@ -182,6 +182,10 @@ func NewRouter(opts Options) http.Handler {
 			r.Delete("/servers/{id}", mh.DeleteServer)
 			r.Post("/servers/{id}/test", mh.TestServer)
 			r.Get("/tools", mh.ListTools)
+			r.Get("/resources", mh.ListResources)
+			r.Post("/resources/read", mh.ReadResource)
+			r.Get("/prompts", mh.ListPrompts)
+			r.Post("/prompts/get", mh.GetPrompt)
 		})
 
 		r.Route("/vault", func(r chi.Router) {

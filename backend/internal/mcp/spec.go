@@ -89,6 +89,75 @@ type ToolResult struct {
 	Truncated bool   `json:"truncated,omitempty"`
 }
 
+// --- resources & prompts (A4f) ------------------------------------------
+// See MCP_RESOURCES_PROMPTS_PLAN.md. Resources are user-attached context;
+// prompts are server-authored templates. Neither is model-invoked.
+
+// ResourceSpec is a concrete resource discovered on a server.
+type ResourceSpec struct {
+	Server      string `json:"server"`
+	ServerName  string `json:"serverName"`
+	URI         string `json:"uri"`
+	Name        string `json:"name"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	MIMEType    string `json:"mimeType,omitempty"`
+	Size        int64  `json:"size,omitempty"`
+}
+
+// ResourceTemplateSpec is a URI-templated resource (e.g. file:///{path}).
+type ResourceTemplateSpec struct {
+	Server      string `json:"server"`
+	ServerName  string `json:"serverName"`
+	URITemplate string `json:"uriTemplate"`
+	Name        string `json:"name"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	MIMEType    string `json:"mimeType,omitempty"`
+}
+
+// ResourceContent is one sub-resource returned by resources/read (text only).
+type ResourceContent struct {
+	URI      string `json:"uri"`
+	MIMEType string `json:"mimeType,omitempty"`
+	Text     string `json:"text"`
+}
+
+// ResourceRead is the flattened outcome of resources/read.
+type ResourceRead struct {
+	Contents  []ResourceContent `json:"contents"`
+	Truncated bool              `json:"truncated,omitempty"`
+}
+
+// PromptArgSpec describes one templated argument of a prompt.
+type PromptArgSpec struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+}
+
+// PromptSpec is a prompt template discovered on a server.
+type PromptSpec struct {
+	Server      string          `json:"server"`
+	ServerName  string          `json:"serverName"`
+	Name        string          `json:"name"`
+	Title       string          `json:"title,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Arguments   []PromptArgSpec `json:"arguments,omitempty"`
+}
+
+// PromptMessage is one message of a rendered prompt (text flattened).
+type PromptMessage struct {
+	Role string `json:"role"`
+	Text string `json:"text"`
+}
+
+// PromptResult is the flattened outcome of prompts/get.
+type PromptResult struct {
+	Description string          `json:"description,omitempty"`
+	Messages    []PromptMessage `json:"messages"`
+}
+
 // maxResultBytes caps a tool result so a chatty tool can't blow the model
 // context or the SSE. See AI_MCP_PLAN.md §3.1.
 const maxResultBytes = 32 << 10
