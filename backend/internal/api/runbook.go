@@ -50,7 +50,7 @@ func (h *RunbookHandlers) ok() bool { return h != nil && h.Store != nil && h.Eng
 
 func (h *RunbookHandlers) guard(w http.ResponseWriter) bool {
 	if !h.ok() {
-		WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "runbooks store unavailable"})
+		apierr.Write(w, apierr.Unavailable("the runbooks store"))
 		return false
 	}
 	return true
@@ -253,12 +253,12 @@ func (h *RunbookHandlers) Preview(w http.ResponseWriter, r *http.Request) {
 // RunStream: GET /runbooks/{id}/run/stream?version=&dryRun=&args=<url-encoded json>
 func (h *RunbookHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 	if !h.ok() {
-		sse.Reject(w, "runbooks store unavailable")
+		sse.RejectCoded(w, string(apierr.CodeInternal), "the runbooks store is not available", "")
 		return
 	}
 	rb, err := h.Store.GetRunbook(chi.URLParam(r, "id"))
 	if err != nil {
-		sse.Reject(w, "runbook not found")
+		sse.RejectCoded(w, string(apierr.CodeNotFound), "runbook not found", "")
 		return
 	}
 	q := r.URL.Query()
@@ -268,7 +268,7 @@ func (h *RunbookHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 	var args map[string]string
 	if raw := q.Get("args"); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &args); err != nil {
-			sse.Reject(w, "bad args json")
+			sse.RejectCoded(w, string(apierr.CodeValidation), "bad args json", "")
 			return
 		}
 	}
@@ -458,7 +458,7 @@ func (h *RunbookHandlers) PackagesInstall(w http.ResponseWriter, r *http.Request
 	tool := r.URL.Query().Get("tool")
 	mgr := r.URL.Query().Get("manager")
 	if tool == "" || mgr == "" {
-		sse.Reject(w, "tool and manager are required")
+		sse.RejectCoded(w, string(apierr.CodeValidation), "tool and manager are required", "")
 		return
 	}
 	sw, err := sse.New(w)
@@ -472,7 +472,7 @@ func (h *RunbookHandlers) PackagesInstall(w http.ResponseWriter, r *http.Request
 		defer close(ch)
 		lw := &lineToSSE{ch: ch}
 		if err := packages.RunInstall(ctx, mgr, tool, lw); err != nil {
-			ch <- sse.Message{Event: "error", Data: map[string]string{"error": err.Error()}}
+			ch <- sse.Message{Event: "error", Data: map[string]string{"error": err.Error(), "code": string(apierr.CodeInternal)}}
 			return
 		}
 		ch <- sse.Message{Event: "done", Data: map[string]string{"status": "ok"}}

@@ -81,6 +81,14 @@ func Internal(msg string) *Error {
 	return mk(CodeInternal, http.StatusInternalServerError, "Something went wrong on the backend. Check its log.", msg)
 }
 
+// Unavailable is for a backend subsystem that isn't wired up for this launch
+// (no llm.db, no vault, headless build without a store). Coded `internal` so
+// the frontend treats it as a backend fault, but with a 503 status.
+func Unavailable(msg string) *Error {
+	return mk(CodeInternal, http.StatusServiceUnavailable,
+		"That part of the backend isn't running for this launch. Check how the service was started.", msg)
+}
+
 // Write serializes err with its HTTP status. A plain error becomes Internal.
 func Write(w http.ResponseWriter, err error) {
 	var e *Error
