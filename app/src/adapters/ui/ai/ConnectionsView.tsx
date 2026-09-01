@@ -3,7 +3,7 @@ import { Plug, Plus, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useLlmStore } from '@/stores/llmStore'
-import { PROVIDER_LABEL, type LlmConnection } from '@/core/llm/llmModel'
+import { PROVIDER_DEFAULT_MODEL, PROVIDER_LABEL, type LlmConnection } from '@/core/llm/llmModel'
 import { ConnectionDialog } from './ConnectionDialog'
 
 type Draft = Partial<LlmConnection>
@@ -22,7 +22,12 @@ export function ConnectionsView() {
           Endpoints the AI features talk to. Keys are stored in the Vault, never here.
         </span>
         <div className="flex-1" />
-        <Button size="sm" onClick={() => setEditing({ provider: 'ollama', baseUrl: '', name: '' })}>
+        <Button
+          size="sm"
+          onClick={() =>
+            setEditing({ provider: 'ollama', baseUrl: '', name: '', defaultModel: PROVIDER_DEFAULT_MODEL.ollama })
+          }
+        >
           <Plus className="size-4" /> Connection
         </Button>
       </div>

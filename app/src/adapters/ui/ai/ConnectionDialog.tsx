@@ -9,6 +9,8 @@ import { testConnection } from '@/adapters/backend/llmClient'
 import { useLlmStore } from '@/stores/llmStore'
 import {
   ALL_PROVIDERS,
+  isDefaultModel,
+  PROVIDER_DEFAULT_MODEL,
   PROVIDER_DEFAULT_URL,
   PROVIDER_KEYLESS_OK,
   PROVIDER_LABEL,
@@ -80,9 +82,23 @@ export function ConnectionDialog({ draft, onClose }: Props) {
                 <Label className="text-xs">Provider</Label>
                 <Select
                   value={provider}
-                  onValueChange={(v) =>
-                    v && setD((c) => ({ ...c!, provider: v as ProviderKind, authSecretId: undefined }))
-                  }
+                  onValueChange={(v) => {
+                    if (!v) return
+                    const next = v as ProviderKind
+                    setD((c) => ({
+                      ...c!,
+                      provider: next,
+                      authSecretId: undefined,
+                      defaultModel:
+                        !c!.defaultModel || isDefaultModel(c!.defaultModel)
+                          ? PROVIDER_DEFAULT_MODEL[next]
+                          : c!.defaultModel,
+                      baseUrl:
+                        c!.baseUrl === PROVIDER_DEFAULT_URL[(c!.provider ?? 'ollama') as ProviderKind]
+                          ? ''
+                          : c!.baseUrl,
+                    }))
+                  }}
                 >
                   <SelectTrigger size="sm" className="w-full">
                     <SelectValue>{(v) => PROVIDER_LABEL[v as ProviderKind] ?? v}</SelectValue>

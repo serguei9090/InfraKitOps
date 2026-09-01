@@ -23,6 +23,21 @@ export const PROVIDER_DEFAULT_URL: Record<ProviderKind, string> = {
   gemini: 'https://generativelanguage.googleapis.com',
 }
 
+/** A reasonable starting model per provider — pre-filled in the connection
+ *  editor when the provider is picked (overwrite-able; Test pulls the real list). */
+export const PROVIDER_DEFAULT_MODEL: Record<ProviderKind, string> = {
+  ollama: 'llama3.1:8b',
+  'openai-compatible': 'gpt-4o-mini',
+  anthropic: 'claude-sonnet-4-5',
+  gemini: 'gemini-2.5-flash',
+}
+
+/** True when `model` is just one of the auto-filled defaults (safe to replace
+ *  on a provider switch — the user hasn't typed their own). */
+export function isDefaultModel(model: string): boolean {
+  return Object.values(PROVIDER_DEFAULT_MODEL).includes(model)
+}
+
 /** Providers that can run with no API key (local runtimes). */
 export const PROVIDER_KEYLESS_OK: Record<ProviderKind, boolean> = {
   ollama: true,
@@ -97,6 +112,25 @@ export interface LlmTask {
   preferredModel?: string
   /** MCP tools this task may use (A4d): mcp_server ids, or ["all"]. Empty = none. */
   tools?: string[]
+}
+
+/** A saved chat (A3b) — metadata only; messages load separately. */
+export interface LlmConversation {
+  id: string
+  title: string
+  connId?: string
+  model?: string
+  taskId?: string
+  pinned: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+/** One turn of a saved conversation. `steps` is a ChatToolStep[] blob. */
+export interface StoredMessage {
+  role: ChatRole
+  content: string
+  steps?: ChatToolStep[]
 }
 
 /** Global AI defaults, stored server-side in llm_settings. */
