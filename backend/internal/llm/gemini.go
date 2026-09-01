@@ -70,6 +70,39 @@ func (geminiProvider) ListModels(ctx context.Context, conn Connection, key strin
 	return out, nil
 }
 
+// geminiUnsupportedSchemaKeys are JSON-Schema fields the Gemini
+// `functionDeclarations[].parameters` grammar rejects (it takes a restricted
+// OpenAPI 3.0 subset). MCP servers routinely emit `$schema` /
+// `additionalProperties`, so strip them recursively.
+var geminiUnsupportedSchemaKeys = map[string]bool{
+	"$schema": true, "$id": true, "$ref": true, "$defs": true,
+	"definitions": true, "additionalProperties": true, "patternProperties": true,
+	"unevaluatedProperties": true, "$comment": true, "examples": true,
+}
+
+// geminiSchema deep-copies a JSON-Schema value, dropping keys Gemini rejects.
+func geminiSchema(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			if geminiUnsupportedSchemaKeys[k] {
+				continue
+			}
+			out[k] = geminiSchema(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, val := range t {
+			out[i] = geminiSchema(val)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
 func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr ChatRequest, out chan<- Delta) (ChatResult, error) {
 	var system string
 	var contents []map[string]any
@@ -121,7 +154,7 @@ func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr 
 	if hasTools(cr) {
 		decls := make([]map[string]any, len(cr.Tools))
 		for i, d := range cr.Tools {
-			params := d.Parameters
+			params := geminiSchema(d.Parameters)
 			if params == nil {
 				params = map[string]any{"type": "object", "properties": map[string]any{}}
 			}

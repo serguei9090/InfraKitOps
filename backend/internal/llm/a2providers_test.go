@@ -101,3 +101,42 @@ func TestGeminiProvider(t *testing.T) {
 		t.Fatalf("text=%q usage=%+v", text, usage)
 	}
 }
+
+func TestGeminiSchemaStripsUnsupportedKeys(t *testing.T) {
+	in := map[string]any{
+		"$schema":              "http://json-schema.org/draft-07/schema#",
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"q": map[string]any{"type": "string", "$comment": "the query"},
+			"opts": map[string]any{
+				"type":                 "object",
+				"additionalProperties": true,
+				"properties":           map[string]any{"n": map[string]any{"type": "integer"}},
+			},
+		},
+		"anyOf": []any{
+			map[string]any{"required": []any{"q"}, "$id": "x"},
+		},
+	}
+	out := geminiSchema(in).(map[string]any)
+	for _, bad := range []string{"$schema", "additionalProperties"} {
+		if _, ok := out[bad]; ok {
+			t.Fatalf("top-level %q not stripped", bad)
+		}
+	}
+	props := out["properties"].(map[string]any)
+	if _, ok := props["q"].(map[string]any)["$comment"]; ok {
+		t.Fatal("$comment not stripped from a nested property")
+	}
+	if _, ok := props["opts"].(map[string]any)["additionalProperties"]; ok {
+		t.Fatal("additionalProperties not stripped from a nested object")
+	}
+	if _, ok := out["anyOf"].([]any)[0].(map[string]any)["$id"]; ok {
+		t.Fatal("$id not stripped inside an anyOf branch")
+	}
+	// preserved
+	if out["type"] != "object" || props["q"].(map[string]any)["type"] != "string" {
+		t.Fatalf("real fields lost: %+v", out)
+	}
+}
