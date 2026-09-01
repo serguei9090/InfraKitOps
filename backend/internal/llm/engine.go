@@ -40,6 +40,10 @@ const maxToolIterations = 6
 // the user's decision before it is treated as declined.
 const toolApprovalTimeout = 5 * time.Minute
 
+// defaultMaxPerConn caps concurrent streams against one connection (A3e) — a
+// courtesy to the provider's rate limits. 0 = unlimited.
+const defaultMaxPerConn = 4
+
 // Engine runs model listing and chat against configured connections.
 type Engine struct {
 	Store   *Store
@@ -52,11 +56,50 @@ type Engine struct {
 
 	approvalMu sync.Mutex
 	approvals  map[string]chan bool
+
+	semMu      sync.Mutex
+	sem        map[string]chan struct{}
+	maxPerConn int
 }
 
 // SetToolRunner wires the MCP tool runner (A4b). Nil → tool-enabled requests
 // still work but every tool call reports "tools unavailable".
 func (e *Engine) SetToolRunner(t ToolRunner) { e.tools = t }
+
+// SetMaxConcurrentPerConn changes the per-connection stream cap (A3e). 0 or
+// negative = unlimited. In-flight streams keep their slot.
+func (e *Engine) SetMaxConcurrentPerConn(n int) {
+	e.semMu.Lock()
+	e.maxPerConn = n
+	e.semMu.Unlock()
+}
+
+// acquireConn blocks until a slot is free for connID, or ctx is done. Returns
+// a release func and ok=false when ctx ended first.
+func (e *Engine) acquireConn(ctx context.Context, connID string) (func(), bool) {
+	e.semMu.Lock()
+	n := e.maxPerConn
+	if n <= 0 {
+		e.semMu.Unlock()
+		return func() {}, true
+	}
+	if e.sem == nil {
+		e.sem = map[string]chan struct{}{}
+	}
+	ch := e.sem[connID]
+	if ch == nil {
+		ch = make(chan struct{}, n)
+		e.sem[connID] = ch
+	}
+	e.semMu.Unlock()
+
+	select {
+	case ch <- struct{}{}:
+		return func() { <-ch }, true
+	case <-ctx.Done():
+		return func() {}, false
+	}
+}
 
 // awaitApproval registers a pending tool-approval and returns its id + channel.
 func (e *Engine) awaitApproval() (string, chan bool) {
@@ -103,7 +146,13 @@ const modelCacheTTL = 60 * time.Second
 
 // NewEngine builds an engine.
 func NewEngine(store *Store, secrets SecretResolver) *Engine {
-	return &Engine{Store: store, Secrets: secrets, cache: map[string]modelCacheEntry{}}
+	return &Engine{
+		Store:      store,
+		Secrets:    secrets,
+		cache:      map[string]modelCacheEntry{},
+		sem:        map[string]chan struct{}{},
+		maxPerConn: defaultMaxPerConn,
+	}
 }
 
 // resolveKey returns the plaintext API key for a connection, or "" for a
@@ -216,6 +265,14 @@ func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, sha
 	if !send(sse.Message{Event: "start", Data: map[string]any{"model": req.Model, "provider": string(conn.Provider)}}) {
 		return
 	}
+
+	// A3e: hold a per-connection slot for the whole exchange (courtesy to the
+	// provider's rate limits). Released when this function returns.
+	release, ok := e.acquireConn(ctx, connID)
+	if !ok {
+		return
+	}
+	defer release()
 
 	// Only offer tools if a runner is wired; otherwise strip them so the
 	// provider doesn't advertise tools we can't execute.

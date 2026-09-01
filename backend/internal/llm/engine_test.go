@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -80,4 +81,53 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+func TestPerConnectionConcurrencyCap(t *testing.T) {
+	var inflight, peak int32
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		inflight++
+		if inflight > peak {
+			peak = inflight
+		}
+		mu.Unlock()
+		time.Sleep(120 * time.Millisecond)
+		fl, _ := w.(http.Flusher)
+		w.Write([]byte("{\"message\":{\"content\":\"x\"},\"done\":true,\"prompt_eval_count\":1,\"eval_count\":1}\n"))
+		if fl != nil {
+			fl.Flush()
+		}
+		mu.Lock()
+		inflight--
+		mu.Unlock()
+	}))
+	defer srv.Close()
+
+	s := newStore(t)
+	conn, _ := s.PutConnection(Connection{Name: "L", Provider: ProviderOllama, BaseURL: srv.URL})
+	eng := NewEngine(s, nil)
+	eng.SetMaxConcurrentPerConn(2)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			out := make(chan sse.Message, 64)
+			go func() {
+				eng.stream(context.Background(), conn.ID,
+					ChatRequest{Model: "m", Messages: []ChatMessage{{Role: "user", Content: "hi"}}}, OutputText, out)
+				close(out)
+			}()
+			for range out { //nolint:revive
+			}
+		}()
+	}
+	wg.Wait()
+
+	if peak > 2 {
+		t.Fatalf("peak concurrency = %d, want <= 2", peak)
+	}
 }

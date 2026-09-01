@@ -121,7 +121,16 @@ func (p anthropicProvider) Chat(ctx context.Context, conn Connection, key string
 		"stream":     true,
 	}
 	if system != "" {
-		payload["system"] = system
+		// A3e: cache the system block for a long task template — Anthropic
+		// prompt caching cuts latency/cost on repeated runs. Only worth it past
+		// ~1k tokens (~4k chars); a short prompt stays a plain string.
+		if len(system) >= 4000 {
+			payload["system"] = []map[string]any{
+				{"type": "text", "text": system, "cache_control": map[string]any{"type": "ephemeral"}},
+			}
+		} else {
+			payload["system"] = system
+		}
 	}
 	if cr.Temperature != nil {
 		payload["temperature"] = *cr.Temperature
