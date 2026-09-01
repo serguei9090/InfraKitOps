@@ -32,8 +32,16 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
   installer is wanted.
 - **MCP resources + prompts** — own follow-up after A4e
 
-## Done (recent)
+## Remaining (bigger — own sessions)
 
-AI A0–A2, A3b, A4a–A4d, **A4e-2** · AI Stop · provider→model auto-fill ·
-Gemini MCP fixes (`$schema` strip, `thoughtSignature` echo) · E0–E2 · S0–S2 ·
+- **#9** `jsrsasign` → `@peculiar/x509` — full X.509 parse rewrite (L)
+- **#12** S3d keyboard-shortcut editor — `core/shortcuts/` registry + rebind UI (M–L)
+- **#13** E3c migrate ~70 endpoints to `apierr` — 4 batches (L grind)
+- **#14** E3d error wording / i18n scaffold — one pass, extract `PRESETS` strings (M)
+
+## Done
+
+AI A0–A2 · **A3b/A3c/A3e** · A4a–A4d · **A4e (complete)** · AI Stop ·
+provider→model auto-fill · Gemini MCP fixes (`$schema` strip,
+`thoughtSignature` echo) · E0–E2 · **E3a/E3b/E3e** · S0–S2 · **S3a/S3b/S3c** ·
 CS0–CS4 · P7a–P7d baseline · dialog-width fix · Tasks-view grouping.
