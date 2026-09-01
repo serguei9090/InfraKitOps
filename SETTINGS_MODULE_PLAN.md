@@ -223,15 +223,15 @@ deleted.
 
 Small, mostly-frontend. Order below is by value; each is one commit.
 
-#### S3a — Per-section reset
-- Each `SettingsSectionDef` gains an optional `onReset?: () => Promise<void>`
-  + `resetLabel`. `SettingsScaffold` renders a "Reset {section} to defaults"
-  in the section footer with a confirm.
-- General → re-seed theme/rail/module-order; AI → `DELETE` all custom
-  `llm_task` overrides + clear `llm_settings`; Runbooks → `PUT` the `DEFAULTS`
-  blob; Network → the existing `useNetworkSettingsStore` reset.
-**DoD**: reset AI → every task shows its builtin prompt again; other sections
-untouched.
+#### S3a — Per-section reset — **DONE 2026-09-01** (`66f9f18`)
+- `SettingsResetButton` — a shared two-click-confirm control (no dialog, no
+  registry change); each section drops it at the bottom of its panel.
+- General → `themeStore.reset` + `moduleVisibilityStore.reset` (dark, default
+  order, nothing hidden, rail collapsed). Runbooks → `PUT /runbook-settings`
+  with `DEFAULTS`. AI → clear the 3 `llm_settings` keys + `resetTask` every
+  overridden task. Network → kept its existing "Reset to defaults".
+- Simpler than the planned `SettingsSectionDef.onReset` — the button lives in
+  the section component, not the scaffold.
 
 #### S3b — Export / import all settings
 - `core/settings/settingsIo.ts` (framework-free) — a versioned envelope
