@@ -15,7 +15,7 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 | 6 | **A4e-3** per-server MCP status ([AI_MCP_PLAN](AI_MCP_PLAN.md) §A4e) | done `455bc8a` — `ServerStatus` per server (connected/toolCount/lastError), shown in McpView. **A4e complete** (item 4 = loop token totals fell out of A3c). | M | ✅ |
 | 7 | **E3b** error-history drawer ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3b) | done `81f295c` — `history` ring (50) + header bell w/ unseen badge + drawer (expand, copy-all, clear) | M | ✅ |
 | 8 | **S3a** per-section settings reset ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | done `66f9f18` — `SettingsResetButton` (2-click), wired into General/Runbooks/AI; Network already had one | M | ✅ |
-| 9 | **CS** `jsrsasign` → `@peculiar/x509` ([CODE_SPLITTING_PLAN](CODE_SPLITTING_PLAN.md)) | **bigger than it looked** — jsrsasign is only in `x509Inspector.ts` (jwt-parser is dep-free) but it's a full X.509 parse (DN/SAN/exts/key-bits/EC-curve/RSA-exp/3 fingerprints incl. MD5). `@noble/*` can't parse X.509. Needs `@peculiar/x509` + asn1 packages + a separate MD5, and 13 parity tests. The chunk is already lazy (0 first-load cost) so low urgency. **Deferred to its own session.** | L | ⏸ |
+| 9 | **CS** `jsrsasign` &rarr; `@peculiar/asn1-x509` ([CODE_SPLITTING_PLAN](CODE_SPLITTING_PLAN.md)) | done `65f2996` — x509Inspector rewritten on peculiar asn1 + noble hashes; 32 tests green; chunk 303KB&rarr;124KB raw | L | ✅ |
 | 10 | **S3c** settings search ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | done `a20663e` — nav search box, per-section `keywords` | M | ✅ |
 | 11 | **S3b** export / import all settings ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | done `e7d182a` — `settingsBackup.ts` + General "Backup" group; no secrets, merge-on-import | M | ✅ |
 | 12 | **S3d** keyboard-shortcut editor ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | rebind UI + persisted map | M–L | ☐ |
@@ -32,9 +32,8 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
   installer is wanted.
 - **MCP resources + prompts** — own follow-up after A4e
 
-## Remaining (bigger — own sessions)
+## Remaining
 
-- **#9** `jsrsasign` → `@peculiar/x509` — full X.509 parse rewrite (L)
 - **#12** S3d keyboard-shortcut editor — `core/shortcuts/` registry + rebind UI (M–L)
 - **#13** E3c migrate ~70 endpoints to `apierr` — 4 batches (L grind)
 - **#14** E3d error wording / i18n scaffold — one pass, extract `PRESETS` strings (M)
@@ -44,4 +43,5 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 AI A0–A2 · **A3b/A3c/A3e** · A4a–A4d · **A4e (complete)** · AI Stop ·
 provider→model auto-fill · Gemini MCP fixes (`$schema` strip,
 `thoughtSignature` echo) · E0–E2 · **E3a/E3b/E3e** · S0–S2 · **S3a/S3b/S3c** ·
-CS0–CS4 · P7a–P7d baseline · dialog-width fix · Tasks-view grouping.
+CS0–CS4 · **jsrsasign→peculiar** · P7a–P7d baseline · dialog-width fix ·
+Tasks-view grouping.

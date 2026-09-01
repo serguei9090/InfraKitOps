@@ -1,7 +1,11 @@
 # Code-splitting & bundle budget
 
-Status: **CS0–CS4 done 2026-09-01** (CS2 mostly fell out of CS1 for free).
-Only leftover: swap `jsrsasign` for `@noble/*` (CS2 note). Flagged repeatedly
+Status: **CS0–CS4 done + jsrsasign swap done 2026-09-01** (`65f2996`). CS2's
+last item: `x509Inspector.ts` was the only `jsrsasign` user (~900 KB) — rewritten
+on `@peculiar/asn1-x509` + `@peculiar/asn1-rsa`/`-ecc` (structure) +
+`@noble/hashes` (md5/sha1/sha2 fingerprints, all synchronous). 32 parity tests
+green. `X509InspectorScreen` chunk 303 KB → 124 KB raw; first-load unchanged
+(peculiar/asn1 stays in the lazy route chunk). Flagged repeatedly
 since `MIGRATION_PLAN.md` Phase 3.
 
 **Result (2026-09-01 `bun run build`):**
