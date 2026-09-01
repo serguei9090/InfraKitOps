@@ -6,7 +6,7 @@
 import { create } from 'zustand'
 import * as api from '@/adapters/backend/llmClient'
 import { reportError } from '@/stores/errorStore'
-import type { ChatMessage, LlmConnection, LlmModel, LlmTask, TokenUsage } from '@/core/llm/llmModel'
+import type { ChatMessage, ChatToolStep, LlmConnection, LlmModel, LlmTask, TokenUsage } from '@/core/llm/llmModel'
 
 const SRC = 'AI Hub'
 
@@ -17,6 +17,8 @@ export interface ChatTurn extends ChatMessage {
   state?: 'streaming' | 'done' | 'error'
   usage?: TokenUsage
   error?: string
+  /** tool calls made during this assistant turn (A4b) */
+  steps?: ChatToolStep[]
 }
 
 interface LiveChat {
@@ -25,6 +27,8 @@ interface LiveChat {
   turns: ChatTurn[]
   abort: () => void
   busy: boolean
+  /** "" = off, "all" or a comma list of MCP server ids */
+  tools: string
 }
 
 interface LlmStore {
@@ -49,6 +53,8 @@ interface LlmStore {
   putSettings: (patch: Record<string, string>) => Promise<void>
 
   startChat: (connId: string, model: string) => void
+  /** toggle MCP tools for the live chat ("" = off, "all" = every enabled server) */
+  setChatTools: (tools: string) => void
   sendMessage: (text: string) => void
   /** abort an in-flight reply, keeping whatever streamed so far */
   stopChat: () => void
@@ -158,8 +164,14 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
   },
 
   startChat: (connId, model) => {
+    const prevTools = get().chat?.tools ?? ''
     get().chat?.abort()
-    set({ chat: { connId, model, turns: [], abort: () => {}, busy: false } })
+    set({ chat: { connId, model, turns: [], abort: () => {}, busy: false, tools: prevTools } })
+  },
+
+  setChatTools: (tools) => {
+    const c = get().chat
+    if (c) set({ chat: { ...c, tools } })
   },
 
   sendMessage: (text) => {
@@ -184,7 +196,7 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
     })
 
     const abort = api.openChatStream(
-      { connId: chat.connId, model: chat.model, messages: outgoing },
+      { connId: chat.connId, model: chat.model, messages: outgoing, tools: chat.tools || undefined },
       {
         onEvent: (name, data) => {
           const d = data as Record<string, unknown>
@@ -193,10 +205,21 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
             const turns = [...s.chat.turns]
             const last = turns.length - 1
             if (last < 0) return s
-            const cur = { ...turns[last] }
+            const cur = { ...turns[last], steps: turns[last].steps ? [...turns[last].steps!] : undefined }
             let done = false
             if (name === 'delta') cur.content += (d.text as string) ?? ''
-            else if (name === 'end') {
+            else if (name === 'tool-call') {
+              cur.steps = [
+                ...(cur.steps ?? []),
+                { id: String(d.id), name: String(d.name), args: d.args as Record<string, unknown> | undefined },
+              ]
+            } else if (name === 'tool-result') {
+              cur.steps = (cur.steps ?? []).map((st) =>
+                st.id === String(d.id)
+                  ? { ...st, done: true, ok: d.ok !== false, result: (d.text as string) ?? '' }
+                  : st,
+              )
+            } else if (name === 'end') {
               cur.state = 'done'
               const u = d.usage as TokenUsage | undefined
               if (u) cur.usage = u

@@ -55,20 +55,60 @@ func (p anthropicProvider) ListModels(ctx context.Context, conn Connection, key 
 	return out, nil
 }
 
-func (p anthropicProvider) Chat(ctx context.Context, conn Connection, key string, cr ChatRequest, out chan<- Delta) (Usage, error) {
-	// Split the system message out; Anthropic wants it as a top-level field.
-	var system string
-	msgs := make([]map[string]string, 0, len(cr.Messages))
-	for _, m := range cr.Messages {
-		if m.Role == "system" {
+// anthropicMessages splits the system prompt out (top-level field) and maps
+// the rest, using content-block arrays for tool_use / tool_result turns.
+func anthropicMessages(all []ChatMessage) (system string, msgs []map[string]any) {
+	for _, m := range all {
+		switch {
+		case m.Role == "system":
 			if system != "" {
 				system += "\n\n"
 			}
 			system += m.Content
-			continue
+
+		case m.Role == "tool":
+			msgs = append(msgs, map[string]any{
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "tool_result", "tool_use_id": m.ToolCallID, "content": m.Content},
+				},
+			})
+
+		case len(m.ToolCalls) > 0:
+			blocks := []map[string]any{}
+			if m.Content != "" {
+				blocks = append(blocks, map[string]any{"type": "text", "text": m.Content})
+			}
+			for _, c := range m.ToolCalls {
+				args := c.Args
+				if args == nil {
+					args = map[string]any{}
+				}
+				blocks = append(blocks, map[string]any{"type": "tool_use", "id": c.ID, "name": c.Name, "input": args})
+			}
+			msgs = append(msgs, map[string]any{"role": "assistant", "content": blocks})
+
+		default:
+			msgs = append(msgs, map[string]any{"role": m.Role, "content": m.Content})
 		}
-		msgs = append(msgs, map[string]string{"role": m.Role, "content": m.Content})
 	}
+	return system, msgs
+}
+
+func anthropicTools(defs []ToolDef) []map[string]any {
+	out := make([]map[string]any, len(defs))
+	for i, d := range defs {
+		schema := d.Parameters
+		if schema == nil {
+			schema = map[string]any{"type": "object", "properties": map[string]any{}}
+		}
+		out[i] = map[string]any{"name": d.Name, "description": d.Description, "input_schema": schema}
+	}
+	return out
+}
+
+func (p anthropicProvider) Chat(ctx context.Context, conn Connection, key string, cr ChatRequest, out chan<- Delta) (ChatResult, error) {
+	system, msgs := anthropicMessages(cr.Messages)
 
 	maxTokens := cr.MaxTokens
 	if maxTokens <= 0 {
@@ -86,26 +126,44 @@ func (p anthropicProvider) Chat(ctx context.Context, conn Connection, key string
 	if cr.Temperature != nil {
 		payload["temperature"] = *cr.Temperature
 	}
+	if hasTools(cr) {
+		payload["tools"] = anthropicTools(cr.Tools)
+	}
 	raw, _ := json.Marshal(payload)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL(conn)+"/v1/messages", bytes.NewReader(raw))
 	if err != nil {
-		return Usage{}, err
+		return ChatResult{}, err
 	}
 	p.headers(req, key)
 	req.Header.Set("accept", "text/event-stream")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return Usage{}, netErr(err, nil)
+		return ChatResult{}, netErr(err, nil)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return Usage{}, httpErr("anthropic", resp)
+		return ChatResult{}, httpErr("anthropic", resp)
 	}
 
 	sc := bufio.NewScanner(resp.Body)
 	sc.Buffer(make([]byte, 0, 64*1024), 4<<20)
 	var usage Usage
+	var calls []ToolCall
+	// tool_use blocks arrive as start(id,name) → input_json_delta(partial) … → stop
+	cur := struct {
+		active     bool
+		id, name   string
+		argBuilder strings.Builder
+	}{}
+	flush := func() {
+		if cur.active && cur.name != "" {
+			calls = append(calls, ToolCall{ID: cur.id, Name: cur.name, Args: parseArgs(cur.argBuilder.String())})
+		}
+		cur.active, cur.id, cur.name = false, "", ""
+		cur.argBuilder.Reset()
+	}
+
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		if !strings.HasPrefix(line, "data:") {
@@ -113,9 +171,16 @@ func (p anthropicProvider) Chat(ctx context.Context, conn Connection, key string
 		}
 		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 		var ev struct {
-			Type  string `json:"type"`
+			Type         string `json:"type"`
+			ContentBlock struct {
+				Type string `json:"type"`
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"content_block"`
 			Delta struct {
-				Text string `json:"text"`
+				Type        string `json:"type"`
+				Text        string `json:"text"`
+				PartialJSON string `json:"partial_json"`
 			} `json:"delta"`
 			Message struct {
 				Usage struct {
@@ -131,10 +196,20 @@ func (p anthropicProvider) Chat(ctx context.Context, conn Connection, key string
 			continue
 		}
 		switch ev.Type {
+		case "content_block_start":
+			if ev.ContentBlock.Type == "tool_use" {
+				flush()
+				cur.active, cur.id, cur.name = true, ev.ContentBlock.ID, ev.ContentBlock.Name
+			}
 		case "content_block_delta":
 			if ev.Delta.Text != "" {
 				out <- Delta{Text: ev.Delta.Text}
 			}
+			if ev.Delta.Type == "input_json_delta" {
+				cur.argBuilder.WriteString(ev.Delta.PartialJSON)
+			}
+		case "content_block_stop":
+			flush()
 		case "message_start":
 			usage.PromptTokens = ev.Message.Usage.InputTokens
 		case "message_delta":
@@ -142,15 +217,17 @@ func (p anthropicProvider) Chat(ctx context.Context, conn Connection, key string
 				usage.CompletionTokens = ev.Usage.OutputTokens
 			}
 		case "message_stop":
+			flush()
 			out <- Delta{Done: true}
-			return usage, nil
+			return ChatResult{Usage: usage, ToolCalls: calls}, nil
 		}
 	}
+	flush()
 	if err := sc.Err(); err != nil {
 		if m := contextErr(ctx); m != "" {
-			return usage, fmt.Errorf("%s", m)
+			return ChatResult{Usage: usage}, fmt.Errorf("%s", m)
 		}
-		return usage, err
+		return ChatResult{Usage: usage}, err
 	}
-	return usage, nil
+	return ChatResult{Usage: usage, ToolCalls: calls}, nil
 }

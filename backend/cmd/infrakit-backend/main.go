@@ -107,6 +107,7 @@ func main() {
 			}
 			mcpManager = mcp.NewManager(mcpStore, mcpSecrets, api.Version)
 			defer mcpManager.CloseAll()
+			llmEngine.SetToolRunner(mcpToolRunner{mcpManager})
 		}
 	}
 	defer iperf.StopServer() // kill any managed `iperf3 -s` child
@@ -280,4 +281,13 @@ func mustToken() string {
 		log.Fatalf("token: %v", err)
 	}
 	return hex.EncodeToString(b)
+}
+
+// mcpToolRunner adapts *mcp.Manager to llm.ToolRunner (keeps internal/llm from
+// depending on internal/mcp directly).
+type mcpToolRunner struct{ m *mcp.Manager }
+
+func (r mcpToolRunner) Call(ctx context.Context, serverID, tool string, args map[string]any) (llm.ToolCallOutput, error) {
+	res, err := r.m.Call(ctx, serverID, tool, args)
+	return llm.ToolCallOutput{Text: res.Text, IsError: res.IsError, Truncated: res.Truncated}, err
 }

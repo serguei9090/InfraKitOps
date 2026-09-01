@@ -28,8 +28,8 @@ type Provider interface {
 	// ListModels queries the endpoint for its available models.
 	ListModels(ctx context.Context, conn Connection, key string) ([]Model, error)
 	// Chat streams a completion. Text deltas go to out; out is closed by the
-	// caller, not here. The final token usage is returned.
-	Chat(ctx context.Context, conn Connection, key string, req ChatRequest, out chan<- Delta) (Usage, error)
+	// caller, not here. Returns token usage and any tool calls the model made.
+	Chat(ctx context.Context, conn Connection, key string, req ChatRequest, out chan<- Delta) (ChatResult, error)
 	// Kind is the provider this adapter serves.
 	Kind() ProviderKind
 	// KeylessOK reports whether this provider can be used with no API key

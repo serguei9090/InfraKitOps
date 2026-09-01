@@ -310,9 +310,14 @@ Assistant.
   (stdio `CommandTransport` + http `StreamableClientTransport`, tool cache,
   `{{secret:}}` env via Vault, least-env spawn, 32 KB result cap),
   `/mcp/servers*` + `/mcp/tools`, `capabilities.mcp`, AI Hub **"MCP"** tab
-  (`McpView`/`McpServerDialog`). No LLM wiring yet. **A4b next**: tool-calling
-  in the engine (`internal/llm/agent.go` agent loop) + 4 adapter mappings +
-  Playground toggle. A4c approval, A4d per-task opt-in. Lets the model look up
+  (`McpView`/`McpServerDialog`). No LLM wiring yet. **A4b done 2026-09-01**:
+  `ChatRequest.Tools`/`ToolCall`/`ChatResult`, tool mapping in all 4 adapters
+  (openai streamed `tool_calls` reassembly, ollama, anthropic `tool_use`
+  blocks, gemini `functionCall`), agent loop in `engine.go` `stream()` (max 6
+  iters, `ToolRunner` iface + `mcpToolRunner` in main.go), SSE
+  `tool-call`/`tool-result`, `?tools=all|<ids>` on chat + task streams, FE
+  Playground "Tools" toggle + `<ToolSteps>`. Auto-runs all tools (approval is
+  **A4c next**). A4d = per-task opt-in. Lets the model look up
   commands/docs not in its training (Context7, web search). Note: Knowledge
   Hub's `McpServersScreen` is just a link list, unrelated.
 ### Settings module (started 2026-08-31, S0–S2 done)

@@ -15,11 +15,11 @@ func collect(t *testing.T, p Provider, conn Connection, key string, req ChatRequ
 	t.Helper()
 	out := make(chan Delta, 64)
 	var text strings.Builder
-	var usage Usage
+	var res ChatResult
 	var err error
 	done := make(chan struct{})
 	go func() {
-		usage, err = p.Chat(context.Background(), conn, key, req, out)
+		res, err = p.Chat(context.Background(), conn, key, req, out)
 		close(out)
 		close(done)
 	}()
@@ -30,7 +30,7 @@ func collect(t *testing.T, p Provider, conn Connection, key string, req ChatRequ
 	if err != nil {
 		t.Fatalf("Chat: %v", err)
 	}
-	return text.String(), usage
+	return text.String(), res.Usage
 }
 
 func TestOpenAICompatibleProvider(t *testing.T) {

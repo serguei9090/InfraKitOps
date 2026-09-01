@@ -57,6 +57,17 @@ export interface TokenUsage {
   completionTokens: number
 }
 
+/** A tool call the model made mid-answer (A4b). */
+export interface ChatToolStep {
+  id: string
+  name: string
+  args?: Record<string, unknown>
+  /** filled in once the tool-result event arrives */
+  done?: boolean
+  ok?: boolean
+  result?: string
+}
+
 export function emptyConnection(provider: ProviderKind = 'ollama'): Partial<LlmConnection> {
   return { name: '', provider, baseUrl: '', defaultModel: '' }
 }

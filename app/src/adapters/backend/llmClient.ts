@@ -48,6 +48,8 @@ export interface ChatStreamOpts {
   messages: ChatMessage[]
   temperature?: number
   maxTokens?: number
+  /** "all" or a comma list of MCP server ids — offers those tools to the model */
+  tools?: string
 }
 
 /** Open the chat stream. Returns an abort function. */
@@ -59,6 +61,7 @@ export function openChatStream(opts: ChatStreamOpts, handlers: StreamHandlers): 
   if (opts.model) params.model = opts.model
   if (opts.temperature != null) params.temperature = String(opts.temperature)
   if (opts.maxTokens != null) params.maxTokens = String(opts.maxTokens)
+  if (opts.tools) params.tools = opts.tools
   return openStream('/llm/chat/stream', params, handlers)
 }
 
@@ -91,6 +94,8 @@ export interface TaskRunOpts {
   context?: Record<string, string>
   input?: string
   history?: ChatMessage[]
+  /** "all" or a comma list of MCP server ids */
+  tools?: string
 }
 
 /** Open a grounded task run. Returns an abort function. */
@@ -100,5 +105,6 @@ export function openTaskStream(opts: TaskRunOpts, handlers: StreamHandlers): () 
   if (opts.input) params.input = opts.input
   if (opts.context) params.context = JSON.stringify(opts.context)
   if (opts.history?.length) params.history = JSON.stringify(opts.history)
+  if (opts.tools) params.tools = opts.tools
   return openStream(`/llm/tasks/${opts.taskId}/run/stream`, params, handlers)
 }

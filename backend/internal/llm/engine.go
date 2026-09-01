@@ -19,14 +19,37 @@ type SecretResolver interface {
 	Resolve(id string) (string, error)
 }
 
+// ToolRunner executes a tool call routed by qualified name. *mcp.Manager
+// satisfies it; kept as an interface so internal/llm doesn't hard-depend on
+// internal/mcp for tests.
+type ToolRunner interface {
+	Call(ctx context.Context, serverID, tool string, args map[string]any) (ToolCallOutput, error)
+}
+
+// ToolCallOutput is the flattened result of one tool call.
+type ToolCallOutput struct {
+	Text      string
+	IsError   bool
+	Truncated bool
+}
+
+// maxToolIterations bounds the agent loop per turn.
+const maxToolIterations = 6
+
 // Engine runs model listing and chat against configured connections.
 type Engine struct {
 	Store   *Store
 	Secrets SecretResolver
 
+	tools ToolRunner
+
 	mu    sync.Mutex
 	cache map[string]modelCacheEntry
 }
+
+// SetToolRunner wires the MCP tool runner (A4b). Nil → tool-enabled requests
+// still work but every tool call reports "tools unavailable".
+func (e *Engine) SetToolRunner(t ToolRunner) { e.tools = t }
 
 type modelCacheEntry struct {
 	models []Model
@@ -101,7 +124,7 @@ func (e *Engine) Chat(ctx context.Context, connID string, req ChatRequest, out c
 // `history` prior turns (for chat mode). See AI_MODULE_PLAN.md §6.2.
 func (e *Engine) RunTask(
 	ctx context.Context, taskID, connID, model string,
-	vars map[string]string, input string, history []ChatMessage,
+	vars map[string]string, input string, history []ChatMessage, tools []ToolDef,
 	out chan<- sse.Message,
 ) {
 	task, err := e.Store.GetTask(taskID)
@@ -114,7 +137,7 @@ func (e *Engine) RunTask(
 	msgs = append(msgs, ChatMessage{Role: "system", Content: system})
 	msgs = append(msgs, history...)
 	msgs = append(msgs, ChatMessage{Role: "user", Content: input})
-	req := ChatRequest{Model: model, Messages: msgs, Temperature: task.Temperature}
+	req := ChatRequest{Model: model, Messages: msgs, Temperature: task.Temperature, Tools: tools}
 	e.stream(ctx, connID, req, task.OutputShape, out)
 }
 
@@ -147,27 +170,96 @@ func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, sha
 		return
 	}
 
+	if !send(sse.Message{Event: "start", Data: map[string]any{"model": req.Model, "provider": string(conn.Provider)}}) {
+		return
+	}
+
+	// Only offer tools if a runner is wired; otherwise strip them so the
+	// provider doesn't advertise tools we can't execute.
+	if hasTools(req) && e.tools == nil {
+		req.Tools = nil
+	}
+	iters := 1
+	if hasTools(req) {
+		iters = maxToolIterations
+	}
+
+	var total Usage
+	var lastText string
+	for iter := 0; iter < iters; iter++ {
+		res, text, ok, err := e.runChat(ctx, p, *conn, key, req, send)
+		if !ok {
+			return // client gone, already drained
+		}
+		total.PromptTokens += res.Usage.PromptTokens
+		total.CompletionTokens += res.Usage.CompletionTokens
+		lastText = text
+		if err != nil {
+			send(sse.Message{Event: "error", Data: errData(err)})
+			return
+		}
+		if len(res.ToolCalls) == 0 {
+			break
+		}
+		if iter == iters-1 {
+			send(sse.Message{Event: "error", Data: map[string]string{
+				"error": "the model kept calling tools without answering (limit reached)",
+				"code":  string(apierr.CodeValidation),
+			}})
+			return
+		}
+
+		req.Messages = append(req.Messages, ChatMessage{Role: "assistant", Content: text, ToolCalls: res.ToolCalls})
+		for _, tc := range res.ToolCalls {
+			if !send(sse.Message{Event: "tool-call", Data: map[string]any{
+				"id": tc.ID, "name": tc.Name, "args": tc.Args,
+			}}) {
+				return
+			}
+			outText, isErr := e.callTool(ctx, tc)
+			if !send(sse.Message{Event: "tool-result", Data: map[string]any{
+				"id": tc.ID, "name": tc.Name, "ok": !isErr, "text": outText,
+			}}) {
+				return
+			}
+			req.Messages = append(req.Messages, ChatMessage{
+				Role: "tool", ToolCallID: tc.ID, Name: tc.Name, Content: outText,
+			})
+		}
+	}
+
+	if shape == OutputJSON {
+		if j := extractJSON(lastText); j != "" {
+			send(sse.Message{Event: "parsed", Data: map[string]string{"json": j}})
+		}
+	}
+	send(sse.Message{Event: "end", Data: map[string]any{
+		"usage": map[string]int{"promptTokens": total.PromptTokens, "completionTokens": total.CompletionTokens},
+	}})
+}
+
+// runChat runs one provider Chat call, streaming `delta` events. Returns the
+// result, the accumulated text, ok=false if the client disconnected mid-stream
+// (already drained), and any provider error.
+func (e *Engine) runChat(
+	ctx context.Context, p Provider, conn Connection, key string, req ChatRequest,
+	send func(sse.Message) bool,
+) (ChatResult, string, bool, error) {
 	deltas := make(chan Delta, 64)
-	var usage Usage
+	var res ChatResult
 	var chatErr error
 	done := make(chan struct{})
 	go func() {
-		usage, chatErr = p.Chat(ctx, *conn, key, req, deltas)
+		res, chatErr = p.Chat(ctx, conn, key, req, deltas)
 		close(deltas)
 		close(done)
 	}()
-	// Always drain `deltas` so the provider goroutine never blocks on a send,
-	// even if the client has gone and `out` is no longer being read.
 	drain := func() {
 		for range deltas {
 		}
 		<-done
 	}
 
-	if !send(sse.Message{Event: "start", Data: map[string]any{"model": req.Model, "provider": string(conn.Provider)}}) {
-		drain()
-		return
-	}
 	var full strings.Builder
 	for d := range deltas {
 		if d.Text == "" {
@@ -176,22 +268,32 @@ func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, sha
 		full.WriteString(d.Text)
 		if !send(sse.Message{Event: "delta", Data: map[string]string{"text": d.Text}}) {
 			drain()
-			return
+			return ChatResult{}, "", false, nil
 		}
 	}
 	<-done
-	if chatErr != nil {
-		send(sse.Message{Event: "error", Data: errData(chatErr)})
-		return
+	return res, full.String(), true, chatErr
+}
+
+// callTool routes a ToolCall (qualified name "<serverId>__<tool>") through the
+// MCP manager. Returns the result text and whether it was an error.
+func (e *Engine) callTool(ctx context.Context, tc ToolCall) (string, bool) {
+	if e.tools == nil {
+		return "tools are not available (no MCP layer)", true
 	}
-	if shape == OutputJSON {
-		if j := extractJSON(full.String()); j != "" {
-			send(sse.Message{Event: "parsed", Data: map[string]string{"json": j}})
-		}
+	serverID, tool, found := strings.Cut(tc.Name, "__")
+	if !found {
+		return "malformed tool name: " + tc.Name, true
 	}
-	send(sse.Message{Event: "end", Data: map[string]any{
-		"usage": map[string]int{"promptTokens": usage.PromptTokens, "completionTokens": usage.CompletionTokens},
-	}})
+	res, err := e.tools.Call(ctx, serverID, tool, tc.Args)
+	if err != nil {
+		return "tool call failed: " + err.Error(), true
+	}
+	text := res.Text
+	if res.Truncated {
+		text += "\n…(truncated)"
+	}
+	return text, res.IsError
 }
 
 // errData shapes an SSE `error` payload — `{error}` plus `code`+`hint` when the

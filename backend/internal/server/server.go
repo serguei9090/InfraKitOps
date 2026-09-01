@@ -61,7 +61,7 @@ func NewRouter(opts Options) http.Handler {
 	}
 	rbh := &api.RunbookHandlers{Store: opts.Orchestrator, Engine: opts.RunbookEngine, Vault: opts.Vault}
 	vh := &api.VaultHandlers{Vault: opts.Vault}
-	lh := &api.LLMHandlers{Store: opts.LLM, Engine: opts.LLMEngine}
+	lh := &api.LLMHandlers{Store: opts.LLM, Engine: opts.LLMEngine, MCP: opts.MCP}
 	mh := &api.MCPHandlers{Manager: opts.MCP}
 
 	r.Route("/api/v1", func(r chi.Router) {

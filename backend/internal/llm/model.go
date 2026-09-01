@@ -33,8 +33,29 @@ type Model struct {
 
 // ChatMessage is one turn.
 type ChatMessage struct {
-	Role    string `json:"role"` // "system" | "user" | "assistant"
+	Role    string `json:"role"` // "system" | "user" | "assistant" | "tool"
 	Content string `json:"content"`
+
+	// Tool use (A4b). ToolCalls is set on an assistant turn that requested
+	// tools; ToolCallID + Name identify which call a "tool" turn answers.
+	ToolCalls  []ToolCall `json:"toolCalls,omitempty"`
+	ToolCallID string     `json:"toolCallId,omitempty"`
+	Name       string     `json:"name,omitempty"`
+}
+
+// ToolDef is a tool offered to the model. Name is the qualified MCP name
+// ("<serverId>__<tool>"); Parameters is a JSON-Schema object.
+type ToolDef struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Parameters  any    `json:"parameters"`
+}
+
+// ToolCall is a tool invocation the model asked for.
+type ToolCall struct {
+	ID   string         `json:"id"`
+	Name string         `json:"name"`
+	Args map[string]any `json:"args"`
 }
 
 // ChatRequest is a resolved completion request (connection + key already picked).
@@ -43,12 +64,21 @@ type ChatRequest struct {
 	Messages    []ChatMessage `json:"messages"`
 	Temperature *float64      `json:"temperature,omitempty"`
 	MaxTokens   int           `json:"maxTokens,omitempty"`
+	Tools       []ToolDef     `json:"tools,omitempty"`
 }
 
 // Delta is one streamed chunk from a provider.
 type Delta struct {
 	Text string
 	Done bool
+}
+
+// ChatResult is what a provider's Chat returns after the stream ends.
+type ChatResult struct {
+	Usage Usage
+	// ToolCalls is non-empty when the model stopped to call tools rather than
+	// finishing its answer — the engine runs them and calls Chat again.
+	ToolCalls []ToolCall
 }
 
 // Usage is the token accounting a provider reports at the end of a stream.

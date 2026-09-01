@@ -1,6 +1,6 @@
 # AI — MCP tools & tool-calling (A4)
 
-Status: **A4a done 2026-09-01. A4b next.** Extends the AI module
+Status: **A4a + A4b done 2026-09-01. A4c (approval) next.** Extends the AI module
 (`AI_MODULE_PLAN.md`) with **Model Context Protocol** clients so a model can
 call tools mid-answer — web search, Context7 doc lookup, filesystem, etc. —
 to ground answers on things outside its training (a new CLI flag, a fresh API,
@@ -174,7 +174,7 @@ plain API call.
 | Phase | Content | Ships value |
 |---|---|---|
 | **A4a** ✅ | `internal/mcp/` (spec + store on `llm.db` + `Manager` on go-sdk v1.7.0, stdio `CommandTransport` + http `StreamableClientTransport`, tool cache, `{{secret:}}` env via Vault, 32 KB result cap, least-env spawn) + `/mcp/servers*` + `/mcp/tools` + `capabilities.mcp` + AI Hub **"MCP"** tab (`McpView` + `McpServerDialog` — transport picker, env rows, Test → tool list with read-only/confirm badge). `core/mcp/mcpModel.ts`, `mcpClient.ts`, `mcpStore.ts`. **No LLM wiring.** Verified in-browser: added `@modelcontextprotocol/server-everything`, Test discovered 14 tools with correct `readOnly` flags. | Connect Context7 / any server, see its tools. |
-| **A4b** | Tool-calling in the engine + 4 adapter mappings + agent loop (auto-run all, no approval yet) + Playground "Tools" toggle + step rendering. | Playground model can call Context7 and answer with fresh docs. |
+| **A4b** ✅ | `ChatRequest.Tools` + `ToolCall`/`ToolResult` + `ChatResult` return; per-adapter mapping — openai (`tools`/streamed `tool_calls` reassembled by index), ollama (same shape, args are objects), anthropic (`tools`/`tool_use` blocks + `input_json_delta`), gemini (`functionDeclarations`/`functionCall`). Agent loop in `engine.go` `stream()` (max 6 iters, `runChat` extracted, `callTool` routes `serverId__tool` via `ToolRunner` iface — `mcpToolRunner` adapter in main.go). SSE `tool-call`/`tool-result`. `/llm/chat/stream` + task stream take `?tools=all\|<ids>` → `resolveTools` via `mcp.Manager.AggregateTools`. FE: `ChatToolStep`, `llmStore` chat `steps[]` + `setChatTools`, Playground "Tools" toggle, `<ToolSteps>` collapsible rows. `agent_test.go` (2-round mock). **Verified end-to-end** (browser + API): Ollama `qwen3.5:9b` → `echo` tool via MCP → result fed back → final answer. Auto-runs all tools (approval = A4c). | Playground model calls MCP tools and answers with the result. |
 | **A4c** | Approval flow — `readOnlyHint` auto, others pause → `tool-approval` event → inline Approve/Deny → `/llm/tool/{id}/resume`. | Safe for write-capable servers. |
 | **A4d** | Per-task `tools` config + `TaskDialog` UI + `<AiPanel>` passthrough. First consumer: **Runbooks "Generate step" / Assistant** looks up an unknown command before answering. | Every module's AI can opt into tools. |
 | **A4e** | Polish — tool transcript in saved conversations (needs `AI_MODULE_PLAN.md` §A3b), token/cost accounting across the loop, `list_changed` live refresh, per-server logs. | — |

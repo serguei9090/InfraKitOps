@@ -70,33 +70,64 @@ func (geminiProvider) ListModels(ctx context.Context, conn Connection, key strin
 	return out, nil
 }
 
-func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr ChatRequest, out chan<- Delta) (Usage, error) {
-	type part struct {
-		Text string `json:"text"`
-	}
-	type content struct {
-		Role  string `json:"role"`
-		Parts []part `json:"parts"`
-	}
+func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr ChatRequest, out chan<- Delta) (ChatResult, error) {
 	var system string
-	var contents []content
+	var contents []map[string]any
 	for _, m := range cr.Messages {
-		switch m.Role {
-		case "system":
+		switch {
+		case m.Role == "system":
 			if system != "" {
 				system += "\n\n"
 			}
 			system += m.Content
-		case "assistant":
-			contents = append(contents, content{Role: "model", Parts: []part{{Text: m.Content}}})
+
+		case m.Role == "tool":
+			var resp any
+			if err := json.Unmarshal([]byte(m.Content), &resp); err != nil {
+				resp = map[string]any{"result": m.Content}
+			}
+			contents = append(contents, map[string]any{
+				"role": "user",
+				"parts": []map[string]any{
+					{"functionResponse": map[string]any{"name": m.Name, "response": map[string]any{"result": resp}}},
+				},
+			})
+
+		case len(m.ToolCalls) > 0:
+			parts := []map[string]any{}
+			if m.Content != "" {
+				parts = append(parts, map[string]any{"text": m.Content})
+			}
+			for _, c := range m.ToolCalls {
+				args := c.Args
+				if args == nil {
+					args = map[string]any{}
+				}
+				parts = append(parts, map[string]any{"functionCall": map[string]any{"name": c.Name, "args": args}})
+			}
+			contents = append(contents, map[string]any{"role": "model", "parts": parts})
+
+		case m.Role == "assistant":
+			contents = append(contents, map[string]any{"role": "model", "parts": []map[string]any{{"text": m.Content}}})
 		default:
-			contents = append(contents, content{Role: "user", Parts: []part{{Text: m.Content}}})
+			contents = append(contents, map[string]any{"role": "user", "parts": []map[string]any{{"text": m.Content}}})
 		}
 	}
 
 	payload := map[string]any{"contents": contents}
 	if system != "" {
-		payload["systemInstruction"] = content{Parts: []part{{Text: system}}}
+		payload["systemInstruction"] = map[string]any{"parts": []map[string]any{{"text": system}}}
+	}
+	if hasTools(cr) {
+		decls := make([]map[string]any, len(cr.Tools))
+		for i, d := range cr.Tools {
+			params := d.Parameters
+			if params == nil {
+				params = map[string]any{"type": "object", "properties": map[string]any{}}
+			}
+			decls[i] = map[string]any{"name": d.Name, "description": d.Description, "parameters": params}
+		}
+		payload["tools"] = []map[string]any{{"functionDeclarations": decls}}
 	}
 	gc := map[string]any{}
 	if cr.Temperature != nil {
@@ -114,21 +145,22 @@ func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr 
 		baseURL(conn), url.PathEscape(cr.Model), url.QueryEscape(key))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(raw))
 	if err != nil {
-		return Usage{}, scrubKey(err, key)
+		return ChatResult{}, scrubKey(err, key)
 	}
 	req.Header.Set("content-type", "application/json")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return Usage{}, netErr(err, func(e error) error { return scrubKey(e, key) })
+		return ChatResult{}, netErr(err, func(e error) error { return scrubKey(e, key) })
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return Usage{}, httpErr("gemini", resp)
+		return ChatResult{}, httpErr("gemini", resp)
 	}
 
 	sc := bufio.NewScanner(resp.Body)
 	sc.Buffer(make([]byte, 0, 64*1024), 4<<20)
 	var usage Usage
+	var calls []ToolCall
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		if !strings.HasPrefix(line, "data:") {
@@ -138,7 +170,13 @@ func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr 
 		var chunk struct {
 			Candidates []struct {
 				Content struct {
-					Parts []part `json:"parts"`
+					Parts []struct {
+						Text         string `json:"text"`
+						FunctionCall *struct {
+							Name string         `json:"name"`
+							Args map[string]any `json:"args"`
+						} `json:"functionCall"`
+					} `json:"parts"`
 				} `json:"content"`
 			} `json:"candidates"`
 			UsageMetadata struct {
@@ -154,6 +192,13 @@ func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr 
 				if pt.Text != "" {
 					out <- Delta{Text: pt.Text}
 				}
+				if pt.FunctionCall != nil && pt.FunctionCall.Name != "" {
+					calls = append(calls, ToolCall{
+						ID:   fmt.Sprintf("call_%d", len(calls)),
+						Name: pt.FunctionCall.Name,
+						Args: pt.FunctionCall.Args,
+					})
+				}
 			}
 		}
 		if chunk.UsageMetadata.PromptTokenCount > 0 {
@@ -165,10 +210,10 @@ func (geminiProvider) Chat(ctx context.Context, conn Connection, key string, cr 
 	}
 	if err := sc.Err(); err != nil {
 		if m := contextErr(ctx); m != "" {
-			return usage, fmt.Errorf("%s", m)
+			return ChatResult{Usage: usage}, fmt.Errorf("%s", m)
 		}
-		return usage, err
+		return ChatResult{Usage: usage}, err
 	}
 	out <- Delta{Done: true}
-	return usage, nil
+	return ChatResult{Usage: usage, ToolCalls: calls}, nil
 }

@@ -6,12 +6,14 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/llm"
+	"github.com/infrakit/backend/internal/mcp"
 	"github.com/infrakit/backend/internal/sse"
 )
 
@@ -19,6 +21,37 @@ import (
 type LLMHandlers struct {
 	Store  *llm.Store
 	Engine *llm.Engine
+	// MCP resolves the `tools` stream param into tool definitions. Nil → tools off.
+	MCP *mcp.Manager
+}
+
+// resolveTools turns a `tools` query value ("all" or a comma list of server
+// ids) into tool definitions for the model. Empty / no MCP → nil.
+func (h *LLMHandlers) resolveTools(ctx context.Context, spec string) []llm.ToolDef {
+	if spec == "" || h.MCP == nil {
+		return nil
+	}
+	tctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	all, err := h.MCP.AggregateTools(tctx)
+	if err != nil || len(all) == 0 {
+		return nil
+	}
+	var want map[string]bool
+	if spec != "all" {
+		want = map[string]bool{}
+		for _, id := range strings.Split(spec, ",") {
+			want[strings.TrimSpace(id)] = true
+		}
+	}
+	out := make([]llm.ToolDef, 0, len(all))
+	for _, s := range all {
+		if want != nil && !want[s.Server] {
+			continue
+		}
+		out = append(out, llm.ToolDef{Name: s.QualifiedName, Description: s.Description, Parameters: s.InputSchema})
+	}
+	return out
 }
 
 func (h *LLMHandlers) ok() bool { return h != nil && h.Store != nil && h.Engine != nil }
@@ -237,8 +270,9 @@ func (h *LLMHandlers) TaskRunStream(w http.ResponseWriter, r *http.Request) {
 	ch := make(chan sse.Message, 128)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	tools := h.resolveTools(r.Context(), q.Get("tools"))
 	go func() {
-		h.Engine.RunTask(ctx, chi.URLParam(r, "id"), connID, q.Get("model"), vars, q.Get("input"), history, ch)
+		h.Engine.RunTask(ctx, chi.URLParam(r, "id"), connID, q.Get("model"), vars, q.Get("input"), history, tools, ch)
 		close(ch)
 	}()
 	sw.Pump(ctx, ch)
@@ -278,6 +312,7 @@ func (h *LLMHandlers) ChatStream(w http.ResponseWriter, r *http.Request) {
 			req.MaxTokens = n
 		}
 	}
+	req.Tools = h.resolveTools(r.Context(), q.Get("tools"))
 
 	sw, err := sse.New(w)
 	if err != nil {

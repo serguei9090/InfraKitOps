@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, RotateCcw, Send, X } from 'lucide-react'
+import { Boxes, Loader2, RotateCcw, Send, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useLlmStore } from '@/stores/llmStore'
+import { useMcpStore } from '@/stores/mcpStore'
+import { ToolSteps } from './ToolSteps'
 import { cn } from '@/lib/utils'
 
 const LAST_CONN = 'infrakit:llm-playground-conn'
@@ -18,11 +20,22 @@ export function PlaygroundView() {
   const sendMessage = useLlmStore((s) => s.sendMessage)
   const stopChat = useLlmStore((s) => s.stopChat)
   const resetChat = useLlmStore((s) => s.resetChat)
+  const setChatTools = useLlmStore((s) => s.setChatTools)
+  const mcpServers = useMcpStore((s) => s.servers)
+  const refreshMcp = useMcpStore((s) => s.refresh)
+  const mcpLoaded = useMcpStore((s) => s.loaded)
 
   const [connId, setConnId] = useState('')
   const [model, setModel] = useState('')
   const [draft, setDraft] = useState('')
+  const [toolsOn, setToolsOn] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!mcpLoaded) void refreshMcp()
+  }, [mcpLoaded, refreshMcp])
+
+  const enabledServers = mcpServers.filter((s) => s.enabled).length
 
   // restore last picks once connections load
   useEffect(() => {
@@ -56,6 +69,7 @@ export function PlaygroundView() {
     if (!connId || !model || !draft.trim()) return
     safeSet(LAST_MODEL, model)
     ensureChat() // zustand set is synchronous — the chat is in place after this
+    setChatTools(toolsOn && enabledServers > 0 ? 'all' : '')
     sendMessage(draft)
     setDraft('')
   }
@@ -101,6 +115,19 @@ export function PlaygroundView() {
         <Button size="xs" variant="ghost" onClick={() => void loadModels(connId, true)}>
           <RotateCcw className="size-3.5" /> models
         </Button>
+        <Button
+          size="xs"
+          variant={toolsOn ? 'default' : 'ghost'}
+          disabled={enabledServers === 0}
+          onClick={() => setToolsOn((v) => !v)}
+          title={
+            enabledServers === 0
+              ? 'No enabled MCP servers — add one in the MCP tab'
+              : `${enabledServers} MCP server${enabledServers === 1 ? '' : 's'}`
+          }
+        >
+          <Boxes className="size-3.5" /> Tools{toolsOn ? ' on' : ''}
+        </Button>
         <div className="flex-1" />
         <Button size="xs" variant="ghost" onClick={() => resetChat()} disabled={!chat?.turns.length}>
           Clear
@@ -123,7 +150,10 @@ export function PlaygroundView() {
                 {t.state === 'streaming' && ' · …'}
                 {t.usage && ` · ${t.usage.promptTokens}+${t.usage.completionTokens} tok`}
               </div>
-              <pre className="whitespace-pre-wrap break-words font-sans">{t.content || (t.error ?? '')}</pre>
+              {t.steps && t.steps.length > 0 && <ToolSteps steps={t.steps} className="mb-2" />}
+              {(t.content || t.error || !t.steps?.length) && (
+                <pre className="whitespace-pre-wrap break-words font-sans">{t.content || (t.error ?? '')}</pre>
+              )}
             </div>
           ))}
           {!chat?.turns.length && (
