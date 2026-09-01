@@ -22,12 +22,15 @@ import { useThemeStore } from '@/stores/themeStore'
 import { useModuleVisibilityStore } from '@/stores/moduleVisibilityStore'
 import { kModuleTaxonomy, type ModuleDef } from '@/adapters/ui/shell/moduleTaxonomy'
 import { SettingsGroup, SettingsRow } from '../SettingsScaffold'
+import { SettingsResetButton } from '../SettingsResetButton'
 
 export function GeneralSettings() {
   const mode = useThemeStore((s) => s.mode)
   const toggleTheme = useThemeStore((s) => s.toggle)
+  const resetTheme = useThemeStore((s) => s.reset)
   const railExpanded = useModuleVisibilityStore((s) => s.railExpanded)
   const toggleRail = useModuleVisibilityStore((s) => s.toggleRailExpanded)
+  const resetModules = useModuleVisibilityStore((s) => s.reset)
 
   return (
     <>
@@ -46,6 +49,13 @@ export function GeneralSettings() {
       >
         <ModuleOrderList />
       </SettingsGroup>
+
+      <SettingsResetButton
+        onReset={() => {
+          resetTheme()
+          resetModules()
+        }}
+      />
     </>
   )
 }

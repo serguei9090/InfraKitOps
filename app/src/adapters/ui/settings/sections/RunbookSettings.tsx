@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input'
 import { useBackendStore } from '@/stores/backendStore'
 import { getRunbookSettings, putRunbookSettings } from '@/adapters/backend/runbookClient'
 import { SettingsGroup, SettingsRow } from '../SettingsScaffold'
+import { SettingsResetButton } from '../SettingsResetButton'
 
 const DEFAULTS: Record<string, number> = {
   historyRetentionDays: 90,
@@ -73,6 +74,15 @@ export function RunbookSettings() {
           <NumInput value={num('vaultAutoLockMinutes')} disabled={!loaded} onCommit={(v) => save('vaultAutoLockMinutes', v)} />
         </SettingsRow>
       </SettingsGroup>
+
+      <SettingsResetButton
+        onReset={async () => {
+          const merged = await putRunbookSettings(
+            Object.fromEntries(Object.entries(DEFAULTS).map(([k, v]) => [k, String(v)])),
+          )
+          setValues(merged)
+        }}
+      />
     </>
   )
 }

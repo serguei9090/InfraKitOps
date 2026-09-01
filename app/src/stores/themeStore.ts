@@ -8,6 +8,7 @@ export type ThemeMode = 'light' | 'dark'
 interface ThemeStore {
   mode: ThemeMode
   toggle: () => void
+  reset: () => void
 }
 
 /**
@@ -20,6 +21,7 @@ export const useThemeStore = create<ThemeStore>()(
     (set) => ({
       mode: 'dark',
       toggle: () => set((s) => ({ mode: s.mode === 'dark' ? 'light' : 'dark' })),
+      reset: () => set({ mode: 'dark' }),
     }),
     {
       name: 'theme',

@@ -12,6 +12,7 @@ interface ModuleVisibilityStore {
   reorder: (oldIndex: number, newIndex: number) => void
   toggleHidden: (moduleId: string) => void
   toggleRailExpanded: () => void
+  reset: () => void
 }
 
 /**
@@ -27,6 +28,7 @@ export const useModuleVisibilityStore = create<ModuleVisibilityStore>()(
       hiddenIds: [],
       railExpanded: false,
       toggleRailExpanded: () => set((s) => ({ railExpanded: !s.railExpanded })),
+      reset: () => set({ order: kModuleTaxonomy.map((m) => m.id), hiddenIds: [], railExpanded: false }),
       reorder: (oldIndex, newIndex) =>
         set((s) => {
           const updated = [...s.order]

@@ -9,6 +9,7 @@ import type { LlmTask } from '@/core/llm/llmModel'
 import { groupTasks } from '@/core/llm/taskGroups'
 import { TaskDialog } from '@/adapters/ui/ai/TaskDialog'
 import { SettingsGroup, SettingsRow } from '../SettingsScaffold'
+import { SettingsResetButton } from '../SettingsResetButton'
 
 export function AiSettings() {
   const status = useBackendStore((s) => s.status)
@@ -151,6 +152,16 @@ export function AiSettings() {
           ))}
         </SettingsGroup>
       ))}
+
+      <SettingsResetButton
+        label="Reset AI settings"
+        onReset={async () => {
+          await putSettings({ defaultConnectionId: '', defaultModel: '', defaultTemperature: '' })
+          for (const t of tasks.filter((x) => x.overridden)) {
+            await resetTask(t.id)
+          }
+        }}
+      />
 
       <TaskDialog
         key={editing?.id ?? 'closed'}
