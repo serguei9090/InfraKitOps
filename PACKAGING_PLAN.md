@@ -1,9 +1,11 @@
 # Packaging & Build — Phase 7
 
-Status: **proposal, not started (2026-09-01).** Expands `MIGRATION_PLAN.md`
-Phase 7 into checkpoints now that the Go backend exists and ships as a Tauri
-sidecar (`app/src-tauri` → `NETWORK_MODULE_PLAN.md` §2.1, `CLAUDE.md` "sidecar
-wiring").
+Status: **P7a/P7b done, P7c analysed, P7d baseline proven — PAUSED 2026-09-01
+by owner.** `bun run tauri build` already produces working MSI + NSIS
+installers. The rest (P7d tuning, P7e clean-VM verification, P7f web deploy,
+P7g Linux, P7h release CI) is **on hold until the user asks to finish the
+deployment build** — the app stays dev-run for now while feature/fix work
+continues. Expands `MIGRATION_PLAN.md` Phase 7.
 
 Goal: one reproducible command produces a **signed-or-at-least-clean Windows
 installer** that installs → launches → runs a backend tool → uninstalls with no
