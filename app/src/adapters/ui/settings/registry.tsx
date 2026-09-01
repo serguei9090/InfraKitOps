@@ -1,4 +1,4 @@
-import { Info, Network, Server, SlidersHorizontal, Sparkles, SquareTerminal } from 'lucide-react'
+import { Info, Network, Server, SlidersHorizontal, Sparkles, SquareTerminal, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { GeneralSettings } from './sections/GeneralSettings'
@@ -6,6 +6,7 @@ import { AiSettings } from './sections/AiSettings'
 import { RunbookSettings } from './sections/RunbookSettings'
 import { NetworkSettings } from './sections/NetworkSettings'
 import { BackendSettings } from './sections/BackendSettings'
+import { UsersSettings } from './sections/UsersSettings'
 import { AboutSettings } from './sections/AboutSettings'
 
 export interface SettingsSectionDef {
@@ -16,6 +17,8 @@ export interface SettingsSectionDef {
   scope: 'local' | 'global' | 'info'
   /** extra terms the settings search matches against (S3c) */
   keywords?: string[]
+  /** only shown to an admin in multi-user mode (U1) */
+  adminOnly?: boolean
   element: ReactNode
 }
 
@@ -64,6 +67,15 @@ export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     scope: 'info',
     keywords: ['sidecar', 'service', 'endpoint', 'token', 'reconnect', 'status', 'capabilities', 'url', 'override', 'self-hosted'],
     element: <BackendSettings />,
+  },
+  {
+    id: 'users',
+    label: 'Users',
+    icon: Users,
+    scope: 'global',
+    adminOnly: true,
+    keywords: ['account', 'role', 'admin', 'operator', 'viewer', 'permission', 'access', 'password', 'audit', 'login'],
+    element: <UsersSettings />,
   },
   { id: 'about', label: 'About', icon: Info, scope: 'info', keywords: ['version', 'license', 'plan'], element: <AboutSettings /> },
 ]

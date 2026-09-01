@@ -23,6 +23,27 @@ export interface BackendConnection {
 
 let resolved: BackendConnection | null = null
 
+/**
+ * Multi-user session token (USER_MANAGEMENT_PLAN.md U1). When set it takes
+ * priority over the static bearer token for every request. `authStore` owns it.
+ */
+let sessionToken: string | null = null
+
+export function setSessionToken(t: string | null): void {
+  sessionToken = t
+  resolved = null // re-resolve `available` with/without the session
+}
+
+export function getSessionToken(): string | null {
+  return sessionToken
+}
+
+/** Called on any 401 so `authStore` can drop the session and show /login. */
+let onUnauthorized: (() => void) | null = null
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  onUnauthorized = fn
+}
+
 async function resolveConnection(): Promise<BackendConnection> {
   if (resolved) return resolved
   if (isTauri()) {
@@ -32,7 +53,10 @@ async function resolveConnection(): Promise<BackendConnection> {
       resolved = { endpoint: '', token: '', available: false }
     }
   } else {
-    resolved = resolveWebEndpoint()
+    const web = resolveWebEndpoint()
+    // A live session implies the user already reached the backend (via /login),
+    // so treat it as available even with no configured URL (same-origin deploy).
+    resolved = { ...web, available: web.available || sessionToken != null }
   }
   return resolved
 }
@@ -43,7 +67,13 @@ export function resetBackendConnection(): void {
 }
 
 function authHeaders(token: string): HeadersInit {
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  const t = sessionToken || token
+  return t ? { Authorization: `Bearer ${t}` } : {}
+}
+
+/** The credential to put in a `?token=` query param for EventSource streams. */
+export function streamToken(fallback: string): string {
+  return sessionToken || fallback
 }
 
 export class BackendUnavailableError extends Error {
@@ -61,6 +91,11 @@ async function throwHttpError(res: Response, path: string): Promise<never> {
     if (j && (j.error || j.code)) body = j
   } catch {
     /* keep the status-line fallback */
+  }
+  // A 401 in multi-user mode means the session is gone — let authStore react
+  // (but not for the login call itself, which surfaces its own error).
+  if (res.status === 401 && sessionToken && !path.startsWith('/auth/login') && !path.startsWith('/auth/bootstrap')) {
+    onUnauthorized?.()
   }
   throw classify(body)
 }
@@ -82,6 +117,8 @@ export interface HealthInfo {
   uptimeSec: number
   elevated: boolean
   os: string
+  /** "on" when the backend runs in multi-user mode (USER_MANAGEMENT_PLAN.md) */
+  authMode?: 'off' | 'on'
 }
 
 export interface ToolCapability {
@@ -183,7 +220,8 @@ export async function backendStreamUrl(path: string, params?: Record<string, str
   const conn = await resolveConnection()
   if (!conn.available) throw new BackendUnavailableError()
   const qs = new URLSearchParams(params)
-  if (conn.token) qs.set('token', conn.token)
+  const tok = streamToken(conn.token)
+  if (tok) qs.set('token', tok)
   const query = qs.toString()
   return `${conn.endpoint}/api/v1${path}${query ? `?${query}` : ''}`
 }

@@ -1,5 +1,5 @@
 import { fetchEventSource } from '@microsoft/fetch-event-source'
-import { BackendUnavailableError } from './backendClient'
+import { BackendUnavailableError, getSessionToken, streamToken } from './backendClient'
 import { resolveWebEndpoint } from './endpointOverride'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 
@@ -26,7 +26,8 @@ async function resolve(): Promise<Connection> {
       conn = { endpoint: '', token: '', available: false }
     }
   } else {
-    conn = resolveWebEndpoint()
+    const web = resolveWebEndpoint()
+    conn = { ...web, available: web.available || getSessionToken() != null }
   }
   return conn
 }
@@ -60,11 +61,12 @@ export function openStream(
     }
     const qs = new URLSearchParams(params).toString()
     const url = `${c.endpoint}/api/v1${path}${qs ? `?${qs}` : ''}`
+    const tok = streamToken(c.token)
 
     try {
       await fetchEventSource(url, {
         signal: controller.signal,
-        headers: c.token ? { Authorization: `Bearer ${c.token}` } : {},
+        headers: tok ? { Authorization: `Bearer ${tok}` } : {},
         openWhenHidden: true,
         onopen: async (res) => {
           if (res.ok) return

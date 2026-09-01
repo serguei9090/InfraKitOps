@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils'
 import { createSchemaRepository } from '@/adapters/storage/schemaRepository'
 import { useModuleVisibilityStore, visibleModulesInOrder } from '@/stores/moduleVisibilityStore'
 import { useSearchQueryStore } from '@/stores/searchQueryStore'
+import { useAuthStore } from '@/stores/authStore'
+import { canSeeModule } from '@/core/auth/authModel'
 import { moduleContainingRoute, moduleRailRoute, type ModuleDef } from './moduleTaxonomy'
 import { prefetchRoute } from './prefetchRoute'
 
@@ -29,7 +31,8 @@ const FORMFLOW_BUILDER_ROUTE = '/tools/formflow-builder'
 export function AppSidebar() {
   const { pathname } = useLocation()
   const { order, hiddenIds } = useModuleVisibilityStore()
-  const modules = visibleModulesInOrder(order, hiddenIds)
+  const me = useAuthStore((s) => s.me)
+  const modules = visibleModulesInOrder(order, hiddenIds).filter((m) => canSeeModule(me, m.id))
   const activeModuleId = activeModuleIdFor(pathname)
   const activeModule = modules.find((m) => m.id === activeModuleId) ?? null
   const showPane = activeModule != null && !activeModule.hideToolPane

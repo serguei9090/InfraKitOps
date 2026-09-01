@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/authStore'
 import { DEFAULT_SECTION, SETTINGS_SECTIONS } from './registry'
 
 /**
@@ -13,18 +14,26 @@ export function SettingsScaffold() {
   const { section } = useParams()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
-  const activeId = SETTINGS_SECTIONS.some((s) => s.id === section) ? section! : DEFAULT_SECTION
-  const active = SETTINGS_SECTIONS.find((s) => s.id === activeId)!
+  const authMode = useAuthStore((s) => s.mode)
+  const isAdmin = useAuthStore((s) => s.me?.role === 'admin')
+
+  const sections = useMemo(
+    // an adminOnly section is hidden in single-user mode and for non-admins
+    () => SETTINGS_SECTIONS.filter((s) => !s.adminOnly || (authMode === 'on' && isAdmin)),
+    [authMode, isAdmin],
+  )
+  const activeId = sections.some((s) => s.id === section) ? section! : DEFAULT_SECTION
+  const active = sections.find((s) => s.id === activeId) ?? sections[0]
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    if (!needle) return SETTINGS_SECTIONS
-    return SETTINGS_SECTIONS.filter(
+    if (!needle) return sections
+    return sections.filter(
       (s) =>
         s.label.toLowerCase().includes(needle) ||
         (s.keywords ?? []).some((k) => k.includes(needle)),
     )
-  }, [q])
+  }, [q, sections])
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl">

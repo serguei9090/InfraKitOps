@@ -1,14 +1,18 @@
-import { MoonStar, Search, SunMedium } from 'lucide-react'
+import { Lock, MoonStar, Search, SunMedium } from 'lucide-react'
 import { useEffect } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { RoutePendingBar } from './RouteFallback'
 import { Input } from '@/components/ui/input'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSearchQueryStore } from '@/stores/searchQueryStore'
 import { useThemeStore } from '@/stores/themeStore'
+import { useAuthStore } from '@/stores/authStore'
+import { canSeeModule } from '@/core/auth/authModel'
 import { ErrorToaster } from '@/adapters/ui/errors/ErrorToaster'
 import { ErrorHistoryButton } from '@/adapters/ui/errors/ErrorHistoryDrawer'
+import { UserMenu } from '@/adapters/ui/auth/UserMenu'
 import { AppSidebar } from './AppSidebar'
+import { moduleContainingRoute } from './moduleTaxonomy'
 
 /**
  * The persistent chrome around every route: brand mark + search + theme
@@ -24,10 +28,16 @@ export function AppShellScaffold() {
   const mode = useThemeStore((s) => s.mode)
   const toggle = useThemeStore((s) => s.toggle)
   const { query, setQuery } = useSearchQueryStore()
+  const me = useAuthStore((s) => s.me)
+  const location = useLocation()
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', mode === 'dark')
   }, [mode])
+
+  // multi-user: block a deep-link into a module this account can't see
+  const currentModule = moduleContainingRoute(location.pathname)
+  const moduleBlocked = !!(me && currentModule && !canSeeModule(me, currentModule.id))
 
   return (
     <TooltipProvider delay={300}>
@@ -56,13 +66,25 @@ export function AppShellScaffold() {
           >
             {mode === 'dark' ? <MoonStar className="size-[18px]" /> : <SunMedium className="size-[18px]" />}
           </button>
+          <UserMenu />
         </header>
         <div className="flex flex-1 overflow-hidden">
           <AppSidebar />
           <div className="w-px shrink-0 bg-border/60" />
           <main className="relative flex-1 overflow-auto">
             <RoutePendingBar />
-            <Outlet />
+            {moduleBlocked ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
+                <Lock className="size-6 text-muted-foreground" />
+                <p className="text-sm font-medium">This module isn&rsquo;t enabled for your account</p>
+                <p className="max-w-sm text-xs text-muted-foreground">
+                  Ask an administrator to grant you access to{' '}
+                  <span className="font-medium">{currentModule?.title}</span>.
+                </p>
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </main>
         </div>
       </div>
