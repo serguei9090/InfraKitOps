@@ -56,6 +56,8 @@ interface LlmStore {
   /** toggle MCP tools for the live chat ("" = off, "all" = every enabled server) */
   setChatTools: (tools: string) => void
   sendMessage: (text: string) => void
+  /** A4c — approve/deny a paused tool call by its approvalId */
+  resumeToolCall: (approvalId: string, approved: boolean) => void
   /** abort an in-flight reply, keeping whatever streamed so far */
   stopChat: () => void
   resetChat: () => void
@@ -174,6 +176,20 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
     if (c) set({ chat: { ...c, tools } })
   },
 
+  resumeToolCall: (approvalId, approved) => {
+    // optimistic: drop the pending flag so the buttons disappear at once
+    set((s) => {
+      if (!s.chat) return s
+      const turns = s.chat.turns.map((t) =>
+        t.steps?.some((st) => st.approvalId === approvalId)
+          ? { ...t, steps: t.steps.map((st) => (st.approvalId === approvalId ? { ...st, approvalId: undefined } : st)) }
+          : t,
+      )
+      return { chat: { ...s.chat, turns } }
+    })
+    void api.resumeTool(approvalId, approved).catch((e) => reportError(e, SRC))
+  },
+
   sendMessage: (text) => {
     const chat = get().chat
     if (!chat || chat.busy || !text.trim()) return
@@ -213,10 +229,21 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
                 ...(cur.steps ?? []),
                 { id: String(d.id), name: String(d.name), args: d.args as Record<string, unknown> | undefined },
               ]
+            } else if (name === 'tool-approval') {
+              cur.steps = (cur.steps ?? []).map((st) =>
+                st.id === String(d.id) ? { ...st, approvalId: String(d.approvalId) } : st,
+              )
             } else if (name === 'tool-result') {
               cur.steps = (cur.steps ?? []).map((st) =>
                 st.id === String(d.id)
-                  ? { ...st, done: true, ok: d.ok !== false, result: (d.text as string) ?? '' }
+                  ? {
+                      ...st,
+                      done: true,
+                      ok: d.ok !== false,
+                      denied: d.denied === true,
+                      approvalId: undefined,
+                      result: (d.text as string) ?? '',
+                    }
                   : st,
               )
             } else if (name === 'end') {

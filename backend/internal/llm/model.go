@@ -49,6 +49,9 @@ type ToolDef struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Parameters  any    `json:"parameters"`
+	// ReadOnly mirrors the MCP annotations.readOnlyHint — a read-only tool
+	// runs without asking; anything else pauses for approval (A4c).
+	ReadOnly bool `json:"readOnly"`
 }
 
 // ToolCall is a tool invocation the model asked for.

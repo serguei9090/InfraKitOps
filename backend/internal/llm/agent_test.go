@@ -66,7 +66,7 @@ func TestAgentLoopRunsToolThenAnswers(t *testing.T) {
 	req := ChatRequest{
 		Model:    "m",
 		Messages: []ChatMessage{{Role: "user", Content: "explain unix pipes"}},
-		Tools:    []ToolDef{{Name: "srv1__search", Description: "search", Parameters: map[string]any{"type": "object"}}},
+		Tools:    []ToolDef{{Name: "srv1__search", Description: "search", Parameters: map[string]any{"type": "object"}, ReadOnly: true}},
 	}
 	done := make(chan struct{})
 	go func() { eng.stream(context.Background(), conn.ID, req, OutputText, out); close(out); close(done) }()
@@ -93,6 +93,70 @@ func TestAgentLoopRunsToolThenAnswers(t *testing.T) {
 	}
 	if round != 2 {
 		t.Fatalf("provider rounds = %d, want 2", round)
+	}
+}
+
+// TestAgentLoopWaitsForApproval: a non-read-only tool pauses on a
+// `tool-approval` event; ResumeTool(false) declines it and the model still
+// gets a (declined) tool result to react to.
+func TestAgentLoopWaitsForApproval(t *testing.T) {
+	var round int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		round++
+		fl := w.(http.Flusher)
+		if round == 1 {
+			fmt.Fprint(w, `data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"srv1__write","arguments":"{}"}}]}}]}`+"\n\n")
+			fmt.Fprint(w, "data: [DONE]\n\n")
+			fl.Flush()
+			return
+		}
+		if !strings.Contains(string(raw), "declined") {
+			t.Errorf("round 2 missing declined result: %s", raw)
+		}
+		fmt.Fprint(w, `data: {"choices":[{"delta":{"content":"ok, skipping that"}}]}`+"\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+		fl.Flush()
+	}))
+	defer srv.Close()
+
+	s := newStore(t)
+	conn, _ := s.PutConnection(Connection{Name: "O", Provider: ProviderOpenAICompatible, BaseURL: srv.URL})
+	eng := NewEngine(s, nil)
+	fr := &fakeRunner{}
+	eng.SetToolRunner(fr)
+
+	out := make(chan sse.Message, 64)
+	req := ChatRequest{
+		Model:    "m",
+		Messages: []ChatMessage{{Role: "user", Content: "delete everything"}},
+		Tools:    []ToolDef{{Name: "srv1__write", Description: "write", Parameters: map[string]any{"type": "object"}}}, // not read-only
+	}
+	go func() { eng.stream(context.Background(), conn.ID, req, OutputText, out); close(out) }()
+
+	var events []string
+	var answer strings.Builder
+	for m := range out {
+		events = append(events, m.Event)
+		if m.Event == "tool-approval" {
+			apID := m.Data.(map[string]any)["approvalId"].(string)
+			if !eng.ResumeTool(apID, false) {
+				t.Fatalf("ResumeTool returned false for %s", apID)
+			}
+		}
+		if m.Event == "delta" {
+			answer.WriteString(m.Data.(map[string]string)["text"])
+		}
+	}
+
+	if len(fr.calls) != 0 {
+		t.Fatalf("declined tool still ran: %v", fr.calls)
+	}
+	if j := strings.Join(events, ","); !strings.Contains(j, "tool-approval") || !strings.Contains(j, "tool-result") {
+		t.Fatalf("missing events: %s", j)
+	}
+	if !strings.Contains(answer.String(), "skipping") {
+		t.Fatalf("final answer = %q", answer.String())
 	}
 }
 

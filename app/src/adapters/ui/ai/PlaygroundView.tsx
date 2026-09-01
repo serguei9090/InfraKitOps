@@ -21,6 +21,7 @@ export function PlaygroundView() {
   const stopChat = useLlmStore((s) => s.stopChat)
   const resetChat = useLlmStore((s) => s.resetChat)
   const setChatTools = useLlmStore((s) => s.setChatTools)
+  const resumeToolCall = useLlmStore((s) => s.resumeToolCall)
   const mcpServers = useMcpStore((s) => s.servers)
   const refreshMcp = useMcpStore((s) => s.refresh)
   const mcpLoaded = useMcpStore((s) => s.loaded)
@@ -150,7 +151,14 @@ export function PlaygroundView() {
                 {t.state === 'streaming' && ' · …'}
                 {t.usage && ` · ${t.usage.promptTokens}+${t.usage.completionTokens} tok`}
               </div>
-              {t.steps && t.steps.length > 0 && <ToolSteps steps={t.steps} className="mb-2" />}
+              {t.steps && t.steps.length > 0 && (
+                <ToolSteps
+                  steps={t.steps}
+                  className="mb-2"
+                  onApprove={(id) => resumeToolCall(id, true)}
+                  onDeny={(id) => resumeToolCall(id, false)}
+                />
+              )}
               {(t.content || t.error || !t.steps?.length) && (
                 <pre className="whitespace-pre-wrap break-words font-sans">{t.content || (t.error ?? '')}</pre>
               )}

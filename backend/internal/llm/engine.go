@@ -36,6 +36,10 @@ type ToolCallOutput struct {
 // maxToolIterations bounds the agent loop per turn.
 const maxToolIterations = 6
 
+// toolApprovalTimeout is how long a paused (non-read-only) tool call waits for
+// the user's decision before it is treated as declined.
+const toolApprovalTimeout = 5 * time.Minute
+
 // Engine runs model listing and chat against configured connections.
 type Engine struct {
 	Store   *Store
@@ -45,11 +49,50 @@ type Engine struct {
 
 	mu    sync.Mutex
 	cache map[string]modelCacheEntry
+
+	approvalMu sync.Mutex
+	approvals  map[string]chan bool
 }
 
 // SetToolRunner wires the MCP tool runner (A4b). Nil → tool-enabled requests
 // still work but every tool call reports "tools unavailable".
 func (e *Engine) SetToolRunner(t ToolRunner) { e.tools = t }
+
+// awaitApproval registers a pending tool-approval and returns its id + channel.
+func (e *Engine) awaitApproval() (string, chan bool) {
+	id := newID("ap")
+	ch := make(chan bool, 1)
+	e.approvalMu.Lock()
+	if e.approvals == nil {
+		e.approvals = map[string]chan bool{}
+	}
+	e.approvals[id] = ch
+	e.approvalMu.Unlock()
+	return id, ch
+}
+
+func (e *Engine) clearApproval(id string) {
+	e.approvalMu.Lock()
+	delete(e.approvals, id)
+	e.approvalMu.Unlock()
+}
+
+// ResumeTool delivers the user's decision for a paused tool call. Returns false
+// if the id is unknown (already resolved, expired, or the stream is gone).
+func (e *Engine) ResumeTool(id string, approved bool) bool {
+	e.approvalMu.Lock()
+	ch := e.approvals[id]
+	e.approvalMu.Unlock()
+	if ch == nil {
+		return false
+	}
+	select {
+	case ch <- approved:
+		return true
+	default:
+		return false
+	}
+}
 
 type modelCacheEntry struct {
 	models []Model
@@ -183,6 +226,10 @@ func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, sha
 	if hasTools(req) {
 		iters = maxToolIterations
 	}
+	readOnly := map[string]bool{}
+	for _, t := range req.Tools {
+		readOnly[t.Name] = t.ReadOnly
+	}
 
 	var total Usage
 	var lastText string
@@ -212,13 +259,40 @@ func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, sha
 		req.Messages = append(req.Messages, ChatMessage{Role: "assistant", Content: text, ToolCalls: res.ToolCalls})
 		for _, tc := range res.ToolCalls {
 			if !send(sse.Message{Event: "tool-call", Data: map[string]any{
-				"id": tc.ID, "name": tc.Name, "args": tc.Args,
+				"id": tc.ID, "name": tc.Name, "args": tc.Args, "readOnly": readOnly[tc.Name],
 			}}) {
 				return
 			}
-			outText, isErr := e.callTool(ctx, tc)
+
+			approved := true
+			if !readOnly[tc.Name] {
+				apID, ch := e.awaitApproval()
+				if !send(sse.Message{Event: "tool-approval", Data: map[string]any{
+					"approvalId": apID, "id": tc.ID, "name": tc.Name, "args": tc.Args,
+				}}) {
+					e.clearApproval(apID)
+					return
+				}
+				select {
+				case approved = <-ch:
+				case <-time.After(toolApprovalTimeout):
+					approved = false
+				case <-ctx.Done():
+					e.clearApproval(apID)
+					return
+				}
+				e.clearApproval(apID)
+			}
+
+			var outText string
+			var isErr bool
+			if approved {
+				outText, isErr = e.callTool(ctx, tc)
+			} else {
+				outText, isErr = "The user declined to run this tool.", true
+			}
 			if !send(sse.Message{Event: "tool-result", Data: map[string]any{
-				"id": tc.ID, "name": tc.Name, "ok": !isErr, "text": outText,
+				"id": tc.ID, "name": tc.Name, "ok": !isErr, "text": outText, "denied": !approved,
 			}}) {
 				return
 			}

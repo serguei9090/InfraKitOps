@@ -65,6 +65,10 @@ export function openChatStream(opts: ChatStreamOpts, handlers: StreamHandlers): 
   return openStream('/llm/chat/stream', params, handlers)
 }
 
+/** A4c — deliver the user's decision for a paused (non-read-only) tool call. */
+export const resumeTool = (approvalId: string, approved: boolean) =>
+  backendRequest<{ ok: boolean }>('POST', `/llm/tool/${approvalId}/resume`, { approved })
+
 // --- tasks -------------------------------------------------------
 
 export const listTasks = () =>

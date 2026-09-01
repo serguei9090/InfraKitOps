@@ -49,7 +49,10 @@ func (h *LLMHandlers) resolveTools(ctx context.Context, spec string) []llm.ToolD
 		if want != nil && !want[s.Server] {
 			continue
 		}
-		out = append(out, llm.ToolDef{Name: s.QualifiedName, Description: s.Description, Parameters: s.InputSchema})
+		out = append(out, llm.ToolDef{
+			Name: s.QualifiedName, Description: s.Description,
+			Parameters: s.InputSchema, ReadOnly: s.ReadOnly,
+		})
 	}
 	return out
 }
@@ -326,6 +329,23 @@ func (h *LLMHandlers) ChatStream(w http.ResponseWriter, r *http.Request) {
 		close(ch)
 	}()
 	sw.Pump(ctx, ch)
+}
+
+// ResumeTool: POST /llm/tool/{id}/resume  {approved:bool} — deliver the user's
+// decision for a paused (non-read-only) tool call (A4c).
+func (h *LLMHandlers) ResumeTool(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var b struct {
+		Approved bool `json:"approved"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	ok := h.Engine.ResumeTool(chi.URLParam(r, "id"), b.Approved)
+	WriteJSON(w, http.StatusOK, map[string]bool{"ok": ok})
 }
 
 // LLMProviders reports the provider kinds this build supports.

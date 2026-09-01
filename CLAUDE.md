@@ -316,10 +316,16 @@ Assistant.
   blocks, gemini `functionCall`), agent loop in `engine.go` `stream()` (max 6
   iters, `ToolRunner` iface + `mcpToolRunner` in main.go), SSE
   `tool-call`/`tool-result`, `?tools=all|<ids>` on chat + task streams, FE
-  Playground "Tools" toggle + `<ToolSteps>`. Auto-runs all tools (approval is
-  **A4c next**). A4d = per-task opt-in. Lets the model look up
-  commands/docs not in its training (Context7, web search). Note: Knowledge
-  Hub's `McpServersScreen` is just a link list, unrelated.
+  Playground "Tools" toggle + `<ToolSteps>`. **A4c done 2026-09-01**:
+  `ToolDef.ReadOnly` (from MCP `readOnlyHint`) — read-only tools auto-run,
+  others pause on a `tool-approval` SSE event and wait on
+  `POST /llm/tool/{id}/resume {approved}` (`Engine.ResumeTool`, 5-min timeout
+  → deny); declined result still fed back so the model reacts. FE: amber
+  Approve/Deny row in `<ToolSteps>`, `llmStore.resumeToolCall`. **A4d next** =
+  per-task opt-in (`Task.tools` + `TaskDialog` + `<AiPanel>` passthrough).
+  Lets the model look up commands/docs not in its training (Context7, web
+  search). Note: Knowledge Hub's `McpServersScreen` is just a link list,
+  unrelated.
 ### Settings module (started 2026-08-31, S0–S2 done)
 
 `/settings` page (`adapters/ui/settings/`) — replaces the old rearrange-only

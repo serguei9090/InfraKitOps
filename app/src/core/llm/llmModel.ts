@@ -57,11 +57,15 @@ export interface TokenUsage {
   completionTokens: number
 }
 
-/** A tool call the model made mid-answer (A4b). */
+/** A tool call the model made mid-answer (A4b / A4c). */
 export interface ChatToolStep {
   id: string
   name: string
   args?: Record<string, unknown>
+  /** set while a non-read-only call waits for the user's decision (A4c) */
+  approvalId?: string
+  /** the user declined this call */
+  denied?: boolean
   /** filled in once the tool-result event arrives */
   done?: boolean
   ok?: boolean
