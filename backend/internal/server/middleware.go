@@ -9,6 +9,7 @@ import (
 
 	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/auth"
+	"github.com/infrakit/backend/internal/userctx"
 )
 
 // tauriOrigins are the exact browser origins the desktop webview reports.
@@ -103,7 +104,9 @@ func sessionAuth(svc *auth.Service) func(http.Handler) http.Handler {
 				apierr.Write(w, apierr.Auth("session invalid or expired"))
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
+			ctx := context.WithValue(r.Context(), userKey, u)
+			ctx = userctx.With(ctx, u.ID) // low-level packages scope per user off this
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

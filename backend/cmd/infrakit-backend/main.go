@@ -75,12 +75,15 @@ func main() {
 	if orch != nil {
 		defer orch.Close()
 	}
-	vlt := openVault(*vaultPath, *vaultAutoLock)
+	vlt := openVaultRegistry(*vaultPath, *vaultAutoLock)
+	if vlt != nil {
+		defer vlt.CloseAll()
+	}
 	var engine *orchestrator.Engine
 	if orch != nil {
 		var secrets orchestrator.SecretResolver
 		if vlt != nil {
-			secrets = vlt
+			secrets = vlt.Resolver()
 		}
 		engine = orchestrator.NewEngine(orch, secrets, *maxConcurrentRuns)
 		// Stored module settings override the process flags.
@@ -99,7 +102,7 @@ func main() {
 		defer llmStore.Close()
 		var secrets llm.SecretResolver
 		if vlt != nil {
-			secrets = vlt
+			secrets = vlt.Resolver()
 		}
 		llmEngine = llm.NewEngine(llmStore, secrets)
 
@@ -121,7 +124,7 @@ func main() {
 		} else {
 			var mcpSecrets mcp.SecretResolver
 			if vlt != nil {
-				mcpSecrets = vlt
+				mcpSecrets = vlt.Resolver()
 			}
 			mcpManager = mcp.NewManager(mcpStore, mcpSecrets, api.Version)
 			defer mcpManager.CloseAll()
@@ -312,8 +315,10 @@ func openAuth(path string) *auth.Store {
 	return s
 }
 
-// openVault loads (does not unlock) the vault file.
-func openVault(path string, autoLock time.Duration) *vault.Vault {
+// openVaultRegistry resolves the vault location and returns a per-user
+// registry (U2). Single-user mode uses exactly one vault at <path>; multi-user
+// mode adds vault/<userID>.enc siblings.
+func openVaultRegistry(path string, autoLock time.Duration) *vault.Registry {
 	if path == "off" {
 		return nil
 	}
@@ -325,13 +330,8 @@ func openVault(path string, autoLock time.Duration) *vault.Vault {
 		}
 		path = filepath.Join(d, "vault.enc")
 	}
-	v, err := vault.Open(path, autoLock)
-	if err != nil {
-		log.Printf("vault: open %s: %v (vault disabled)", path, err)
-		return nil
-	}
-	log.Printf("vault: %s", path)
-	return v
+	log.Printf("vault: %s (+ vault/ per user)", path)
+	return vault.NewRegistry(path, autoLock)
 }
 
 func mustToken() string {

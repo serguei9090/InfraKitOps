@@ -23,13 +23,13 @@ import (
 type RunbookHandlers struct {
 	Store  *orchestrator.Store
 	Engine *orchestrator.Engine
-	Vault  *vault.Vault // for applying vault-autolock from module settings
+	Vault  *vault.Registry // per-user vault registry; for applying vault-autolock from module settings
 }
 
 // ApplyRunbookSettings pushes the settings that map onto live objects — the
 // concurrency cap and the vault idle timeout. Called at startup and after every
 // settings write. Missing / unparseable keys are left at their current value.
-func ApplyRunbookSettings(st map[string]string, engine *orchestrator.Engine, vlt *vault.Vault) {
+func ApplyRunbookSettings(st map[string]string, engine *orchestrator.Engine, vlt *vault.Registry) {
 	if engine != nil {
 		if v := st["maxConcurrentRuns"]; v != "" {
 			if n, err := strconv.Atoi(v); err == nil {
@@ -242,7 +242,7 @@ func (h *RunbookHandlers) Preview(w http.ResponseWriter, r *http.Request) {
 		Args    map[string]string `json:"args"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	p, _, _, err := h.Engine.BuildPreview(rb, body.Version, body.Args)
+	p, _, _, err := h.Engine.BuildPreview(r.Context(), rb, body.Version, body.Args)
 	if err != nil {
 		writeStoreErr(w, err)
 		return
@@ -381,7 +381,7 @@ func (h *RunbookHandlers) TestNode(w http.ResponseWriter, r *http.Request) {
 	}
 	t := &executor.SSHTarget{Host: n.Host, Port: n.Port, User: n.User, HostKeyFP: n.HostKeyFP}
 	if n.AuthSecret != "" && h.Engine != nil && h.Engine.Secrets != nil {
-		v, serr := h.Engine.Secrets.Resolve(n.AuthSecret)
+		v, serr := h.Engine.Secrets.Resolve(r.Context(), n.AuthSecret)
 		if serr != nil {
 			apierr.Write(w, apierr.Locked("can't read the node's auth secret — the vault is locked"))
 			return

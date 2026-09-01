@@ -42,7 +42,7 @@ type Options struct {
 	// RunbookEngine executes runbooks. Nil → running is unavailable.
 	RunbookEngine *orchestrator.Engine
 	// Vault is the secret store. Nil → /vault* endpoints 503.
-	Vault *vault.Vault
+	Vault *vault.Registry
 	// LLM is the AI-layer store. Nil → /llm* endpoints 503.
 	LLM *llm.Store
 	// LLMEngine runs model listing + chat. Nil → the same.
@@ -74,7 +74,7 @@ func NewRouter(opts Options) http.Handler {
 		DefaultPolicy: opts.HistoryPolicy,
 	}
 	rbh := &api.RunbookHandlers{Store: opts.Orchestrator, Engine: opts.RunbookEngine, Vault: opts.Vault}
-	vh := &api.VaultHandlers{Vault: opts.Vault}
+	vh := &api.VaultHandlers{Reg: opts.Vault}
 	lh := &api.LLMHandlers{
 		Store: opts.LLM, Engine: opts.LLMEngine, MCP: opts.MCP,
 		History: opts.LLMHistory, Usage: opts.LLMUsage,

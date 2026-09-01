@@ -13,10 +13,11 @@ import (
 	"github.com/infrakit/backend/internal/sse"
 )
 
-// SecretResolver fetches an API key from the Vault by secret id. The Vault type
-// satisfies this; a nil resolver means keyed connections are unusable.
+// SecretResolver fetches an API key from the calling user's Vault by secret
+// id (the user is carried on ctx — see internal/userctx). A nil resolver
+// means keyed connections are unusable.
 type SecretResolver interface {
-	Resolve(id string) (string, error)
+	Resolve(ctx context.Context, id string) (string, error)
 }
 
 // ToolRunner executes a tool call routed by qualified name. *mcp.Manager
@@ -167,14 +168,14 @@ func NewEngine(store *Store, secrets SecretResolver) *Engine {
 
 // resolveKey returns the plaintext API key for a connection, or "" for a
 // keyless one. The key never leaves the backend.
-func (e *Engine) resolveKey(conn Connection) (string, error) {
+func (e *Engine) resolveKey(ctx context.Context, conn Connection) (string, error) {
 	if conn.AuthSecretID == "" {
 		return "", nil
 	}
 	if e.Secrets == nil {
 		return "", fmt.Errorf("vault unavailable — cannot read this connection's key")
 	}
-	v, err := e.Secrets.Resolve(conn.AuthSecretID)
+	v, err := e.Secrets.Resolve(ctx, conn.AuthSecretID)
 	if err != nil {
 		return "", fmt.Errorf("read connection key: %w", err)
 	}
@@ -187,7 +188,7 @@ func (e *Engine) TestConnection(ctx context.Context, id string) ([]Model, error)
 	if err != nil {
 		return nil, err
 	}
-	key, err := e.resolveKey(*conn)
+	key, err := e.resolveKey(ctx, *conn)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +255,7 @@ func (e *Engine) stream(ctx context.Context, connID, taskID string, req ChatRequ
 		send(sse.Message{Event: "error", Data: map[string]string{"error": "connection not found"}})
 		return
 	}
-	key, err := e.resolveKey(*conn)
+	key, err := e.resolveKey(ctx, *conn)
 	if err != nil {
 		send(sse.Message{Event: "error", Data: map[string]string{"error": err.Error()}})
 		return

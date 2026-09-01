@@ -23,7 +23,7 @@ func testManager(t *testing.T, configure func(*sdk.Server)) (*Manager, string, *
 	configure(srv)
 
 	m := NewManager(store, nil, "test")
-	m.dial = func(ServerConfig) (sdk.Transport, error) {
+	m.dial = func(context.Context, ServerConfig) (sdk.Transport, error) {
 		ct, st := sdk.NewInMemoryTransports()
 		go func() { _ = srv.Run(context.Background(), st) }()
 		return ct, nil

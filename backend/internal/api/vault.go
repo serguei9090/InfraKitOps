@@ -9,20 +9,27 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/infrakit/backend/internal/apierr"
+	"github.com/infrakit/backend/internal/userctx"
 	"github.com/infrakit/backend/internal/vault"
 )
 
-// VaultHandlers wires /vault*. Nil Vault → 503.
+// VaultHandlers wires /vault*. Nil Reg → 503. Each request acts on the
+// calling user's vault (U2); single-user mode → the one shared vault.
 type VaultHandlers struct {
-	Vault *vault.Vault
+	Reg *vault.Registry
 }
 
 func (h *VaultHandlers) guard(w http.ResponseWriter) bool {
-	if h == nil || h.Vault == nil {
+	if h == nil || h.Reg == nil {
 		apierr.Write(w, apierr.Unavailable("the vault"))
 		return false
 	}
 	return true
+}
+
+// v returns the vault for the request's user ("" in single-user mode).
+func (h *VaultHandlers) v(r *http.Request) *vault.Vault {
+	return h.Reg.For(userctx.From(r.Context()))
 }
 
 func vaultErr(w http.ResponseWriter, err error) {
@@ -46,88 +53,92 @@ func vaultErr(w http.ResponseWriter, err error) {
 	}
 }
 
-func (h *VaultHandlers) Status(w http.ResponseWriter, _ *http.Request) {
+func (h *VaultHandlers) Status(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	WriteJSON(w, http.StatusOK, h.Vault.Status())
+	WriteJSON(w, http.StatusOK, h.v(r).Status())
 }
 
 func (h *VaultHandlers) Init(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	var b struct{ MasterPassword string `json:"masterPassword"` }
+	var b struct {
+		MasterPassword string `json:"masterPassword"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&b)
-	if err := h.Vault.Init(b.MasterPassword); err != nil {
+	if err := h.v(r).Init(b.MasterPassword); err != nil {
 		vaultErr(w, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, h.Vault.Status())
+	WriteJSON(w, http.StatusOK, h.v(r).Status())
 }
 
 func (h *VaultHandlers) Unlock(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	var b struct{ MasterPassword string `json:"masterPassword"` }
+	var b struct {
+		MasterPassword string `json:"masterPassword"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&b)
-	if err := h.Vault.Unlock(b.MasterPassword); err != nil {
+	if err := h.v(r).Unlock(b.MasterPassword); err != nil {
 		vaultErr(w, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, h.Vault.Status())
+	WriteJSON(w, http.StatusOK, h.v(r).Status())
 }
 
-func (h *VaultHandlers) Lock(w http.ResponseWriter, _ *http.Request) {
+func (h *VaultHandlers) Lock(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	h.Vault.Lock()
-	WriteJSON(w, http.StatusOK, h.Vault.Status())
+	h.v(r).Lock()
+	WriteJSON(w, http.StatusOK, h.v(r).Status())
 }
 
 // UnlockKeyring unlocks the vault from the OS-keyring-remembered key (R4d).
-func (h *VaultHandlers) UnlockKeyring(w http.ResponseWriter, _ *http.Request) {
+func (h *VaultHandlers) UnlockKeyring(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	if err := h.Vault.UnlockWithKeyring(); err != nil {
+	if err := h.v(r).UnlockWithKeyring(); err != nil {
 		vaultErr(w, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, h.Vault.Status())
+	WriteJSON(w, http.StatusOK, h.v(r).Status())
 }
 
 // Remember stores the current key in the OS keyring.
-func (h *VaultHandlers) Remember(w http.ResponseWriter, _ *http.Request) {
+func (h *VaultHandlers) Remember(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	if err := h.Vault.Remember(); err != nil {
+	if err := h.v(r).Remember(); err != nil {
 		vaultErr(w, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, h.Vault.Status())
+	WriteJSON(w, http.StatusOK, h.v(r).Status())
 }
 
 // Forget removes the remembered key from the OS keyring.
-func (h *VaultHandlers) Forget(w http.ResponseWriter, _ *http.Request) {
+func (h *VaultHandlers) Forget(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	if err := h.Vault.Forget(); err != nil {
+	if err := h.v(r).Forget(); err != nil {
 		vaultErr(w, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, h.Vault.Status())
+	WriteJSON(w, http.StatusOK, h.v(r).Status())
 }
 
-func (h *VaultHandlers) ListSecrets(w http.ResponseWriter, _ *http.Request) {
+func (h *VaultHandlers) ListSecrets(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{"secrets": h.Vault.List()})
+	WriteJSON(w, http.StatusOK, map[string]any{"secrets": h.v(r).List()})
 }
 
 func (h *VaultHandlers) PutSecret(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +159,7 @@ func (h *VaultHandlers) PutSecret(w http.ResponseWriter, r *http.Request) {
 	if kind == "" {
 		kind = vault.KindOther
 	}
-	id, err := h.Vault.Put(chi.URLParam(r, "id"), b.Name, kind, b.Notes, b.Value)
+	id, err := h.v(r).Put(chi.URLParam(r, "id"), b.Name, kind, b.Notes, b.Value)
 	if err != nil {
 		vaultErr(w, err)
 		return
@@ -160,18 +171,18 @@ func (h *VaultHandlers) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	if err := h.Vault.Delete(chi.URLParam(r, "id")); err != nil {
+	if err := h.v(r).Delete(chi.URLParam(r, "id")); err != nil {
 		vaultErr(w, err)
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-func (h *VaultHandlers) Export(w http.ResponseWriter, _ *http.Request) {
+func (h *VaultHandlers) Export(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	b, err := h.Vault.ExportBytes()
+	b, err := h.v(r).ExportBytes()
 	if err != nil {
 		vaultErr(w, err)
 		return
@@ -193,9 +204,9 @@ func (h *VaultHandlers) Import(w http.ResponseWriter, r *http.Request) {
 		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
-	if err := h.Vault.ImportBytes(b.File, b.MasterPassword); err != nil {
+	if err := h.v(r).ImportBytes(b.File, b.MasterPassword); err != nil {
 		vaultErr(w, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, h.Vault.Status())
+	WriteJSON(w, http.StatusOK, h.v(r).Status())
 }

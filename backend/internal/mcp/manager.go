@@ -31,7 +31,7 @@ type Manager struct {
 
 	// dial builds the SDK transport for a server. Defaults to m.transport;
 	// overridden in tests to inject an in-memory transport.
-	dial func(ServerConfig) (sdk.Transport, error)
+	dial func(context.Context, ServerConfig) (sdk.Transport, error)
 }
 
 type conn struct {
@@ -141,7 +141,7 @@ func (m *Manager) Connect(ctx context.Context, id string) ([]ToolSpec, error) {
 	}
 	m.mu.Unlock()
 
-	tr, err := m.dial(*cfg)
+	tr, err := m.dial(ctx, *cfg)
 	if err != nil {
 		e := apierr.Validation(err.Error())
 		m.markErr(id, e)
@@ -338,14 +338,14 @@ func (m *Manager) refreshTools(ctx context.Context, id string, cfg *ServerConfig
 	return out, nil
 }
 
-func (m *Manager) transport(cfg ServerConfig) (sdk.Transport, error) {
+func (m *Manager) transport(ctx context.Context, cfg ServerConfig) (sdk.Transport, error) {
 	switch cfg.Transport {
 	case TransportStdio:
 		if _, err := exec.LookPath(cfg.Command); err != nil {
 			return nil, fmt.Errorf("command %q not found on PATH", cfg.Command)
 		}
 		cmd := exec.Command(cfg.Command, cfg.Args...)
-		env, err := m.buildEnv(cfg.Env)
+		env, err := m.buildEnv(ctx, cfg.Env)
 		if err != nil {
 			return nil, err
 		}
@@ -358,7 +358,7 @@ func (m *Manager) transport(cfg ServerConfig) (sdk.Transport, error) {
 			if m.secrets == nil {
 				return nil, errors.New("this server needs a vault secret, but the vault is locked/unavailable")
 			}
-			key, err := m.secrets.Resolve(cfg.AuthSecretID)
+			key, err := m.secrets.Resolve(ctx, cfg.AuthSecretID)
 			if err != nil {
 				return nil, fmt.Errorf("resolve auth secret: %w", err)
 			}
@@ -372,9 +372,9 @@ func (m *Manager) transport(cfg ServerConfig) (sdk.Transport, error) {
 }
 
 // buildEnv starts from PATH only and adds the config's env, resolving
-// {{secret:NAME}} against the vault. Nothing else from the backend's own
-// environment is passed through.
-func (m *Manager) buildEnv(env map[string]string) ([]string, error) {
+// {{secret:NAME}} against the calling user's vault. Nothing else from the
+// backend's own environment is passed through.
+func (m *Manager) buildEnv(ctx context.Context, env map[string]string) ([]string, error) {
 	out := []string{"PATH=" + os.Getenv("PATH")}
 	if sys := os.Getenv("SystemRoot"); sys != "" {
 		out = append(out, "SystemRoot="+sys) // Windows: many tools break without it
@@ -390,7 +390,7 @@ func (m *Manager) buildEnv(env map[string]string) ([]string, error) {
 				resolveErr = errors.New("env references a vault secret, but the vault is locked/unavailable")
 				return "", false
 			}
-			s, err := m.secrets.ResolveByName(ref)
+			s, err := m.secrets.ResolveByName(ctx, ref)
 			if err != nil {
 				resolveErr = fmt.Errorf("resolve secret %q: %w", ref, err)
 				return "", false

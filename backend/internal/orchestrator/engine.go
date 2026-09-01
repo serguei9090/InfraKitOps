@@ -13,11 +13,12 @@ import (
 	"github.com/infrakit/backend/internal/sse"
 )
 
-// SecretResolver resolves secrets from the vault (by `{{secret:NAME}}` ref or
-// by id for auth-secret references on ssh/http steps).
+// SecretResolver resolves secrets from the calling user's vault (by
+// `{{secret:NAME}}` ref or by id for auth-secret references on ssh/http
+// steps). The user is carried on ctx — see internal/userctx.
 type SecretResolver interface {
-	ResolveByName(name string) (string, error)
-	Resolve(id string) (string, error)
+	ResolveByName(ctx context.Context, name string) (string, error)
+	Resolve(ctx context.Context, id string) (string, error)
 }
 
 // Engine executes runbooks.
@@ -144,7 +145,7 @@ func (e *Engine) resolveSpec(rb *Runbook, version int) (*Spec, int, error) {
 }
 
 // BuildPreview resolves + validates + scans without executing.
-func (e *Engine) BuildPreview(rb *Runbook, version int, values map[string]string) (Preview, *Spec, int, error) {
+func (e *Engine) BuildPreview(ctx context.Context, rb *Runbook, version int, values map[string]string) (Preview, *Spec, int, error) {
 	spec, ver, err := e.resolveSpec(rb, version)
 	if err != nil {
 		return Preview{}, nil, 0, err
@@ -156,7 +157,7 @@ func (e *Engine) BuildPreview(rb *Runbook, version int, values map[string]string
 		if e.Secrets == nil {
 			return "", fmt.Errorf("vault unavailable")
 		}
-		return e.Secrets.ResolveByName(name)
+		return e.Secrets.ResolveByName(ctx, name)
 	}
 	for i, st := range spec.Steps {
 		rendered, secretNames := Render(st.Script, Values{Args: values, ResolveSecret: resolver})
@@ -202,7 +203,7 @@ func (e *Engine) BuildPreview(rb *Runbook, version int, values map[string]string
 // ctx is cancelled. Returns the run id (0 for a dry run). `triggeredBy` is
 // recorded on the run row ("local" for a user run, "schedule" for a cron fire).
 func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[string]string, dryRun bool, triggeredBy string, out chan<- sse.Message) int64 {
-	preview, spec, ver, err := e.BuildPreview(rb, version, values)
+	preview, spec, ver, err := e.BuildPreview(ctx, rb, version, values)
 	if err != nil {
 		out <- sse.Message{Event: "error", Data: map[string]string{"error": err.Error()}}
 		return 0
@@ -228,7 +229,7 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 	if e.Secrets != nil {
 		for _, a := range spec.Args {
 			if a.Type == ArgSecret && values[a.Name] != "" {
-				if v, err := e.Secrets.ResolveByName(values[a.Name]); err == nil {
+				if v, err := e.Secrets.ResolveByName(ctx, values[a.Name]); err == nil {
 					argSecretVals[values[a.Name]] = v
 					values[a.Name] = v
 				}
@@ -249,7 +250,7 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 		if e.Secrets == nil {
 			return "", fmt.Errorf("vault is locked or unavailable")
 		}
-		return e.Secrets.ResolveByName(name)
+		return e.Secrets.ResolveByName(ctx, name)
 	}
 
 	if triggeredBy == "" {
@@ -287,7 +288,7 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 
 		rs := RunStep{Index: i + 1, Name: stepName(st, i), Executor: string(st.Executor), StartedAt: time.Now().UnixMilli()}
 
-		exStep, target, buildErr := e.buildExecutorStep(st, rendered, values, run.Steps, secretVals)
+		exStep, target, buildErr := e.buildExecutorStep(ctx, st, rendered, values, run.Steps, secretVals)
 		rs.Target = target
 		rs.CommandRedacted = Redact(exStep.Script, secretVals)
 		if exStep.HTTP != nil {
@@ -370,13 +371,13 @@ func (w *redactWriter) Write(p []byte) (int, error) {
 // executor.Step, resolving the SSH node / auth secrets and rendering {{VAR}}
 // into the HTTP fields. `target` is a short human label for history.
 func (e *Engine) buildExecutorStep(
-	st StepSpec, rendered string, values map[string]string, prior []RunStep, secretVals map[string]string,
+	ctx context.Context, st StepSpec, rendered string, values map[string]string, prior []RunStep, secretVals map[string]string,
 ) (executor.Step, string, error) {
 	resolveByName := func(name string) (string, error) {
 		if e.Secrets == nil {
 			return "", fmt.Errorf("vault unavailable")
 		}
-		return e.Secrets.ResolveByName(name)
+		return e.Secrets.ResolveByName(ctx, name)
 	}
 	rv := Values{Args: values, Steps: prior, ResolveSecret: resolveByName}
 
@@ -399,7 +400,7 @@ func (e *Engine) buildExecutorStep(
 			}
 			t.HostKeyFP = n.HostKeyFP
 			if n.AuthSecret != "" && e.Secrets != nil {
-				v, err := e.Secrets.Resolve(n.AuthSecret)
+				v, err := e.Secrets.Resolve(ctx, n.AuthSecret)
 				if err != nil {
 					return executor.Step{}, "", fmt.Errorf("resolve node auth secret: %w", err)
 				}
@@ -411,7 +412,7 @@ func (e *Engine) buildExecutorStep(
 			}
 		}
 		if st.SSH.AuthSecretID != "" && e.Secrets != nil {
-			v, err := e.Secrets.Resolve(st.SSH.AuthSecretID)
+			v, err := e.Secrets.Resolve(ctx, st.SSH.AuthSecretID)
 			if err != nil {
 				return executor.Step{}, "", fmt.Errorf("resolve step auth secret: %w", err)
 			}
@@ -442,7 +443,7 @@ func (e *Engine) buildExecutorStep(
 			headers[h.K] = hv
 		}
 		if st.HTTP.Auth != nil && st.HTTP.Auth.SecretID != "" && e.Secrets != nil {
-			v, err := e.Secrets.Resolve(st.HTTP.Auth.SecretID)
+			v, err := e.Secrets.Resolve(ctx, st.HTTP.Auth.SecretID)
 			if err != nil {
 				return executor.Step{}, "", fmt.Errorf("resolve http auth secret: %w", err)
 			}

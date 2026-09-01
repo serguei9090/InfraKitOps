@@ -115,14 +115,14 @@ func TestEnginePreviewValidation(t *testing.T) {
 	rb, _ = s.SaveVersion(rb.ID, "")
 	eng := NewEngine(s, nil, 4)
 
-	p, _, _, err := eng.BuildPreview(rb, 0, map[string]string{})
+	p, _, _, err := eng.BuildPreview(context.Background(), rb, 0, map[string]string{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.Valid {
 		t.Fatal("missing required PORT should be invalid")
 	}
-	p, _, _, _ = eng.BuildPreview(rb, 0, map[string]string{"PORT": "8080"})
+	p, _, _, _ = eng.BuildPreview(context.Background(), rb, 0, map[string]string{"PORT": "8080"})
 	if !p.Valid || len(p.Steps) != 1 || !strings.Contains(p.Steps[0].Command, "8080") {
 		t.Fatalf("preview = %+v", p)
 	}

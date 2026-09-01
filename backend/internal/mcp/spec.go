@@ -4,7 +4,10 @@
 // in A4b to let a model call tools mid-answer. See AI_MCP_PLAN.md.
 package mcp
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
 // ErrNotFound is returned for an unknown server id.
 var ErrNotFound = errors.New("not found")
@@ -162,8 +165,10 @@ type PromptResult struct {
 // context or the SSE. See AI_MCP_PLAN.md §3.1.
 const maxResultBytes = 32 << 10
 
-// SecretResolver pulls secret material from the Vault. *vault.Vault satisfies it.
+// SecretResolver pulls secret material from the calling user's Vault (the
+// user is carried on ctx — see internal/userctx). *vault.Registry.Resolver()
+// satisfies it.
 type SecretResolver interface {
-	Resolve(id string) (string, error)
-	ResolveByName(name string) (string, error)
+	Resolve(ctx context.Context, id string) (string, error)
+	ResolveByName(ctx context.Context, name string) (string, error)
 }
