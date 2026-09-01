@@ -73,17 +73,26 @@ func (m *Manager) Connect(ctx context.Context, id string) ([]ToolSpec, error) {
 	}
 
 	// The session outlives this request — give it its own cancelable context.
-	sctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	dialCtx, dialCancel := context.WithTimeout(ctx, connectTimeout)
 	defer dialCancel()
 
-	client := sdk.NewClient(m.impl, nil)
+	// A4e-1: when the server announces its tool list changed, drop our cache so
+	// the next Tools()/AggregateTools() re-lists instead of waiting out the TTL.
+	client := sdk.NewClient(m.impl, &sdk.ClientOptions{
+		ToolListChangedHandler: func(context.Context, *sdk.ToolListChangedRequest) {
+			m.mu.Lock()
+			if cc := m.conns[id]; cc != nil {
+				cc.at = time.Time{}
+			}
+			m.mu.Unlock()
+		},
+	})
 	session, err := client.Connect(dialCtx, tr, nil)
 	if err != nil {
 		cancel()
 		return nil, classifyDial(err)
 	}
-	_ = sctx // reserved for future session-scoped work (list_changed watch)
 
 	c := &conn{session: session, cancel: cancel}
 	m.mu.Lock()
