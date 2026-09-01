@@ -90,6 +90,7 @@ func main() {
 	llmStore := openLLM(*llmDBPath)
 	var llmEngine *llm.Engine
 	var mcpManager *mcp.Manager
+	var llmHistory *llm.History
 	if llmStore != nil {
 		defer llmStore.Close()
 		var secrets llm.SecretResolver
@@ -97,6 +98,12 @@ func main() {
 			secrets = vlt
 		}
 		llmEngine = llm.NewEngine(llmStore, secrets)
+
+		if hist, err := llm.NewHistory(llmStore.DB()); err != nil {
+			log.Printf("llm history: %v (conversation history disabled)", err)
+		} else {
+			llmHistory = hist
+		}
 
 		if mcpStore, err := mcp.NewStore(llmStore.DB()); err != nil {
 			log.Printf("mcp: %v (mcp disabled)", err)
@@ -135,6 +142,7 @@ func main() {
 		LLM:           llmStore,
 		LLMEngine:     llmEngine,
 		MCP:           mcpManager,
+		LLMHistory:    llmHistory,
 		AppVersion:    api.Version,
 		HistoryPolicy: history.PrunePolicy{
 			RetentionDays: *retentionDays,

@@ -44,6 +44,8 @@ type Options struct {
 	LLMEngine *llm.Engine
 	// MCP is the Model Context Protocol client manager. Nil → /mcp* endpoints 503.
 	MCP *mcp.Manager
+	// LLMHistory persists saved conversations (A3b). Nil → /llm/conversations* 503.
+	LLMHistory *llm.History
 }
 
 // NewRouter returns the fully wired API handler.
@@ -61,7 +63,7 @@ func NewRouter(opts Options) http.Handler {
 	}
 	rbh := &api.RunbookHandlers{Store: opts.Orchestrator, Engine: opts.RunbookEngine, Vault: opts.Vault}
 	vh := &api.VaultHandlers{Vault: opts.Vault}
-	lh := &api.LLMHandlers{Store: opts.LLM, Engine: opts.LLMEngine, MCP: opts.MCP}
+	lh := &api.LLMHandlers{Store: opts.LLM, Engine: opts.LLMEngine, MCP: opts.MCP, History: opts.LLMHistory}
 	mh := &api.MCPHandlers{Manager: opts.MCP}
 
 	r.Route("/api/v1", func(r chi.Router) {
@@ -153,6 +155,11 @@ func NewRouter(opts Options) http.Handler {
 			r.Get("/connections/{id}/models", lh.Models)
 			r.Get("/chat/stream", lh.ChatStream)
 			r.Post("/tool/{id}/resume", lh.ResumeTool)
+			r.Get("/conversations", lh.ListConversations)
+			r.Post("/conversations", lh.SaveConversation)
+			r.Get("/conversations/{id}", lh.GetConversation)
+			r.Patch("/conversations/{id}", lh.PatchConversation)
+			r.Delete("/conversations/{id}", lh.DeleteConversation)
 			r.Get("/tasks", lh.ListTasks)
 			r.Post("/tasks", lh.PutTask)
 			r.Put("/tasks/{id}", lh.PutTask)

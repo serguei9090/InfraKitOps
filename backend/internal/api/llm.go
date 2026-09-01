@@ -23,6 +23,8 @@ type LLMHandlers struct {
 	Engine *llm.Engine
 	// MCP resolves the `tools` stream param into tool definitions. Nil → tools off.
 	MCP *mcp.Manager
+	// History persists saved conversations (A3b). Nil → /llm/conversations* 503.
+	History *llm.History
 }
 
 // resolveTools turns a `tools` query value ("all" or a comma list of server
@@ -354,6 +356,95 @@ func (h *LLMHandlers) ResumeTool(w http.ResponseWriter, r *http.Request) {
 	}
 	ok := h.Engine.ResumeTool(chi.URLParam(r, "id"), b.Approved)
 	WriteJSON(w, http.StatusOK, map[string]bool{"ok": ok})
+}
+
+// --- conversation history (A3b) ----------------------------------
+
+func (h *LLMHandlers) historyGuard(w http.ResponseWriter) bool {
+	if h == nil || h.History == nil {
+		WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "conversation history unavailable"})
+		return false
+	}
+	return true
+}
+
+// SaveConversation: POST /llm/conversations  (id in the body → replace).
+func (h *LLMHandlers) SaveConversation(w http.ResponseWriter, r *http.Request) {
+	if !h.historyGuard(w) {
+		return
+	}
+	var b struct {
+		llm.Conversation
+		Messages []llm.StoredMessage `json:"messages"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	id, err := h.History.Save(b.Conversation, b.Messages)
+	if err != nil {
+		llmErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"id": id})
+}
+
+// ListConversations: GET /llm/conversations
+func (h *LLMHandlers) ListConversations(w http.ResponseWriter, _ *http.Request) {
+	if !h.historyGuard(w) {
+		return
+	}
+	list, err := h.History.List()
+	if err != nil {
+		llmErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"conversations": list})
+}
+
+// GetConversation: GET /llm/conversations/{id}
+func (h *LLMHandlers) GetConversation(w http.ResponseWriter, r *http.Request) {
+	if !h.historyGuard(w) {
+		return
+	}
+	conv, msgs, err := h.History.Get(chi.URLParam(r, "id"))
+	if err != nil {
+		llmErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"conversation": conv, "messages": msgs})
+}
+
+// PatchConversation: PATCH /llm/conversations/{id}  {title?, pinned?}
+func (h *LLMHandlers) PatchConversation(w http.ResponseWriter, r *http.Request) {
+	if !h.historyGuard(w) {
+		return
+	}
+	var b struct {
+		Title  *string `json:"title"`
+		Pinned *bool   `json:"pinned"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	if err := h.History.Patch(chi.URLParam(r, "id"), b.Title, b.Pinned); err != nil {
+		llmErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// DeleteConversation: DELETE /llm/conversations/{id}
+func (h *LLMHandlers) DeleteConversation(w http.ResponseWriter, r *http.Request) {
+	if !h.historyGuard(w) {
+		return
+	}
+	if err := h.History.Delete(chi.URLParam(r, "id")); err != nil {
+		llmErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 // LLMProviders reports the provider kinds this build supports.

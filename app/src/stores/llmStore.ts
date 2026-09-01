@@ -6,9 +6,27 @@
 import { create } from 'zustand'
 import * as api from '@/adapters/backend/llmClient'
 import { reportError } from '@/stores/errorStore'
-import type { ChatMessage, ChatToolStep, LlmConnection, LlmModel, LlmTask, TokenUsage } from '@/core/llm/llmModel'
+import type {
+  ChatMessage,
+  ChatToolStep,
+  LlmConnection,
+  LlmConversation,
+  LlmModel,
+  LlmTask,
+  StoredMessage,
+  TokenUsage,
+} from '@/core/llm/llmModel'
 
 const SRC = 'AI Hub'
+
+const AUTOSAVE_KEY = 'infrakit:llm-autosave'
+const autoSaveDefault = () => {
+  try {
+    return localStorage.getItem(AUTOSAVE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 export type Section = 'playground' | 'connections' | 'tasks' | 'mcp'
 
@@ -29,6 +47,8 @@ interface LiveChat {
   busy: boolean
   /** "" = off, "all" or a comma list of MCP server ids */
   tools: string
+  /** set once this chat is saved (A3b) — further saves update the same row */
+  savedId?: string
 }
 
 interface LlmStore {
@@ -40,6 +60,10 @@ interface LlmStore {
   loaded: boolean
   error: string | null
   chat: LiveChat | null
+
+  // A3b — opt-in conversation history
+  conversations: LlmConversation[]
+  autoSave: boolean
 
   setSection: (s: Section) => void
   refresh: () => Promise<void>
@@ -61,6 +85,15 @@ interface LlmStore {
   /** abort an in-flight reply, keeping whatever streamed so far */
   stopChat: () => void
   resetChat: () => void
+
+  // A3b
+  refreshConversations: () => Promise<void>
+  setAutoSave: (on: boolean) => void
+  /** save the live chat (create or update its row); returns the id */
+  saveChat: (title?: string) => Promise<string | null>
+  loadConversation: (id: string) => Promise<void>
+  deleteConversation: (id: string) => Promise<void>
+  patchConversation: (id: string, patch: { title?: string; pinned?: boolean }) => Promise<void>
 }
 
 function msg(e: unknown): string {
@@ -76,6 +109,8 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
   loaded: false,
   error: null,
   chat: null,
+  conversations: [],
+  autoSave: autoSaveDefault(),
 
   setSection: (section) => set({ section }),
 
@@ -216,6 +251,10 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
       {
         onEvent: (name, data) => {
           const d = data as Record<string, unknown>
+          if (name === 'end' && get().autoSave) {
+            // fire after the state update below has landed
+            queueMicrotask(() => void get().saveChat())
+          }
           set((s) => {
             if (!s.chat) return s
             const turns = [...s.chat.turns]
@@ -295,6 +334,95 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
   resetChat: () => {
     get().chat?.abort()
     const c = get().chat
-    if (c) set({ chat: { ...c, turns: [], busy: false } })
+    if (c) set({ chat: { ...c, turns: [], busy: false, savedId: undefined } })
+  },
+
+  // --- A3b conversation history ----------------------------------
+
+  refreshConversations: async () => {
+    try {
+      set({ conversations: await api.listConversations() })
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
+  setAutoSave: (on) => {
+    try {
+      localStorage.setItem(AUTOSAVE_KEY, on ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+    set({ autoSave: on })
+  },
+
+  saveChat: async (title) => {
+    const c = get().chat
+    if (!c || c.turns.length === 0) return null
+    const messages: StoredMessage[] = c.turns
+      .filter((t) => t.state !== 'error')
+      .map((t) => ({ role: t.role, content: t.content, steps: t.steps }))
+    const firstUser = c.turns.find((t) => t.role === 'user')?.content ?? 'Chat'
+    try {
+      const id = await api.saveConversation({
+        id: c.savedId,
+        title: title || firstUser.slice(0, 60),
+        connId: c.connId,
+        model: c.model,
+        messages,
+      })
+      set((s) => (s.chat ? { chat: { ...s.chat, savedId: id } } : s))
+      await get().refreshConversations()
+      return id
+    } catch (e) {
+      reportError(e, SRC)
+      return null
+    }
+  },
+
+  loadConversation: async (id) => {
+    try {
+      const { conversation, messages } = await api.getConversation(id)
+      get().chat?.abort()
+      set({
+        chat: {
+          connId: conversation.connId ?? '',
+          model: conversation.model ?? '',
+          tools: '',
+          abort: () => {},
+          busy: false,
+          savedId: conversation.id,
+          turns: messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            state: 'done',
+            steps: m.steps,
+          })),
+        },
+      })
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
+  deleteConversation: async (id) => {
+    try {
+      await api.deleteConversation(id)
+      set((s) => ({
+        conversations: s.conversations.filter((c) => c.id !== id),
+        chat: s.chat?.savedId === id ? { ...s.chat, savedId: undefined } : s.chat,
+      }))
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
+  patchConversation: async (id, patch) => {
+    try {
+      await api.patchConversation(id, patch)
+      await get().refreshConversations()
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 }))

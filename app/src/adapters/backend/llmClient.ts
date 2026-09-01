@@ -6,7 +6,14 @@
  */
 import { backendGet, backendRequest } from './backendClient'
 import { openStream, type StreamHandlers } from './sseClient'
-import type { ChatMessage, LlmConnection, LlmModel, LlmTask } from '@/core/llm/llmModel'
+import type {
+  ChatMessage,
+  LlmConnection,
+  LlmConversation,
+  LlmModel,
+  LlmTask,
+  StoredMessage,
+} from '@/core/llm/llmModel'
 
 const arr = <T,>(v: T[] | null | undefined): T[] => v ?? []
 
@@ -68,6 +75,32 @@ export function openChatStream(opts: ChatStreamOpts, handlers: StreamHandlers): 
 /** A4c — deliver the user's decision for a paused (non-read-only) tool call. */
 export const resumeTool = (approvalId: string, approved: boolean) =>
   backendRequest<{ ok: boolean }>('POST', `/llm/tool/${approvalId}/resume`, { approved })
+
+// --- conversation history (A3b) ---------------------------------
+
+export const listConversations = () =>
+  backendGet<{ conversations: LlmConversation[] | null }>('/llm/conversations').then((r) => arr(r.conversations))
+
+export const getConversation = (id: string) =>
+  backendGet<{ conversation: LlmConversation; messages: StoredMessage[] | null }>(`/llm/conversations/${id}`).then(
+    (r) => ({ conversation: r.conversation, messages: arr(r.messages) }),
+  )
+
+export const saveConversation = (body: {
+  id?: string
+  title: string
+  connId?: string
+  model?: string
+  taskId?: string
+  pinned?: boolean
+  messages: StoredMessage[]
+}) => backendRequest<{ id: string }>('POST', '/llm/conversations', body).then((r) => r.id)
+
+export const patchConversation = (id: string, patch: { title?: string; pinned?: boolean }) =>
+  backendRequest<unknown>('PATCH', `/llm/conversations/${id}`, patch)
+
+export const deleteConversation = (id: string) =>
+  backendRequest<unknown>('DELETE', `/llm/conversations/${id}`)
 
 // --- tasks -------------------------------------------------------
 

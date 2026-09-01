@@ -77,6 +77,8 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"llm": {Available: true},
 		// MCP client layer (A4). 503 when the manager isn't wired.
 		"mcp": {Available: true},
+		// Opt-in conversation history (A3b).
+		"llmHistory": {Available: true},
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{

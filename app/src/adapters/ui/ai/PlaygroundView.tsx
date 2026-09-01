@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Boxes, Loader2, RotateCcw, Send, X } from 'lucide-react'
+import { Boxes, History, Loader2, Pin, RotateCcw, Save, Send, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -22,6 +22,14 @@ export function PlaygroundView() {
   const resetChat = useLlmStore((s) => s.resetChat)
   const setChatTools = useLlmStore((s) => s.setChatTools)
   const resumeToolCall = useLlmStore((s) => s.resumeToolCall)
+  const conversations = useLlmStore((s) => s.conversations)
+  const autoSave = useLlmStore((s) => s.autoSave)
+  const setAutoSave = useLlmStore((s) => s.setAutoSave)
+  const refreshConversations = useLlmStore((s) => s.refreshConversations)
+  const saveChat = useLlmStore((s) => s.saveChat)
+  const loadConversation = useLlmStore((s) => s.loadConversation)
+  const deleteConversation = useLlmStore((s) => s.deleteConversation)
+  const patchConversation = useLlmStore((s) => s.patchConversation)
   const mcpServers = useMcpStore((s) => s.servers)
   const refreshMcp = useMcpStore((s) => s.refresh)
   const mcpLoaded = useMcpStore((s) => s.loaded)
@@ -30,11 +38,16 @@ export function PlaygroundView() {
   const [model, setModel] = useState('')
   const [draft, setDraft] = useState('')
   const [toolsOn, setToolsOn] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!mcpLoaded) void refreshMcp()
   }, [mcpLoaded, refreshMcp])
+
+  useEffect(() => {
+    void refreshConversations()
+  }, [refreshConversations])
 
   const enabledServers = mcpServers.filter((s) => s.enabled).length
 
@@ -84,8 +97,80 @@ export function PlaygroundView() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0">
+      {showHistory && (
+        <aside className="flex w-56 shrink-0 flex-col border-r border-border/60 bg-card/40">
+          <div className="flex items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground">
+            Saved chats
+            <button type="button" onClick={() => setShowHistory(false)} aria-label="Hide">
+              <X className="size-3.5" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+            {conversations.length === 0 ? (
+              <p className="px-2 py-4 text-[11px] text-muted-foreground">
+                None yet. Save a chat with the disk icon, or turn on auto-save.
+              </p>
+            ) : (
+              conversations.map((c) => (
+                <div
+                  key={c.id}
+                  className={cn(
+                    'group flex items-center gap-1 rounded-md px-2 py-1.5 text-xs hover:bg-accent/40',
+                    chat?.savedId === c.id && 'bg-primary/10',
+                  )}
+                >
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate text-left"
+                    onClick={() => void loadConversation(c.id)}
+                    title={c.title}
+                  >
+                    {c.pinned && <Pin className="mr-1 inline size-3 text-primary" />}
+                    {c.title}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Pin"
+                    className="shrink-0 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
+                    onClick={() => void patchConversation(c.id, { pinned: !c.pinned })}
+                  >
+                    <Pin className="size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Delete"
+                    className="shrink-0 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
+                    onClick={() => void deleteConversation(c.id)}
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+          <label className="flex items-center gap-1.5 border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
+            <input
+              type="checkbox"
+              className="size-3 accent-primary"
+              checked={autoSave}
+              onChange={(e) => setAutoSave(e.target.checked)}
+            />
+            Auto-save chats
+          </label>
+        </aside>
+      )}
+
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-4 py-2">
+        <Button
+          size="xs"
+          variant={showHistory ? 'default' : 'ghost'}
+          onClick={() => setShowHistory((v) => !v)}
+          aria-label="Saved chats"
+        >
+          <History className="size-3.5" />
+        </Button>
         <Select value={connId} onValueChange={(v) => v && setConnId(v)}>
           <SelectTrigger size="sm" className="w-48">
             <SelectValue placeholder="connection">
@@ -130,6 +215,16 @@ export function PlaygroundView() {
           <Boxes className="size-3.5" /> Tools{toolsOn ? ' on' : ''}
         </Button>
         <div className="flex-1" />
+        <Button
+          size="xs"
+          variant="ghost"
+          onClick={() => void saveChat()}
+          disabled={!chat?.turns.length || chat.busy}
+          title={chat?.savedId ? 'Update the saved copy' : 'Save this chat'}
+        >
+          <Save className="size-3.5" />
+          {chat?.savedId ? 'Saved' : 'Save'}
+        </Button>
         <Button size="xs" variant="ghost" onClick={() => resetChat()} disabled={!chat?.turns.length}>
           Clear
         </Button>
@@ -166,7 +261,7 @@ export function PlaygroundView() {
           ))}
           {!chat?.turns.length && (
             <p className="py-16 text-center text-xs text-muted-foreground">
-              Pick a model and send a message. Conversations here are not saved.
+              Pick a model and send a message. Chats aren&rsquo;t saved unless you hit Save or turn on auto-save.
             </p>
           )}
         </div>
@@ -197,6 +292,7 @@ export function PlaygroundView() {
             </Button>
           )}
         </div>
+      </div>
       </div>
     </div>
   )
