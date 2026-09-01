@@ -60,19 +60,19 @@ func RateLimited(msg string) *Error {
 	return mk(CodeRateLimited, http.StatusTooManyRequests, "The provider is rate-limiting. Wait a moment and retry.", msg)
 }
 func NotFound(msg string) *Error {
-	return mk(CodeNotFound, http.StatusNotFound, "", msg)
+	return mk(CodeNotFound, http.StatusNotFound, "It may have been deleted or renamed. Refresh and try again.", msg)
 }
 func Conflict(msg string) *Error {
-	return mk(CodeConflict, http.StatusConflict, "", msg)
+	return mk(CodeConflict, http.StatusConflict, "Something changed underneath. Reload, then try again.", msg)
 }
 func Validation(msg string) *Error {
-	return mk(CodeValidation, http.StatusBadRequest, "", msg)
+	return mk(CodeValidation, http.StatusBadRequest, "Check the values and try again.", msg)
 }
 func Locked(msg string) *Error {
 	return mk(CodeLocked, http.StatusForbidden, "Unlock the Vault, then try again.", msg)
 }
 func Permission(msg string) *Error {
-	return mk(CodePermission, http.StatusForbidden, "", msg)
+	return mk(CodePermission, http.StatusForbidden, "You don't have the rights for this — it may need administrator access.", msg)
 }
 func Upstream(msg string) *Error {
 	return mk(CodeUpstream, http.StatusBadGateway, "The provider rejected the request.", msg)

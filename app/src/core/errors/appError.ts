@@ -3,6 +3,7 @@
  * through `classify()` so they present consistently. Framework-free (no React),
  * same rule as the rest of `src/core/**`. See ERROR_HANDLING_PLAN.md §5.1.
  */
+import { ERROR_STRINGS, RETRYABLE_CODES, STICKY_CODES } from './errorStrings'
 
 export type ErrorCode =
   | 'auth_failed'
@@ -66,26 +67,22 @@ interface Preset {
   sticky?: boolean
 }
 
-const PRESETS: Record<ErrorCode, Preset> = {
-  auth_failed: { title: 'Authentication failed', hint: 'Check the API key or token for this connection.', retryable: false, sticky: true },
-  unreachable: { title: 'Service not reachable', hint: "The endpoint isn't answering. Is it running, and is the URL right?", retryable: true },
-  timeout: { title: 'Request timed out', hint: 'The service took too long. Try again, or raise the timeout.', retryable: true },
-  rate_limited: { title: 'Rate limited', hint: 'The provider is throttling requests. Wait a moment and retry.', retryable: true },
-  not_found: { title: 'Not found', retryable: false },
-  conflict: { title: 'Conflict', hint: 'Something changed underneath — reload and try again.', retryable: true },
-  validation: { title: "Can't do that", retryable: false },
-  locked: { title: 'Vault is locked', hint: 'Unlock the Vault, then try again.', retryable: false },
-  permission: { title: 'Not permitted', retryable: false },
-  upstream: { title: 'The provider rejected the request', retryable: false },
-  internal: { title: 'Backend error', hint: 'Something went wrong on the backend. Check its log.', retryable: false, sticky: true },
-  backend_down: { title: 'Backend not connected', hint: 'Configure or start the backend service (Settings → Backend).', retryable: true, sticky: true },
-  aborted: { title: 'Cancelled', retryable: false },
-  unknown: { title: 'Something went wrong', retryable: true },
-}
+// E3d — the strings live in errorStrings.ts (one file for a future i18n layer);
+// this composes them with the retryable / sticky behaviour.
+const PRESETS: Record<ErrorCode, Preset> = Object.fromEntries(
+  (Object.keys(ERROR_STRINGS) as ErrorCode[]).map((code) => [
+    code,
+    {
+      ...ERROR_STRINGS[code],
+      retryable: RETRYABLE_CODES.has(code),
+      sticky: STICKY_CODES.has(code),
+    },
+  ]),
+) as Record<ErrorCode, Preset>
 
 /** Toasts of these codes stay until the user dismisses them. */
 export function isSticky(code: ErrorCode): boolean {
-  return PRESETS[code]?.sticky ?? false
+  return STICKY_CODES.has(code)
 }
 
 /** True for a user/programmatic cancellation that should never be surfaced. */
