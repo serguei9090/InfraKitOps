@@ -69,7 +69,7 @@ func TestAgentLoopRunsToolThenAnswers(t *testing.T) {
 		Tools:    []ToolDef{{Name: "srv1__search", Description: "search", Parameters: map[string]any{"type": "object"}, ReadOnly: true}},
 	}
 	done := make(chan struct{})
-	go func() { eng.stream(context.Background(), conn.ID, req, OutputText, out); close(out); close(done) }()
+	go func() { eng.stream(context.Background(), conn.ID, "", req, OutputText, out); close(out); close(done) }()
 
 	var events []string
 	var answer strings.Builder
@@ -132,7 +132,7 @@ func TestAgentLoopWaitsForApproval(t *testing.T) {
 		Messages: []ChatMessage{{Role: "user", Content: "delete everything"}},
 		Tools:    []ToolDef{{Name: "srv1__write", Description: "write", Parameters: map[string]any{"type": "object"}}}, // not read-only
 	}
-	go func() { eng.stream(context.Background(), conn.ID, req, OutputText, out); close(out) }()
+	go func() { eng.stream(context.Background(), conn.ID, "", req, OutputText, out); close(out) }()
 
 	var events []string
 	var answer strings.Builder

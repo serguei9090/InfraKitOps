@@ -50,6 +50,7 @@ type Engine struct {
 	Secrets SecretResolver
 
 	tools ToolRunner
+	usage UsageRecorder
 
 	mu    sync.Mutex
 	cache map[string]modelCacheEntry
@@ -65,6 +66,15 @@ type Engine struct {
 // SetToolRunner wires the MCP tool runner (A4b). Nil → tool-enabled requests
 // still work but every tool call reports "tools unavailable".
 func (e *Engine) SetToolRunner(t ToolRunner) { e.tools = t }
+
+// UsageRecorder is written after each completed stream (A3c). *UsageStore
+// satisfies it. Nil → no accounting.
+type UsageRecorder interface {
+	Record(connID, taskID, model string, prompt, completion int)
+}
+
+// SetUsageRecorder wires token-usage accounting (A3c).
+func (e *Engine) SetUsageRecorder(u UsageRecorder) { e.usage = u }
 
 // SetMaxConcurrentPerConn changes the per-connection stream cap (A3e). 0 or
 // negative = unlimited. In-flight streams keep their slot.
@@ -208,7 +218,7 @@ func (e *Engine) Models(ctx context.Context, id string, force bool) ([]Model, er
 
 // Chat streams a raw completion (playground). `out` is closed by the caller.
 func (e *Engine) Chat(ctx context.Context, connID string, req ChatRequest, out chan<- sse.Message) {
-	e.stream(ctx, connID, req, OutputText, out)
+	e.stream(ctx, connID, "", req, OutputText, out)
 }
 
 // RunTask renders a grounded task and streams the completion. `context` is the
@@ -230,13 +240,13 @@ func (e *Engine) RunTask(
 	msgs = append(msgs, history...)
 	msgs = append(msgs, ChatMessage{Role: "user", Content: input})
 	req := ChatRequest{Model: model, Messages: msgs, Temperature: task.Temperature, Tools: tools}
-	e.stream(ctx, connID, req, task.OutputShape, out)
+	e.stream(ctx, connID, taskID, req, task.OutputShape, out)
 }
 
 // stream is the shared completion path: resolve the connection + key, run the
 // provider, forward deltas, and — for a JSON-shaped task — emit a final
 // `parsed` event with the extracted JSON.
-func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, shape TaskOutputShape, out chan<- sse.Message) {
+func (e *Engine) stream(ctx context.Context, connID, taskID string, req ChatRequest, shape TaskOutputShape, out chan<- sse.Message) {
 	send := func(m sse.Message) bool { return sendOrDone(ctx, out, m) }
 
 	conn, err := e.Store.GetConnection(connID)
@@ -363,6 +373,9 @@ func (e *Engine) stream(ctx context.Context, connID string, req ChatRequest, sha
 		if j := extractJSON(lastText); j != "" {
 			send(sse.Message{Event: "parsed", Data: map[string]string{"json": j}})
 		}
+	}
+	if e.usage != nil {
+		e.usage.Record(connID, taskID, req.Model, total.PromptTokens, total.CompletionTokens)
 	}
 	send(sse.Message{Event: "end", Data: map[string]any{
 		"usage": map[string]int{"promptTokens": total.PromptTokens, "completionTokens": total.CompletionTokens},

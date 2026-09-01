@@ -43,7 +43,7 @@ func TestStreamStopsWhenClientGone(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	finished := make(chan struct{})
 	go func() {
-		eng.stream(ctx, conn.ID, ChatRequest{Model: "m", Messages: []ChatMessage{{Role: "user", Content: "hi"}}}, OutputText, out)
+		eng.stream(ctx, conn.ID, "", ChatRequest{Model: "m", Messages: []ChatMessage{{Role: "user", Content: "hi"}}}, OutputText, out)
 		close(finished)
 	}()
 
@@ -117,7 +117,7 @@ func TestPerConnectionConcurrencyCap(t *testing.T) {
 			defer wg.Done()
 			out := make(chan sse.Message, 64)
 			go func() {
-				eng.stream(context.Background(), conn.ID,
+				eng.stream(context.Background(), conn.ID, "",
 					ChatRequest{Model: "m", Messages: []ChatMessage{{Role: "user", Content: "hi"}}}, OutputText, out)
 				close(out)
 			}()

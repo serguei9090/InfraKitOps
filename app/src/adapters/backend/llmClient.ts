@@ -13,6 +13,7 @@ import type {
   LlmModel,
   LlmTask,
   StoredMessage,
+  UsageGroup,
 } from '@/core/llm/llmModel'
 
 const arr = <T,>(v: T[] | null | undefined): T[] => v ?? []
@@ -101,6 +102,13 @@ export const patchConversation = (id: string, patch: { title?: string; pinned?: 
 
 export const deleteConversation = (id: string) =>
   backendRequest<unknown>('DELETE', `/llm/conversations/${id}`)
+
+// --- token usage (A3c) -----------------------------------------
+
+export const getUsage = (days: number, groupBy: 'model' | 'day' | 'task') =>
+  backendGet<{ days: number; groups: UsageGroup[] | null }>(
+    `/llm/usage?days=${days}&groupBy=${groupBy}`,
+  ).then((r) => arr(r.groups))
 
 // --- tasks -------------------------------------------------------
 

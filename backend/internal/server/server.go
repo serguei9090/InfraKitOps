@@ -46,6 +46,8 @@ type Options struct {
 	MCP *mcp.Manager
 	// LLMHistory persists saved conversations (A3b). Nil → /llm/conversations* 503.
 	LLMHistory *llm.History
+	// LLMUsage aggregates token counts (A3c). Nil → /llm/usage 503.
+	LLMUsage *llm.UsageStore
 }
 
 // NewRouter returns the fully wired API handler.
@@ -63,7 +65,10 @@ func NewRouter(opts Options) http.Handler {
 	}
 	rbh := &api.RunbookHandlers{Store: opts.Orchestrator, Engine: opts.RunbookEngine, Vault: opts.Vault}
 	vh := &api.VaultHandlers{Vault: opts.Vault}
-	lh := &api.LLMHandlers{Store: opts.LLM, Engine: opts.LLMEngine, MCP: opts.MCP, History: opts.LLMHistory}
+	lh := &api.LLMHandlers{
+		Store: opts.LLM, Engine: opts.LLMEngine, MCP: opts.MCP,
+		History: opts.LLMHistory, Usage: opts.LLMUsage,
+	}
 	mh := &api.MCPHandlers{Manager: opts.MCP}
 
 	r.Route("/api/v1", func(r chi.Router) {
@@ -155,6 +160,7 @@ func NewRouter(opts Options) http.Handler {
 			r.Get("/connections/{id}/models", lh.Models)
 			r.Get("/chat/stream", lh.ChatStream)
 			r.Post("/tool/{id}/resume", lh.ResumeTool)
+			r.Get("/usage", lh.UsageReport)
 			r.Get("/conversations", lh.ListConversations)
 			r.Post("/conversations", lh.SaveConversation)
 			r.Get("/conversations/{id}", lh.GetConversation)

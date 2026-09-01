@@ -91,6 +91,7 @@ func main() {
 	var llmEngine *llm.Engine
 	var mcpManager *mcp.Manager
 	var llmHistory *llm.History
+	var llmUsage *llm.UsageStore
 	if llmStore != nil {
 		defer llmStore.Close()
 		var secrets llm.SecretResolver
@@ -103,6 +104,13 @@ func main() {
 			log.Printf("llm history: %v (conversation history disabled)", err)
 		} else {
 			llmHistory = hist
+		}
+
+		if us, err := llm.NewUsageStore(llmStore.DB()); err != nil {
+			log.Printf("llm usage: %v (usage accounting disabled)", err)
+		} else {
+			llmUsage = us
+			llmEngine.SetUsageRecorder(us)
 		}
 
 		if mcpStore, err := mcp.NewStore(llmStore.DB()); err != nil {
@@ -143,6 +151,7 @@ func main() {
 		LLMEngine:     llmEngine,
 		MCP:           mcpManager,
 		LLMHistory:    llmHistory,
+		LLMUsage:      llmUsage,
 		AppVersion:    api.Version,
 		HistoryPolicy: history.PrunePolicy{
 			RetentionDays: *retentionDays,

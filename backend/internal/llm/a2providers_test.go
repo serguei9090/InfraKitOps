@@ -179,7 +179,7 @@ func TestGeminiEchoesThoughtSignature(t *testing.T) {
 		Messages: []ChatMessage{{Role: "user", Content: "go"}},
 		Tools:    []ToolDef{{Name: "srv1__do", Description: "d", Parameters: map[string]any{"type": "object"}, ReadOnly: true}},
 	}
-	go func() { eng.stream(context.Background(), conn.ID, req, OutputText, out); close(out) }()
+	go func() { eng.stream(context.Background(), conn.ID, "", req, OutputText, out); close(out) }()
 	for range out { //nolint:revive
 	}
 

@@ -137,6 +137,14 @@ export interface StoredMessage {
   completionTokens?: number
 }
 
+/** One aggregated token-usage bucket (A3c). */
+export interface UsageGroup {
+  key: string
+  calls: number
+  promptTokens: number
+  completionTokens: number
+}
+
 /** Global AI defaults, stored server-side in llm_settings. */
 export interface LlmSettings {
   defaultConnectionId?: string

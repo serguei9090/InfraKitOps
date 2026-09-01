@@ -28,7 +28,7 @@ const autoSaveDefault = () => {
   }
 }
 
-export type Section = 'playground' | 'connections' | 'tasks' | 'mcp'
+export type Section = 'playground' | 'connections' | 'tasks' | 'mcp' | 'usage'
 
 export interface ChatTurn extends ChatMessage {
   /** streaming = still receiving; done/error = final */

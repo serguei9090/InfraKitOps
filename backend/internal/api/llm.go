@@ -25,6 +25,8 @@ type LLMHandlers struct {
 	MCP *mcp.Manager
 	// History persists saved conversations (A3b). Nil → /llm/conversations* 503.
 	History *llm.History
+	// Usage aggregates token counts (A3c). Nil → /llm/usage 503.
+	Usage *llm.UsageStore
 }
 
 // resolveTools turns a `tools` query value ("all" or a comma list of server
@@ -445,6 +447,28 @@ func (h *LLMHandlers) DeleteConversation(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// Usage: GET /llm/usage?days=7&groupBy=model|day|task  (A3c). Token counts
+// only — no cost.
+func (h *LLMHandlers) UsageReport(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.Usage == nil {
+		WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "usage accounting unavailable"})
+		return
+	}
+	days := 7
+	if d := r.URL.Query().Get("days"); d != "" {
+		if n, err := strconv.Atoi(d); err == nil && n > 0 && n <= 366 {
+			days = n
+		}
+	}
+	since := time.Now().Add(-time.Duration(days) * 24 * time.Hour).UnixMilli()
+	groups, err := h.Usage.Aggregate(since, r.URL.Query().Get("groupBy"))
+	if err != nil {
+		apierr.Write(w, apierr.Internal(err.Error()))
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"days": days, "groups": groups})
 }
 
 // LLMProviders reports the provider kinds this build supports.

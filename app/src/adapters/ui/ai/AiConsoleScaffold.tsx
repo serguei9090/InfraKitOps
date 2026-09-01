@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Boxes, MessagesSquare, Plug, Wand2 } from 'lucide-react'
+import { BarChart3, Boxes, MessagesSquare, Plug, Wand2 } from 'lucide-react'
 import { useBackendStore } from '@/stores/backendStore'
 import { useLlmStore, type Section } from '@/stores/llmStore'
 import { useVaultStore } from '@/stores/vaultStore'
@@ -10,12 +10,14 @@ import { ConnectionsView } from './ConnectionsView'
 import { PlaygroundView } from './PlaygroundView'
 import { TasksView } from './TasksView'
 import { McpView } from './McpView'
+import { UsageView } from './UsageView'
 
 const NAV: { id: Section; label: string; icon: typeof Plug }[] = [
   { id: 'playground', label: 'Playground', icon: MessagesSquare },
   { id: 'connections', label: 'Connections', icon: Plug },
   { id: 'tasks', label: 'Tasks', icon: Wand2 },
   { id: 'mcp', label: 'MCP', icon: Boxes },
+  { id: 'usage', label: 'Usage', icon: BarChart3 },
 ]
 
 /**
@@ -91,6 +93,7 @@ export function AiConsoleScaffold() {
         {section === 'connections' && <ConnectionsView />}
         {section === 'tasks' && <TasksView />}
         {section === 'mcp' && <McpView />}
+        {section === 'usage' && <UsageView />}
       </div>
 
       <div className="flex h-8 shrink-0 items-center gap-3 border-t border-border/60 bg-card px-4 text-xs text-muted-foreground">

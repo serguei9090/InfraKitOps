@@ -79,6 +79,8 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"mcp": {Available: true},
 		// Opt-in conversation history (A3b).
 		"llmHistory": {Available: true},
+		// Token-usage accounting (A3c).
+		"llmUsage": {Available: true},
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
