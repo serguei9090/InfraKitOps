@@ -65,7 +65,7 @@ func (h *LLMHandlers) ok() bool { return h != nil && h.Store != nil && h.Engine 
 
 func (h *LLMHandlers) guard(w http.ResponseWriter) bool {
 	if !h.ok() {
-		WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "llm layer unavailable"})
+		apierr.Write(w, apierr.Unavailable("the AI layer"))
 		return false
 	}
 	return true
@@ -364,7 +364,7 @@ func (h *LLMHandlers) ResumeTool(w http.ResponseWriter, r *http.Request) {
 
 func (h *LLMHandlers) historyGuard(w http.ResponseWriter) bool {
 	if h == nil || h.History == nil {
-		WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "conversation history unavailable"})
+		apierr.Write(w, apierr.Unavailable("conversation history"))
 		return false
 	}
 	return true
@@ -453,7 +453,7 @@ func (h *LLMHandlers) DeleteConversation(w http.ResponseWriter, r *http.Request)
 // only — no cost.
 func (h *LLMHandlers) UsageReport(w http.ResponseWriter, r *http.Request) {
 	if h == nil || h.Usage == nil {
-		WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "usage accounting unavailable"})
+		apierr.Write(w, apierr.Unavailable("usage accounting"))
 		return
 	}
 	days := 7

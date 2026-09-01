@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/history"
 )
@@ -21,7 +22,7 @@ type HistoryHandlers struct {
 
 func (h *HistoryHandlers) unavailable(w http.ResponseWriter) bool {
 	if h.Store == nil {
-		WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "history storage is not available"})
+		apierr.Write(w, apierr.Unavailable("run history storage"))
 		return true
 	}
 	return false
@@ -35,7 +36,7 @@ func (h *HistoryHandlers) Save(w http.ResponseWriter, r *http.Request) {
 	}
 	var env envelope.Envelope
 	if err := json.NewDecoder(r.Body).Decode(&env); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid envelope: " + err.Error()})
+		apierr.Write(w, apierr.Validation("invalid envelope: "+err.Error()))
 		return
 	}
 	policy := h.DefaultPolicy
@@ -47,7 +48,7 @@ func (h *HistoryHandlers) Save(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := h.Store.Save(env, h.AppVersion, policy)
 	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]int64{"id": id})
@@ -60,7 +61,7 @@ func (h *HistoryHandlers) List(w http.ResponseWriter, r *http.Request) {
 	}
 	runs, err := h.Store.List(r.URL.Query().Get("tool"), r.URL.Query().Get("target"), intParam(r, "limit", 0))
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"runs": runs})
@@ -77,11 +78,11 @@ func (h *HistoryHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	run, err := h.Store.Get(id)
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}
 	if run == nil {
-		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "no such run"})
+		apierr.Write(w, apierr.NotFound("no such run"))
 		return
 	}
 	WriteJSON(w, http.StatusOK, run)
@@ -101,18 +102,18 @@ func (h *HistoryHandlers) Patch(w http.ResponseWriter, r *http.Request) {
 		Label  *string `json:"label"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if body.Pinned != nil {
 		if err := h.Store.SetPinned(id, *body.Pinned); err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			apierr.Write(w, apierr.Internal(err.Error()))
 			return
 		}
 	}
 	if body.Label != nil {
 		if err := h.Store.SetLabel(id, *body.Label); err != nil {
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			apierr.Write(w, apierr.Internal(err.Error()))
 			return
 		}
 	}
@@ -129,7 +130,7 @@ func (h *HistoryHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.Store.Delete(id); err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -150,7 +151,7 @@ func intParam(r *http.Request, name string, def int) int {
 func idParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		apierr.Write(w, apierr.Validation("invalid id"))
 		return 0, false
 	}
 	return id, true

@@ -20,7 +20,7 @@ type MCPHandlers struct {
 
 func (h *MCPHandlers) guard(w http.ResponseWriter) bool {
 	if h == nil || h.Manager == nil {
-		WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "mcp layer unavailable"})
+		apierr.Write(w, apierr.Unavailable("the MCP layer"))
 		return false
 	}
 	return true

@@ -19,7 +19,7 @@ type VaultHandlers struct {
 
 func (h *VaultHandlers) guard(w http.ResponseWriter) bool {
 	if h == nil || h.Vault == nil {
-		WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "vault unavailable"})
+		apierr.Write(w, apierr.Unavailable("the vault"))
 		return false
 	}
 	return true

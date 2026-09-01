@@ -33,6 +33,13 @@ jobs:
           go-version: '1.25'
           cache-dependency-path: backend/go.sum
       - run: go vet ./...
+      - name: coded errors only (ERROR_HANDLING_PLAN E3c)
+        shell: bash
+        run: |
+          if grep -rnE 'map\[string\]string\{"error": [^,}]*\}' internal/api; then
+            echo "::error::bare {\"error\"} HTTP response in internal/api — use apierr.Write(w, apierr.X(...)). SSE error events may carry a \"code\" key."
+            exit 1
+          fi
       - run: go test ./... -count=1
 
   vendor-tools:
