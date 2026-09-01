@@ -306,12 +306,15 @@ commit per batch, each verified against its module's UI:
 **DoD**: the grep check passes; a spot-check of one endpoint per batch shows a
 coded response. Commits: 4.
 
-#### E3d — Wording & i18n scaffold
-- One pass over every `apierr` message + every `PRESETS` string for voice
-  (imperative hint, no jargon, no stack-trace leakage).
-- Extract `PRESETS` titles/hints into a single `errorStrings.ts` map so a
-  future i18n layer has one file to translate. No actual i18n runtime yet.
-**DoD**: review diff; strings centralised. One commit.
+#### E3d — Wording & i18n scaffold — **DONE 2026-09-01** (`b31b977`)
+- `src/core/errors/errorStrings.ts` — `ERROR_STRINGS: Record<ErrorCode,
+  {title, hint?}>` + `STICKY_CODES` / `RETRYABLE_CODES` sets. `appError.ts`
+  `PRESETS` now composed from it (`Object.fromEntries`); `isSticky` reads
+  `STICKY_CODES`. One file for a future i18n layer to translate.
+- Wording pass both sides: "Conflict"→"Out of sync", "Can't do that"→
+  "Request rejected"; every code now carries an imperative hint.
+- Backend `apierr` constructors (`NotFound`/`Conflict`/`Validation`/
+  `Permission`) gained matching default hints.
 
 #### E3e — Per-source toast rate-limit — **DONE 2026-09-01** (`c26e2b0`)
 - `errorStore.report` — > 3 toasts from one source in 5 s collapse into a
