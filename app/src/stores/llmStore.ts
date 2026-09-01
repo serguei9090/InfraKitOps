@@ -160,7 +160,7 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
     try {
       set({ settings: await api.putLlmSettings(patch) })
     } catch (e) {
-      reportError(e, SRC)
+      reportError(e, SRC, { retry: () => get().putSettings(patch) })
     }
   },
 
@@ -170,7 +170,7 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
       await get().refresh()
       return saved
     } catch (e) {
-      reportError(e, SRC)
+      reportError(e, SRC, { retry: () => get().putConnection(c) })
       return null
     }
   },
@@ -381,7 +381,7 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
       await get().refreshConversations()
       return id
     } catch (e) {
-      reportError(e, SRC)
+      reportError(e, SRC, { retry: () => get().saveChat(title) })
       return null
     }
   },
@@ -411,7 +411,7 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
         },
       })
     } catch (e) {
-      reportError(e, SRC)
+      reportError(e, SRC, { retry: () => get().loadConversation(id) })
     }
   },
 
@@ -423,7 +423,7 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
         chat: s.chat?.savedId === id ? { ...s.chat, savedId: undefined } : s.chat,
       }))
     } catch (e) {
-      reportError(e, SRC)
+      reportError(e, SRC, { retry: () => get().deleteConversation(id) })
     }
   },
 
@@ -432,7 +432,7 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
       await api.patchConversation(id, patch)
       await get().refreshConversations()
     } catch (e) {
-      reportError(e, SRC)
+      reportError(e, SRC, { retry: () => get().patchConversation(id, patch) })
     }
   },
 }))

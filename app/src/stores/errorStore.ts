@@ -10,12 +10,19 @@ import { classify, isAborted, type AppError } from '@/core/errors/appError'
 export interface SurfacedError extends AppError {
   id: string
   at: number
+  /** E3a — a re-runnable action; the toast shows a Retry button for it. */
+  retry?: () => unknown
+}
+
+export interface ReportOpts {
+  /** Show a Retry button that re-runs this. Only shown when the code is retryable. */
+  retry?: () => unknown
 }
 
 interface ErrorStore {
   errors: SurfacedError[]
   /** Classify `raw` and enqueue it. No-op for aborted operations. */
-  report: (raw: unknown, source?: string) => AppError | null
+  report: (raw: unknown, source?: string, opts?: ReportOpts) => AppError | null
   dismiss: (id: string) => void
   clear: () => void
 }
@@ -31,7 +38,7 @@ function newId(): string {
 export const useErrorStore = create<ErrorStore>((set, get) => ({
   errors: [],
 
-  report: (raw, source) => {
+  report: (raw, source, opts) => {
     if (isAborted(raw)) return null
     const err = classify(raw, source)
     const now = Date.now()
@@ -39,7 +46,8 @@ export const useErrorStore = create<ErrorStore>((set, get) => ({
       (e) => e.code === err.code && e.detail === err.detail && now - e.at < DEDUP_MS,
     )
     if (dup) return err
-    set((s) => ({ errors: [...s.errors, { ...err, id: newId(), at: now }].slice(-8) }))
+    const retry = err.retryable ? opts?.retry : undefined
+    set((s) => ({ errors: [...s.errors, { ...err, id: newId(), at: now, retry }].slice(-8) }))
     return err
   },
 
@@ -48,4 +56,5 @@ export const useErrorStore = create<ErrorStore>((set, get) => ({
 }))
 
 /** Convenience for non-hook call sites (e.g. inside a Zustand action). */
-export const reportError = (raw: unknown, source?: string) => useErrorStore.getState().report(raw, source)
+export const reportError = (raw: unknown, source?: string, opts?: ReportOpts) =>
+  useErrorStore.getState().report(raw, source, opts)

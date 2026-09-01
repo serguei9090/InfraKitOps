@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Loader2, RotateCcw, X } from 'lucide-react'
 import { useErrorStore, type SurfacedError } from '@/stores/errorStore'
 import { isSticky } from '@/core/errors/appError'
 import { cn } from '@/lib/utils'
@@ -27,12 +27,25 @@ export function ErrorToaster() {
 
 function Toast({ error, onDismiss }: { error: SurfacedError; onDismiss: () => void }) {
   const sticky = isSticky(error.code)
+  const [retrying, setRetrying] = useState(false)
 
   useEffect(() => {
-    if (sticky) return
+    if (sticky || retrying) return
     const t = setTimeout(onDismiss, 6000)
     return () => clearTimeout(t)
-  }, [sticky, onDismiss])
+  }, [sticky, retrying, onDismiss])
+
+  async function runRetry() {
+    if (!error.retry) return
+    setRetrying(true)
+    // drop this toast first so a re-failure isn't swallowed by the dedup window
+    onDismiss()
+    try {
+      await error.retry()
+    } catch {
+      /* the retried action reports its own failure */
+    }
+  }
 
   return (
     <div
@@ -55,6 +68,17 @@ function Toast({ error, onDismiss }: { error: SurfacedError; onDismiss: () => vo
           </button>
         </div>
         {error.hint && <p className="mt-0.5 text-xs text-muted-foreground">{error.hint}</p>}
+        {error.retry && (
+          <button
+            type="button"
+            onClick={() => void runRetry()}
+            disabled={retrying}
+            className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-1 text-xs font-medium hover:bg-accent/50 disabled:opacity-60"
+          >
+            {retrying ? <Loader2 className="size-3 animate-spin" /> : <RotateCcw className="size-3" />}
+            Retry
+          </button>
+        )}
         {(error.detail && error.detail !== error.title) || error.source ? (
           <details className="mt-1 text-xs text-muted-foreground">
             <summary className="cursor-pointer select-none">Details</summary>
