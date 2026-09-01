@@ -275,9 +275,13 @@ user-visible wins, E3c is the grind.
 - Verified: backend down → Save a chat → "Service not reachable" + Retry →
   backend up → Retry re-runs the save.
 
-#### E3b — Error-history drawer
-- `errorStore` already caps at 8 live; add a separate `history` ring (cap 50,
-  not auto-dismissed, survives `clear()`).
+#### E3b — Error-history drawer — **DONE 2026-09-01** (`81f295c`)
+- `errorStore` `history` ring (cap 50) — `report()` appends, `dismiss()`/
+  `clear()` never touch it. `historySeenAt` + `markHistorySeen` /
+  `clearHistory`.
+- `ErrorHistoryButton` = a header bell (badge = errors since last open;
+  opening marks seen). Drawer: newest-first rows (icon · title · source ·
+  code · rel-time), expand → hint + detail; "Copy all" + "Clear".
 - A drawer opened from a small indicator in `AppShellScaffold` (badge = count
   since last open). Rows: icon · title · source · relative time · Details
   expander. "Clear history" + "Copy all" (for bug reports).

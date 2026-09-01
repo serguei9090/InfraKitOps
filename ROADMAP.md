@@ -13,7 +13,7 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 | 4 | **A3e** reliability polish ([AI_MODULE_PLAN](AI_MODULE_PLAN.md) §A3e) | done `090b0fc` — Anthropic `cache_control` on long system blocks · per-conn concurrency cap (default 4) · abort-releases-upstream confirmed | S–M | ✅ |
 | 5 | **A3c** token-usage aggregation ([AI_MODULE_PLAN](AI_MODULE_PLAN.md) §A3c) | done `4215a74` — `llm_usage` + `UsageRecorder` + `GET /llm/usage` grouped + AI Hub "Usage" tab (in/out bars, model/day/task). No cost. | M | ✅ |
 | 6 | **A4e-3** per-server MCP status ([AI_MCP_PLAN](AI_MCP_PLAN.md) §A4e) | done `455bc8a` — `ServerStatus` per server (connected/toolCount/lastError), shown in McpView. **A4e complete** (item 4 = loop token totals fell out of A3c). | M | ✅ |
-| 7 | **E3b** error-history drawer ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3b) | `errorStore` history ring (cap 50) + a shell drawer with a count badge | M | ☐ |
+| 7 | **E3b** error-history drawer ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3b) | done `81f295c` — `history` ring (50) + header bell w/ unseen badge + drawer (expand, copy-all, clear) | M | ✅ |
 | 8 | **S3a** per-section settings reset ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | "Reset this section" per panel — backend defaults + client clears | M | ☐ |
 | 9 | **CS** `jsrsasign` → `@noble/*` ([CODE_SPLITTING_PLAN](CODE_SPLITTING_PLAN.md)) | swap the big crypto lib in the x509 / jwt tools; verify with real cert + JWT round trips | M | ☐ |
 | 10 | **S3c** settings search ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | filter box over the settings registry | M | ☐ |
