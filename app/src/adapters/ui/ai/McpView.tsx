@@ -69,7 +69,10 @@ export function McpView() {
                 {st?.connected ? (
                   <div className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500">
                     <CircleCheck className="size-3" /> connected · {st.toolCount} tool
-                    {st.toolCount === 1 ? '' : 's'} · {ago(st.connectedAt)}
+                    {st.toolCount === 1 ? '' : 's'}
+                    {st.resourceCount ? ` · ${st.resourceCount} resource${st.resourceCount === 1 ? '' : 's'}` : ''}
+                    {st.promptCount ? ` · ${st.promptCount} prompt${st.promptCount === 1 ? '' : 's'}` : ''} ·{' '}
+                    {ago(st.connectedAt)}
                   </div>
                 ) : st?.lastError ? (
                   <div className="mt-0.5 flex items-start gap-1 text-[11px] text-destructive">

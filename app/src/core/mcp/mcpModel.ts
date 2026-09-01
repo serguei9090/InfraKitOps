@@ -34,13 +34,93 @@ export interface McpTool {
   readOnly: boolean
 }
 
-/** Last-known health of a server (A4e-3). */
+/** Last-known health of a server (A4e-3, +A4f counts). */
 export interface McpServerStatus {
   connected: boolean
   toolCount: number
+  resourceCount?: number
+  promptCount?: number
   connectedAt?: number
   lastError?: string
   lastErrorAt?: number
+}
+
+// --- resources & prompts (A4f) — mirrors backend/internal/mcp/spec.go ---
+
+export interface McpResource {
+  server: string
+  serverName: string
+  uri: string
+  name: string
+  title?: string
+  description?: string
+  mimeType?: string
+  size?: number
+}
+
+export interface McpResourceTemplate {
+  server: string
+  serverName: string
+  uriTemplate: string
+  name: string
+  title?: string
+  description?: string
+  mimeType?: string
+}
+
+export interface McpResourceContent {
+  uri: string
+  mimeType?: string
+  text: string
+}
+
+export interface McpResourceRead {
+  contents: McpResourceContent[]
+  truncated?: boolean
+}
+
+export interface McpPromptArg {
+  name: string
+  description?: string
+  required?: boolean
+}
+
+export interface McpPrompt {
+  server: string
+  serverName: string
+  name: string
+  title?: string
+  description?: string
+  arguments?: McpPromptArg[]
+}
+
+export interface McpPromptMessage {
+  role: string
+  text: string
+}
+
+export interface McpPromptResult {
+  description?: string
+  messages: McpPromptMessage[]
+}
+
+/** A resource the user attached to a chat as context (client-only). */
+export interface McpContextBlock {
+  uri: string
+  name: string
+  text: string
+  truncated?: boolean
+}
+
+/** `text/*`, plus common structured text types — what we can attach in v1. */
+export function isTextResource(mime?: string): boolean {
+  if (!mime) return true // servers often omit it for text
+  return (
+    mime.startsWith('text/') ||
+    /^application\/(json|xml|yaml|x-yaml|toml|javascript|x-ndjson)$/.test(mime) ||
+    mime.endsWith('+json') ||
+    mime.endsWith('+xml')
+  )
 }
 
 export interface McpTestResult {

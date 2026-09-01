@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Boxes, History, Loader2, Pin, RotateCcw, Save, Send, Trash2, X } from 'lucide-react'
+import { Boxes, History, Loader2, Paperclip, Pin, RotateCcw, Save, Send, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useLlmStore } from '@/stores/llmStore'
 import { useMcpStore } from '@/stores/mcpStore'
+import type { McpContextBlock } from '@/core/mcp/mcpModel'
+import { ContextPickerDialog } from './ContextPickerDialog'
 import { ToolSteps } from './ToolSteps'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +23,7 @@ export function PlaygroundView() {
   const stopChat = useLlmStore((s) => s.stopChat)
   const resetChat = useLlmStore((s) => s.resetChat)
   const setChatTools = useLlmStore((s) => s.setChatTools)
+  const setChatContext = useLlmStore((s) => s.setChatContext)
   const resumeToolCall = useLlmStore((s) => s.resumeToolCall)
   const conversations = useLlmStore((s) => s.conversations)
   const autoSave = useLlmStore((s) => s.autoSave)
@@ -39,6 +42,8 @@ export function PlaygroundView() {
   const [draft, setDraft] = useState('')
   const [toolsOn, setToolsOn] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [pickCtx, setPickCtx] = useState(false)
+  const [attached, setAttached] = useState<McpContextBlock[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -84,8 +89,10 @@ export function PlaygroundView() {
     safeSet(LAST_MODEL, model)
     ensureChat() // zustand set is synchronous — the chat is in place after this
     setChatTools(toolsOn && enabledServers > 0 ? 'all' : '')
+    setChatContext(attached)
     sendMessage(draft)
     setDraft('')
+    setAttached([])
   }
 
   if (connections.length === 0) {
@@ -221,6 +228,19 @@ export function PlaygroundView() {
         >
           <Boxes className="size-3.5" /> Tools{toolsOn ? ' on' : ''}
         </Button>
+        <Button
+          size="xs"
+          variant={attached.length > 0 ? 'default' : 'ghost'}
+          disabled={enabledServers === 0}
+          onClick={() => setPickCtx(true)}
+          title={
+            enabledServers === 0
+              ? 'No enabled MCP servers — add one in the MCP tab'
+              : 'Attach an MCP resource as context'
+          }
+        >
+          <Paperclip className="size-3.5" /> Context{attached.length > 0 ? ` (${attached.length})` : ''}
+        </Button>
         <div className="flex-1" />
         <Button
           size="xs"
@@ -275,6 +295,29 @@ export function PlaygroundView() {
       </div>
 
       <div className="shrink-0 border-t border-border/60 p-3">
+        {attached.length > 0 && (
+          <div className="mx-auto mb-2 flex max-w-3xl flex-wrap gap-1.5">
+            {attached.map((b) => (
+              <span
+                key={b.uri}
+                className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-[11px]"
+                title={b.uri}
+              >
+                <Paperclip className="size-3" />
+                <span className="max-w-40 truncate">{b.name}</span>
+                {b.truncated && <span className="text-amber-600 dark:text-amber-500">·trimmed</span>}
+                <button
+                  type="button"
+                  aria-label={`Remove ${b.name}`}
+                  onClick={() => setAttached((a) => a.filter((x) => x.uri !== b.uri))}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <div className="mx-auto flex max-w-3xl items-end gap-2">
           <Textarea
             value={draft}
@@ -301,6 +344,13 @@ export function PlaygroundView() {
         </div>
       </div>
       </div>
+
+      <ContextPickerDialog
+        open={pickCtx}
+        onClose={() => setPickCtx(false)}
+        attached={attached.map((b) => b.uri)}
+        onAdd={(b) => setAttached((a) => (a.some((x) => x.uri === b.uri) ? a : [...a, b]))}
+      />
     </div>
   )
 }

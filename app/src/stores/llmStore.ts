@@ -16,6 +16,7 @@ import type {
   StoredMessage,
   TokenUsage,
 } from '@/core/llm/llmModel'
+import type { McpContextBlock } from '@/core/mcp/mcpModel'
 
 const SRC = 'AI Hub'
 
@@ -47,6 +48,8 @@ interface LiveChat {
   busy: boolean
   /** "" = off, "all" or a comma list of MCP server ids */
   tools: string
+  /** MCP resources attached as context for the NEXT send, then cleared (A4f) */
+  context: McpContextBlock[]
   /** set once this chat is saved (A3b) — further saves update the same row */
   savedId?: string
 }
@@ -79,6 +82,8 @@ interface LlmStore {
   startChat: (connId: string, model: string) => void
   /** toggle MCP tools for the live chat ("" = off, "all" = every enabled server) */
   setChatTools: (tools: string) => void
+  /** replace the attached MCP resource context for the next send (A4f) */
+  setChatContext: (blocks: McpContextBlock[]) => void
   sendMessage: (text: string) => void
   /** A4c — approve/deny a paused tool call by its approvalId */
   resumeToolCall: (approvalId: string, approved: boolean) => void
@@ -202,13 +207,21 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
 
   startChat: (connId, model) => {
     const prevTools = get().chat?.tools ?? ''
+    const prevContext = get().chat?.context ?? []
     get().chat?.abort()
-    set({ chat: { connId, model, turns: [], abort: () => {}, busy: false, tools: prevTools } })
+    set({
+      chat: { connId, model, turns: [], abort: () => {}, busy: false, tools: prevTools, context: prevContext },
+    })
   },
 
   setChatTools: (tools) => {
     const c = get().chat
     if (c) set({ chat: { ...c, tools } })
+  },
+
+  setChatContext: (blocks) => {
+    const c = get().chat
+    if (c) set({ chat: { ...c, context: blocks } })
   },
 
   resumeToolCall: (approvalId, approved) => {
@@ -232,12 +245,19 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
     const history: ChatMessage[] = chat.turns
       .filter((t) => t.state !== 'error')
       .map((t) => ({ role: t.role, content: t.content }))
-    const outgoing: ChatMessage[] = [...history, { role: 'user', content: text }]
+    // A4f — attached MCP resources ride as user context blocks just before the
+    // message, then are cleared. The user sees them as chips before sending.
+    const contextMsgs: ChatMessage[] = (chat.context ?? []).map((b) => ({
+      role: 'user',
+      content: `> context from ${b.uri}\n\n${b.text}`,
+    }))
+    const outgoing: ChatMessage[] = [...history, ...contextMsgs, { role: 'user', content: text }]
 
     set({
       chat: {
         ...chat,
         busy: true,
+        context: [], // consumed by this send
         turns: [
           ...chat.turns,
           { role: 'user', content: text, state: 'done' },
@@ -395,6 +415,7 @@ export const useLlmStore = create<LlmStore>((set, get) => ({
           connId: conversation.connId ?? '',
           model: conversation.model ?? '',
           tools: '',
+          context: [],
           abort: () => {},
           busy: false,
           savedId: conversation.id,
