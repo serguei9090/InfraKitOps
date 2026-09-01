@@ -289,9 +289,16 @@ user-visible wins, E3c is the grind.
 **DoD**: three different failures land in the drawer with correct sources;
 survives navigation. One commit.
 
-#### E3c — Migrate the remaining endpoints
-~70 handlers still return a bare `{error: string}` string. Batch by area, one
-commit per batch, each verified against its module's UI:
+#### E3c — Migrate the remaining endpoints — **DONE 2026-09-01** (`ab75c23` · `1ba9c4b` · `470bc16` · `160dd4e`)
+New `apierr.Unavailable()` (coded `internal`, HTTP 503) for unwired
+subsystems. All four batches landed; `backend.yml` gained a grep guard so a
+bare `map[string]string{"error": …}` HTTP response in `internal/api` fails
+CI (SSE `error` events may still carry a `code` key). Envelope-carried tool
+errors (`map[string]any{"envelope", "error"}`) and the two library-sync
+partial-result payloads (`{"error","report"}` / `{"error","imported"}`)
+were intentionally left — they are not bare-string transport errors.
+
+Original plan — batch by area, one commit per batch:
 1. Network read tools (`dns`, `whois`, `sntp`, `ipgeo`, `portscan`,
    `traceroute`, `ping`, `netscan`, `snmp`, `neighbor`, `connections`,
    `wol`, `x509fetch`, `iperf`) — mostly `ClassifyNet` / `ClassifyHTTP` at the

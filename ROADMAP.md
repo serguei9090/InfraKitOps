@@ -19,7 +19,7 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 | 10 | **S3c** settings search ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | done `a20663e` — nav search box, per-section `keywords` | M | ✅ |
 | 11 | **S3b** export / import all settings ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | done `e7d182a` — `settingsBackup.ts` + General "Backup" group; no secrets, merge-on-import | M | ✅ |
 | 12 | **S3d** keyboard-shortcut editor ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | done `2f7eece` — `core/shortcuts/` registry + `useShortcut` + General "Keyboard shortcuts" rebind UI; migrated ⌘S/⌘↵ | M–L | ✅ |
-| 13 | **E3c** migrate ~70 endpoints to `apierr` ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3c) | 4 batches: network read · utility power-mode · runbook sync · history | L | ☐ |
+| 13 | **E3c** migrate ~70 endpoints to `apierr` ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3c) | done `ab75c23`·`1ba9c4b`·`470bc16`·`160dd4e` — 4 batches + `apierr.Unavailable()` + `backend.yml` grep guard | L | ✅ |
 | 14 | **E3d** error wording / i18n scaffold ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3d) | done `b31b977` — `errorStrings.ts` map + wording pass (both sides) | M | ✅ |
 | 15 | **E3e** per-source toast rate-limit ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3e) | done `c26e2b0` — >3/5s from one source → one "Multiple errors" toast; history keeps all | S | ✅ |
 
@@ -34,13 +34,12 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 
 ## Remaining
 
-- **#13** E3c migrate ~70 endpoints to `apierr` — 4 batches (L grind)
-- **#14** E3d error wording / i18n scaffold — one pass, extract `PRESETS` strings (M)
+All 15 done. **E3 complete.** Only the parked items are left (see below).
 
 ## Done
 
 AI A0–A2 · **A3b/A3c/A3e** · A4a–A4d · **A4e (complete)** · AI Stop ·
 provider→model auto-fill · Gemini MCP fixes (`$schema` strip,
 `thoughtSignature` echo) · E0–E2 · **E3a/E3b/E3e** · S0–S2 · **S3a/S3b/S3c** ·
-CS0–CS4 · **jsrsasign→peculiar** · P7a–P7d baseline · dialog-width fix ·
-Tasks-view grouping.
+**E3c/E3d** · **E3 complete** · CS0–CS4 · **jsrsasign→peculiar** · P7a–P7d
+baseline · dialog-width fix · Tasks-view grouping.
