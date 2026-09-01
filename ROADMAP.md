@@ -21,7 +21,7 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 | 12 | **S3d** keyboard-shortcut editor ([SETTINGS_MODULE_PLAN](SETTINGS_MODULE_PLAN.md) §S3) | rebind UI + persisted map | M–L | ☐ |
 | 13 | **E3c** migrate ~70 endpoints to `apierr` ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3c) | 4 batches: network read · utility power-mode · runbook sync · history | L | ☐ |
 | 14 | **E3d** error wording / i18n scaffold ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3d) | one pass over `apierr` + `PRESETS` strings; extract to one file | M | ☐ |
-| 15 | **E3e** per-source toast rate-limit ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3e) | collapse >3 errors/5s from one source into one toast | S | ☐ |
+| 15 | **E3e** per-source toast rate-limit ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3e) | done `c26e2b0` — >3/5s from one source → one "Multiple errors" toast; history keeps all | S | ✅ |
 
 ## Parked (need a trigger)
 

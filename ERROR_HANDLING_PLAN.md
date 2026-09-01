@@ -313,12 +313,10 @@ coded response. Commits: 4.
   future i18n layer has one file to translate. No actual i18n runtime yet.
 **DoD**: review diff; strings centralised. One commit.
 
-#### E3e — Per-source toast rate-limit
-- `errorStore.report` — if a source fires > 3 errors in 5 s, collapse into one
-  "Multiple errors from {source}" toast that opens the drawer.
-- Guards against a retry loop or a dead backend spamming the corner.
-**DoD**: a `setInterval` firing a failing request every 200 ms produces one
-collapsed toast, not 25. One commit.
+#### E3e — Per-source toast rate-limit — **DONE 2026-09-01** (`c26e2b0`)
+- `errorStore.report` — > 3 toasts from one source in 5 s collapse into a
+  single `burst:{source}` toast ("Multiple errors from {source}"), updated in
+  place. Every error still lands in the E3b history. `errorStore.test.ts`.
 
 #### Still out of scope after E3
 Cross-device error sync · server-side error telemetry / Sentry-style
