@@ -439,17 +439,25 @@ auto read-only / confirm writes, per-task opt-in).
 **DoD**: save a Playground chat → reload → it restores with full turn history;
 delete works; an unsaved chat leaves no rows. Commits: 2 (backend, frontend).
 
-#### A3c — Token / cost aggregation view
-- `Usage{promptTokens, completionTokens}` already comes back per stream.
-  Persist a lightweight `llm_usage` row per call (connId, taskId?, model,
-  tokens, at) — independent of A3b (no message content, just counts).
-- `internal/llm` — a static `ModelPricing` table (USD per 1M in/out, hand-
-  maintained, `openai-compatible` + ollama = free/unknown).
-- Endpoint `GET /llm/usage?since=…&groupBy=day|model|task`.
-- Frontend: a "Usage" section in AI Hub (or Settings → AI) — a small bar
-  chart (reuse the network module's chart primitives) + a table.
-**DoD**: run 5 task calls → the view shows 5, grouped by model, with a cost
-estimate for priced models and "—" for local. Commits: 2.
+#### A3c — Token-usage aggregation view (**no cost — decided 2026-09-01**)
+- `Usage{promptTokens, completionTokens}` already comes back per stream (and,
+  for the MCP agent loop, `stream()` already sums it across iterations).
+  Persist a lightweight `llm_usage` row per call — `connId, taskId?, model,
+  promptTokens, completionTokens, at` — independent of A3b (no message
+  content, just counts). Written by the **API layer** after a stream ends,
+  same place A3b writes history.
+- **No pricing table, no dollar figures.** Cross-provider price data is a
+  maintenance sink and the user does not need billing. Tokens only.
+- Endpoint `GET /llm/usage?since=…&groupBy=day|model|task` — returns
+  `[{key, calls, promptTokens, completionTokens}]`. Result cached in the
+  `Engine` for ~30 s (mirrors the model cache) so the view is cheap to poll.
+- Frontend: a "Usage" section in AI Hub — a small stacked bar (in vs out) per
+  group + a table. Reuse the network module's chart primitives.
+- Useful for: spotting a task that sends huge context, seeing MCP agent-loop
+  token overhead, per-model split. Not billing.
+**DoD**: run 5 task calls (one with tools) → the view shows 5 calls, in/out
+token totals per model, the tool-loop call visibly larger. Commits: 2
+(backend row + endpoint, frontend view).
 
 #### A3d — Embeddings endpoint (only if a module needs RAG)
 - `Provider.Embed(ctx, model, inputs) ([][]float32, error)` — OpenAI
@@ -465,7 +473,7 @@ Commit: 1. **Gated on a concrete consumer — do not build speculatively.**
 
 #### A3e — Reliability polish
 - Anthropic `cache_control` hints on the system block for long task templates
-  (cheap latency/cost win on repeated task runs).
+  (cheap latency win on repeated task runs).
 - Per-connection concurrency cap (mirror `orchestrator.Engine.SetMaxConcurrent`)
   — a semaphore in the `Engine` keyed by connId.
 - Streaming cancel: confirm `RunTask`/`Chat` fully release the upstream HTTP
