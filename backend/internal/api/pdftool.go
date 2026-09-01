@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/tools/pdftool"
 )
 
@@ -15,22 +16,24 @@ const maxPDFUpload = 128 << 20 // 128 MiB
 func readUploadedPDF(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxPDFUpload+(1<<20))
 	if err := r.ParseMultipartForm(16 << 20); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a multipart form upload: " + err.Error()})
+		apierr.Write(w, apierr.Validation("expected a multipart form upload: "+err.Error()))
 		return nil, false
 	}
 	f, hdr, err := r.FormFile("file")
 	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "no \"file\" field in the upload"})
+		apierr.Write(w, apierr.Validation("no \"file\" field in the upload"))
 		return nil, false
 	}
 	defer f.Close()
 	if hdr.Size > maxPDFUpload {
-		WriteJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "the PDF is larger than 128 MiB"})
+		e := apierr.Validation("the PDF is larger than 128 MiB")
+		e.Status = http.StatusRequestEntityTooLarge
+		apierr.Write(w, e)
 		return nil, false
 	}
 	data, err := io.ReadAll(f)
 	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return nil, false
 	}
 	return data, true
@@ -45,7 +48,7 @@ func PDFInspect(w http.ResponseWriter, r *http.Request) {
 	}
 	info, err := pdftool.Inspect(data)
 	if err != nil {
-		WriteJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"info": info})
@@ -72,11 +75,11 @@ func PDFTransform(w http.ResponseWriter, r *http.Request) {
 	case "decrypt":
 		out, err = pdftool.Decrypt(data, r.FormValue("password"))
 	default:
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown op %q (want optimize, encrypt or decrypt)", op)})
+		apierr.Write(w, apierr.Validation(fmt.Sprintf("unknown op %q (want optimize, encrypt or decrypt)", op)))
 		return
 	}
 	if err != nil {
-		WriteJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	w.Header().Set("Content-Type", "application/pdf")

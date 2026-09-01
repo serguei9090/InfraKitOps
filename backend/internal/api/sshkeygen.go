@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/tools/sshkeygen"
 )
 
@@ -22,7 +23,7 @@ type sshKeygenRequest struct {
 func SSHKeygen(w http.ResponseWriter, r *http.Request) {
 	var req sshKeygenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	res, err := sshkeygen.Generate(sshkeygen.Options{
@@ -33,7 +34,7 @@ func SSHKeygen(w http.ResponseWriter, r *http.Request) {
 		Passphrase: req.Passphrase,
 	})
 	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	WriteJSON(w, http.StatusOK, res)

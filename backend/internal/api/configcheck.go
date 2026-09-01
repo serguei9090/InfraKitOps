@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/tools/configcheck"
 )
 
@@ -19,16 +20,16 @@ type configCheckRequest struct {
 func ConfigValidate(w http.ResponseWriter, r *http.Request) {
 	var req configCheckRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if strings.TrimSpace(req.Text) == "" {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "nothing to validate"})
+		apierr.Write(w, apierr.Validation("nothing to validate"))
 		return
 	}
 	res, err := configcheck.Validate(r.Context(), configcheck.Kind(req.Kind), req.Text)
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}
 	WriteJSON(w, http.StatusOK, res)
