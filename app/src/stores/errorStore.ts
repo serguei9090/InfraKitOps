@@ -35,12 +35,20 @@ interface ErrorStore {
 
 const DEDUP_MS = 4000
 const HISTORY_CAP = 50
+// E3e — more than this many toasts from one source inside the window collapse
+// into a single "Multiple errors" toast (guards against a retry loop or a dead
+// backend spamming the corner). History still records every one.
+const BURST_LIMIT = 3
+const BURST_WINDOW_MS = 5000
 
 function newId(): string {
   return typeof crypto?.randomUUID === 'function'
     ? crypto.randomUUID()
     : `err_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 }
+
+/** timestamps of recent toasts, per source, for the burst check */
+const burst = new Map<string, number[]>()
 
 export const useErrorStore = create<ErrorStore>((set, get) => ({
   errors: [],
@@ -57,10 +65,32 @@ export const useErrorStore = create<ErrorStore>((set, get) => ({
     if (dup) return err
     const retry = err.retryable ? opts?.retry : undefined
     const entry: SurfacedError = { ...err, id: newId(), at: now, retry }
-    set((s) => ({
-      errors: [...s.errors, entry].slice(-8),
-      history: [...s.history, entry].slice(-HISTORY_CAP),
-    }))
+
+    // burst check — always record in history, but collapse the toast
+    const src = err.source ?? 'unknown'
+    const hits = (burst.get(src) ?? []).filter((t) => now - t < BURST_WINDOW_MS)
+    hits.push(now)
+    burst.set(src, hits)
+    const collapsed = hits.length > BURST_LIMIT
+
+    set((s) => {
+      const history = [...s.history, entry].slice(-HISTORY_CAP)
+      if (collapsed) {
+        const burstId = `burst:${src}`
+        const others = s.errors.filter((e) => e.id !== burstId)
+        const burstToast: SurfacedError = {
+          ...err,
+          id: burstId,
+          at: now,
+          title: `Multiple errors from ${src}`,
+          hint: `${hits.length} in the last few seconds — see the error history.`,
+          detail: err.detail,
+          retryable: false,
+        }
+        return { errors: [...others, burstToast].slice(-8), history }
+      }
+      return { errors: [...s.errors, entry].slice(-8), history }
+    })
     return err
   },
 
