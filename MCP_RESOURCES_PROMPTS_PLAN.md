@@ -1,9 +1,16 @@
 # MCP — resources & prompts (A4f)
 
-Status: **planned, not started (2026-09-01).** Follow-up to
+Status: **RP1–RP4 DONE + live-verified 2026-09-01.** Follow-up to
 [`AI_MCP_PLAN.md`](AI_MCP_PLAN.md) (A4a–A4e, tools-only). Adds the other two
 MCP primitives a server can expose so the user can pull server-curated
 **context** and server-authored **prompt templates** into a chat.
+
+Commits: `a7a1cf5` (RP1 backend) · `1543929` (RP2 resources in Playground) ·
+`34557de` (RP3 prompts in Playground) · `79e050a` (RP4 `<AiPanel>`).
+Verified end-to-end against `@modelcontextprotocol/server-everything`:
+attach `architecture.md` → Gemini answers from its content (404 prompt
+tokens); `args-prompt(city=Berlin)` → `"What's weather in Berlin?"` into the
+composer; McpView shows `14 tools · 7 resources · 4 prompts`.
 
 > Same naming caveat as A4: Knowledge Hub's `McpServersScreen` is a link
 > list. This is the client. The AI Hub tab is "MCP".
@@ -212,12 +219,15 @@ counts omitted.
 
 ## 5. Phases
 
-| Phase | Scope | Commit gate |
-|-------|-------|-------------|
-| **RP1** | Backend: manager methods + 4 types blocks + 4 endpoints + caches + 2 list_changed handlers + `ServerStatus` counts + tests | `go vet` + `go test ./...`; one endpoint hit by hand |
-| **RP2** | Resources in Playground: model + client + store + Context picker + chips + injection + McpView counts | `bun build/test/lint`; attach a real Context7 / filesystem resource, verify it lands in the prompt |
-| **RP3** | Prompts in Playground: picker + arg form + load-to-draft / load-as-turns | `bun build/test/lint`; invoke a server prompt end-to-end |
-| **RP4** | `<AiPanel>` Context button + chips; optional `Task.resources []string` always-inject | `bun build/test/lint`; browser check in Prompt Library "Improve" |
+| Phase | Scope | Status |
+|-------|-------|--------|
+| **RP1** | Backend: manager methods + types + 4 endpoints + `rpAt` cache + 2 list_changed handlers + `ServerStatus` counts + `resources_test.go` (in-memory SDK transport via a new `dial` seam) | ✅ `a7a1cf5` |
+| **RP2** | Resources in Playground: model + client + `mcpStore` lazy cache + `ContextPickerDialog` (concrete + templated, binary disabled) + chips + `llmStore.setChatContext` injection + McpView counts | ✅ `1543929` |
+| **RP3** | Prompts in Playground: `PromptPickerDialog` + arg form + messages flattened to text → dropped in the draft | ✅ `34557de` |
+| **RP4** | `<AiPanel>` Paperclip + chips (both modes), injected via `run({history})` | ✅ `79e050a` |
+
+`Task.resources []string` (always-inject URIs) was **not** built — deferred
+(see §7); needs a backend `TaskRunStream` change + `TaskDialog` UI.
 
 Each phase is independently shippable; commit per phase (RP2/RP3 may split if
 large). Live-verify against the `Everything` test server
@@ -241,8 +251,11 @@ resources + prompts) and Context7.
 
 ## 7. Deferred past A4f
 
+- `Task.resources []string` — always-inject URIs per grounding task
+  (`TaskRunStream` resolve + `TaskDialog` UI). Interactive attach covers the
+  need for now.
 - Model-invoked / auto-attached resources (needs a roots-style host API).
 - Image/blob resources → vision models.
 - `resources/subscribe` live updates (poll-free resource change stream).
-- Resource attach in Runbooks Assistant / other `<AiPanel>` consumers beyond
-  Prompt Library.
+- Prompt picker in `<AiPanel>` (Playground-only for now — a grounded task
+  already *is* a prompt).

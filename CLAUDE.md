@@ -333,8 +333,18 @@ Assistant.
   modes. Built-ins ship tool-free; user opts a task in. **A4e done
   2026-09-01** (`e690581`/`2ff4522`/`455bc8a`): `list_changed` cache drop ·
   tool transcript + token totals in saved chats · per-server `ServerStatus`
-  (connected/toolCount/lastError) in McpView. **A4 complete** bar MCP
-  resources/prompts. Two Gemini tool-calling bugs fixed live: `geminiSchema()`
+  (connected/toolCount/lastError) in McpView. **A4 complete.** **A4f done
+  2026-09-01** (`a7a1cf5`/`1543929`/`34557de`/`79e050a`,
+  [`MCP_RESOURCES_PROMPTS_PLAN.md`](MCP_RESOURCES_PROMPTS_PLAN.md)): MCP
+  *resources* + *prompts* — `internal/mcp` gains `Resources`/`ReadResource`/
+  `Prompts`/`GetPrompt` (+ `rpAt` 60s cache, Resource/Prompt `list_changed`
+  handlers, `ServerStatus` resource/prompt counts, `dial` test seam); 4
+  endpoints (`/mcp/resources`, `/mcp/resources/read`, `/mcp/prompts`,
+  `/mcp/prompts/get`). FE: `ContextPickerDialog` ("Context" in Playground +
+  Paperclip in `<AiPanel>` — attach a resource as a user context message,
+  32KiB/resource cap) + `PromptPickerDialog` (Playground "Prompts" → arg
+  form → text into the draft). User-driven only; no approval gate (reads).
+  Two Gemini tool-calling bugs fixed live: `geminiSchema()`
   strips `$schema`/`additionalProperties` from MCP schemas (`ddcc1dc`);
   `ToolCall.Signature` echoes Gemini's `thoughtSignature` (`5176918`).
   Lets the model look up commands/docs not in its training (Context7, web

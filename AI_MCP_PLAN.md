@@ -1,6 +1,8 @@
 # AI — MCP tools & tool-calling (A4)
 
-Status: **A4a–A4e done + live-verified with Gemini 2026-09-01. Complete** (bar MCP resources/prompts — separate follow-up). Extends the AI module
+Status: **A4a–A4e done + live-verified with Gemini 2026-09-01. Complete.** MCP
+resources & prompts shipped separately as A4f — see
+[`MCP_RESOURCES_PROMPTS_PLAN.md`](MCP_RESOURCES_PROMPTS_PLAN.md). Extends the AI module
 (`AI_MODULE_PLAN.md`) with **Model Context Protocol** clients so a model can
 call tools mid-answer — web search, Context7 doc lookup, filesystem, etc. —
 to ground answers on things outside its training (a new CLI flag, a fresh API,
@@ -179,7 +181,8 @@ plain API call.
 | **A4d** ✅ | `Task.Tools []string` (mcp_server ids or `["all"]`). `TaskRunStream` merges it (an explicit `?tools=` still overrides). `TaskDialog` gains an "MCP tools" section — "All servers" + per-server checkboxes from `useMcpStore`. `useLlm` now tracks `steps[]` + handles `tool-call`/`tool-approval`/`tool-result` + exposes `resume(approvalId,approved)`; `<AiPanel>` renders `<ToolSteps>` (with Approve/Deny) in both oneshot and chat, and attaches steps to committed chat turns. Built-ins ship with **no tools** (safe/offline default) — the user opts a task in. Verified in-browser: enabled "Everything" on `prompt.improve` → persisted `tools:["mcp_ueDkyGkvKm7D"]` + `overridden`, round-tripped on reopen. Runtime path = the Playground A4b/A4c code (live-verified with Gemini). **Bug found + fixed live** (`ddcc1dc`): Gemini's `functionDeclarations[].parameters` 400s on `$schema`/`additionalProperties`/`$id`/… which MCP servers emit — `geminiSchema()` strips them recursively before send. | Every module's AI can opt into tools; a task looks up an unknown command before answering. |
 | **A4e** ✅ | Polish DONE 2026-09-01. (1) list_changed live refresh `e690581`. (2) tool transcript + token totals in saved chats `2ff4522`. (3) per-server ServerStatus (connected/toolCount/lastError) in McpView `455bc8a`. (4) whole-loop token totals — the agent loop already sums Usage across iterations, recorded by A3c. MCP resources/prompts stay a separate follow-up. | Agentic runs auditable + self-healing. |
 
-**Deferred**: MCP *resources* and *prompts* (this plan is tools-only) · MCP
+**Deferred**: MCP *resources* and *prompts* → **done as A4f**
+(`MCP_RESOURCES_PROMPTS_PLAN.md`) · MCP
 *sampling* (server asks the client's LLM — inverts trust, skip) · parallel
 tool calls (do them sequentially first) · an MCP server *inside* InfraKit
 exposing its own tools to external clients.
