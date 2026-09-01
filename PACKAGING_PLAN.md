@@ -1,11 +1,21 @@
 # Packaging & Build — Phase 7
 
-Status: **P7a/P7b done, P7c analysed, P7d baseline proven — PAUSED 2026-09-01
-by owner.** `bun run tauri build` already produces working MSI + NSIS
-installers. The rest (P7d tuning, P7e clean-VM verification, P7f web deploy,
-P7g Linux, P7h release CI) is **on hold until the user asks to finish the
-deployment build** — the app stays dev-run for now while feature/fix work
-continues. Expands `MIGRATION_PLAN.md` Phase 7.
+Status: **P7a/P7b done, P7c analysed, P7d re-verified, P7h (release CI)
+DONE 2026-09-01.** `bun run tauri build` produces working MSI + NSIS
+installers (re-verified 2026-09-01: FE build 5s → Rust release 3m → MSI 15 MB
++ NSIS 11 MB, sidecar backend+helper staged next to `app.exe`). `bun run
+build` produces the 3.6 MB static web bundle. CI now covers it:
+- **`desktop.yml`** — `cargo check --locked --all-targets` + `cargo test` on
+  windows + ubuntu for every `app/src-tauri/**` change.
+- **`release.yml`** — push a `v*` tag (or manual dispatch with a version):
+  `create-release` (draft) → `desktop` matrix (windows + ubuntu:
+  `set-version` → `build:sidecar` → `tauri-action` bundles MSI/NSIS/deb/
+  AppImage into the release) → `web` (zip `dist/` → attach as
+  `infrakit-studio-web-<v>.zip`). Review the draft, then publish.
+
+Remaining P7 polish (not blocking): P7e clean-VM verification (manual gate),
+P7g Linux runtime testing (needs a Linux user), P7a-icons (brand icon set),
+code signing. Expands `MIGRATION_PLAN.md` Phase 7.
 
 Goal: one reproducible command produces a **signed-or-at-least-clean Windows
 installer** that installs → launches → runs a backend tool → uninstalls with no
@@ -161,12 +171,20 @@ Record the run in `PACKAGING_PLAN.md` (this file) under "Verification log".
   note.
 - Not a release blocker; CI job `continue-on-error` until a Linux user exists.
 
-### P7h — CI
-- `.github/workflows/release.yml` — on a `v*` tag: matrix (windows, ubuntu),
-  `build-sidecar` → `fetch-tools` → `tauri build` → upload artifacts to a
-  draft GitHub Release. `tauri-action` does most of this.
-- Keep the existing `backend.yml` / `links.yml`; add a `frontend.yml` running
-  `build + test + lint` on PRs to `main` if not already there.
+### P7h — CI — **DONE 2026-09-01**
+- `.github/workflows/desktop.yml` — Rust compile gate (`cargo check
+  --locked --all-targets` + `cargo test`) on windows + ubuntu, on
+  `app/src-tauri/**`. Installs the Linux WebKit/bundler deps
+  (`libwebkit2gtk-4.1-dev`, `libsoup-3.0-dev`,
+  `libjavascriptcoregtk-4.1-dev`, `librsvg2-dev`, `patchelf`) and builds the
+  host Go sidecar first (`build.rs` validates `externalBin` exists).
+- `.github/workflows/release.yml` — `create-release` draft → `desktop`
+  matrix (`set-version` → `build:sidecar` → `tauri-action` with
+  `releaseId`) → `web` (zip + `softprops/action-gh-release`). Triggered by a
+  `v*` tag or `workflow_dispatch` (version input). `contents: write`.
+- `frontend.yml` (lint + test + build + bundle budget + version drift) and
+  `backend.yml` (vet + coded-errors grep + test matrix + cross-compile
+  sidecar) already existed and are unchanged.
 
 ## 5. Risks
 

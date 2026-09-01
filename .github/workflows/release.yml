@@ -1,0 +1,123 @@
+name: release
+
+# Cut a release by pushing a tag:  git tag v0.2.0 && git push origin v0.2.0
+# or run manually from the Actions tab with a version like 0.2.0.
+#
+# Produces, attached to a DRAFT GitHub Release:
+#   - Windows:  InfraKit Studio_<v>_x64_en-US.msi  +  _x64-setup.exe (NSIS)
+#   - Linux:    infrakit-studio_<v>_amd64.deb  +  .AppImage
+#   - Web:      infrakit-studio-web-<v>.zip  (static bundle for self-hosting)
+#
+# Review the draft, then publish it.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'semver, no leading v (e.g. 0.2.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      release_id: ${{ steps.rel.outputs.id }}
+    steps:
+      - id: v
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then V="${{ inputs.version }}"; else V="${GITHUB_REF_NAME#v}"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V"    >> "$GITHUB_OUTPUT"
+      - id: rel
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.v.outputs.tag }}
+          name: InfraKit Studio ${{ steps.v.outputs.tag }}
+          draft: true
+          prerelease: false
+          body: |
+            Desktop installers (Windows MSI + NSIS, Linux `.deb` + `.AppImage`)
+            and the self-hosting web bundle are attached below.
+
+            **Single-user (desktop):** install and run — no configuration.
+            **Multi-user (self-hosted):** run the backend with `--auth on`
+            and `--tls auto`, then point the web build at it
+            (Settings → Backend, or `VITE_BACKEND_URL`). See
+            `USER_MANAGEMENT_PLAN.md`.
+
+  desktop:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux WebKit / bundler deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev librsvg2-dev patchelf
+
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: backend/go.sum
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+
+      - name: install frontend deps
+        working-directory: app
+        run: bun install --frozen-lockfile
+
+      - name: stamp version into the 3 files
+        working-directory: app
+        run: bun run set-version "${{ needs.create-release.outputs.version }}"
+
+      - name: build Go sidecar (host triple)
+        working-directory: app
+        run: bun run build:sidecar
+
+      - name: tauri build + upload
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+
+  web:
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: install + version + build
+        working-directory: app
+        run: |
+          bun install --frozen-lockfile
+          bun run set-version "${{ needs.create-release.outputs.version }}"
+          bun run build
+      - name: zip the static bundle
+        working-directory: app/dist
+        run: zip -r "../../infrakit-studio-web-${{ needs.create-release.outputs.version }}.zip" .
+      - name: attach to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.tag }}
+          draft: true
+          files: infrakit-studio-web-${{ needs.create-release.outputs.version }}.zip

@@ -1,0 +1,66 @@
+name: desktop
+
+# Compiles the Tauri shell (Rust) on both target OSes so a change to
+# app/src-tauri/** or the frontend can't silently break `tauri build`.
+# The full installer bundling lives in release.yml (tag-triggered).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/src-tauri/**'
+      - '.github/workflows/desktop.yml'
+  pull_request:
+    paths:
+      - 'app/src-tauri/**'
+      - '.github/workflows/desktop.yml'
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: cargo check + test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux WebKit / bundler deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev librsvg2-dev patchelf
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: backend/go.sum
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+
+      - name: install frontend deps
+        working-directory: app
+        run: bun install --frozen-lockfile
+
+      # build.rs validates externalBin exists — build the host sidecar first.
+      - name: build Go sidecar for the host
+        working-directory: app
+        run: bun run build:sidecar
+
+      - name: cargo check
+        working-directory: app/src-tauri
+        run: cargo check --locked --all-targets
+
+      - name: cargo test
+        working-directory: app/src-tauri
+        run: cargo test --locked
