@@ -1,5 +1,6 @@
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { BackendUnavailableError } from './backendClient'
+import { resolveWebEndpoint } from './endpointOverride'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 
 /**
@@ -25,9 +26,7 @@ async function resolve(): Promise<Connection> {
       conn = { endpoint: '', token: '', available: false }
     }
   } else {
-    const url = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, '') ?? ''
-    const token = (import.meta.env.VITE_BACKEND_TOKEN as string | undefined) ?? ''
-    conn = { endpoint: url, token, available: url.length > 0 }
+    conn = resolveWebEndpoint()
   }
   return conn
 }

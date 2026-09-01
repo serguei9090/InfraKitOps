@@ -62,7 +62,7 @@ export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     label: 'Backend',
     icon: Server,
     scope: 'info',
-    keywords: ['sidecar', 'service', 'endpoint', 'token', 'reconnect', 'status', 'capabilities'],
+    keywords: ['sidecar', 'service', 'endpoint', 'token', 'reconnect', 'status', 'capabilities', 'url', 'override', 'self-hosted'],
     element: <BackendSettings />,
   },
   { id: 'about', label: 'About', icon: Info, scope: 'info', keywords: ['version', 'license', 'plan'], element: <AboutSettings /> },

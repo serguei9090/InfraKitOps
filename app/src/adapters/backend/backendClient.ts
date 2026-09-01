@@ -1,5 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { classify } from '@/core/errors/appError'
+import { resolveWebEndpoint } from './endpointOverride'
 
 /**
  * Talks to the `infrakit-backend` network sidecar (desktop) or a standalone
@@ -9,8 +10,9 @@ import { classify } from '@/core/errors/appError'
  * Resolution:
  *   - desktop (Tauri): the `backend_endpoint` command returns { endpoint,
  *     token, available }, filled in once the sidecar announces its port.
- *   - web: `VITE_BACKEND_URL` (+ optional `VITE_BACKEND_TOKEN`), else the
- *     backend is treated as unavailable and the tools show a setup banner.
+ *   - web: a `localStorage` override (Settings → Backend), else
+ *     `VITE_BACKEND_URL` (+ optional `VITE_BACKEND_TOKEN`), else the backend
+ *     is treated as unavailable and the tools show a setup banner.
  */
 
 export interface BackendConnection {
@@ -30,9 +32,7 @@ async function resolveConnection(): Promise<BackendConnection> {
       resolved = { endpoint: '', token: '', available: false }
     }
   } else {
-    const url = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/$/, '') ?? ''
-    const token = (import.meta.env.VITE_BACKEND_TOKEN as string | undefined) ?? ''
-    resolved = { endpoint: url, token, available: url.length > 0 }
+    resolved = resolveWebEndpoint()
   }
   return resolved
 }

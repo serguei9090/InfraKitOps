@@ -6,6 +6,7 @@ import {
   type CapabilitiesInfo,
   type HealthInfo,
 } from '@/adapters/backend/backendClient'
+import { resetSseConnection } from '@/adapters/backend/sseClient'
 
 export type BackendStatus = 'unknown' | 'connecting' | 'available' | 'unavailable'
 
@@ -45,7 +46,8 @@ export const useBackendStore = create<BackendStore>((set, get) => ({
 
   retry: async () => {
     resetBackendConnection()
-    set({ status: 'connecting' })
+    resetSseConnection()
+    set({ status: 'unknown' })
     await get().refresh()
   },
 
