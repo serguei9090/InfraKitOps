@@ -261,18 +261,19 @@ clear(): void
 Phased so each part is independently shippable. Do in order; E3a/E3b are the
 user-visible wins, E3c is the grind.
 
-#### E3a — Retry-from-toast
-- `errorStore` entry gains an optional `retry?: () => void | Promise<void>`.
-- `reportError(raw, source, { retry })` — callers that have a re-runnable
-  action pass it (`llmStore.putConnection`, `runbookStore.putNode`, …).
-- `<ErrorToaster>` renders a **Retry** button when `retry` is set and
-  `preset.retryable`; on click it calls `retry()`, dismisses, and re-reports
-  on a second failure (with a "retried" marker so the dedup window doesn't
-  swallow it).
-- No global action registry — the closure travels with the report. Simpler
-  than the "action registry" originally sketched.
-**DoD**: kill the backend, edit an AI connection → toast → start backend →
-Retry → succeeds. One commit.
+#### E3a — Retry-from-toast — **DONE 2026-09-01** (`e823421`)
+- `errorStore` `report()` / `reportError()` take an optional `{ retry }`;
+  the closure is stored on the surfaced error **only when the code is
+  retryable** (`err.retryable`).
+- `<ErrorToaster>` shows a **Retry** button for those. Click → drop the toast
+  first (so a re-failure clears the 4 s dedup window) → run the closure; the
+  closure's own action reports its failure → fresh toast.
+- No global action registry — the closure travels with the report.
+- Wired: `llmStore` `putConnection` / `putSettings` / `saveChat` /
+  `load`·`delete`·`patchConversation` (each `retry: () => <same action>`).
+  Other stores can opt in the same way.
+- Verified: backend down → Save a chat → "Service not reachable" + Retry →
+  backend up → Retry re-runs the save.
 
 #### E3b — Error-history drawer
 - `errorStore` already caps at 8 live; add a separate `history` ring (cap 50,

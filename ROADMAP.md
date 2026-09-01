@@ -8,7 +8,7 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 | # | Task | What's left | Effort | Status |
 |---|------|-------------|:---:|---|
 | 1 | **A4e-2** tool transcript in saved chats ([AI_MCP_PLAN](AI_MCP_PLAN.md) §A4e) | done `2ff4522` — steps round-tripped (A3b) + token totals per conversation/turn | S | ✅ |
-| 2 | **E3a** retry-from-toast ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3a) | optional `retry()` closure on an error entry → Retry button in `<ErrorToaster>`; callers pass it | S | ☐ |
+| 2 | **E3a** retry-from-toast ([ERROR_HANDLING_PLAN](ERROR_HANDLING_PLAN.md) §E3a) | done `e823421` — `{ retry }` opt on `reportError`, Retry button on retryable toasts, wired into llmStore mutations | S | ✅ |
 | 3 | **A4e-1** MCP `list_changed` live refresh ([AI_MCP_PLAN](AI_MCP_PLAN.md) §A4e) | subscribe on the go-sdk session; drop the 60s tool cache on the notification | S | ☐ |
 | 4 | **A3e** reliability polish ([AI_MODULE_PLAN](AI_MODULE_PLAN.md) §A3e) | Anthropic `cache_control` hint · per-connection concurrency cap · audit abort-releases-upstream | S–M | ☐ |
 | 5 | **A3c** token-usage aggregation ([AI_MODULE_PLAN](AI_MODULE_PLAN.md) §A3c) | `llm_usage` table + engine `UsageRecorder` + `GET /llm/usage` grouped + AI Hub "Usage" view. **No cost/dollars.** | M | ☐ |
