@@ -21,8 +21,14 @@ import { cn } from '@/lib/utils'
 import { useThemeStore } from '@/stores/themeStore'
 import { useModuleVisibilityStore } from '@/stores/moduleVisibilityStore'
 import { kModuleTaxonomy, type ModuleDef } from '@/adapters/ui/shell/moduleTaxonomy'
+import { useRef, useState } from 'react'
+import { Download, Upload } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { useBackendStore } from '@/stores/backendStore'
+import { reportError } from '@/stores/errorStore'
 import { SettingsGroup, SettingsRow } from '../SettingsScaffold'
 import { SettingsResetButton } from '../SettingsResetButton'
+import { applyBackup, buildBackup, downloadBackup } from '../settingsBackup'
 
 export function GeneralSettings() {
   const mode = useThemeStore((s) => s.mode)
@@ -50,6 +56,13 @@ export function GeneralSettings() {
         <ModuleOrderList />
       </SettingsGroup>
 
+      <SettingsGroup
+        title="Backup"
+        description="Export every setting (theme, module layout, network, AI defaults, Runbooks) as one JSON file. No secrets — Vault contents and API keys are never included."
+      >
+        <BackupControls />
+      </SettingsGroup>
+
       <SettingsResetButton
         onReset={() => {
           resetTheme()
@@ -57,6 +70,63 @@ export function GeneralSettings() {
         }}
       />
     </>
+  )
+}
+
+function BackupControls() {
+  const backendAvailable = useBackendStore((s) => s.status === 'available')
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState<'export' | 'import' | null>(null)
+  const [imported, setImported] = useState(false)
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        size="xs"
+        variant="outline"
+        disabled={busy !== null}
+        onClick={async () => {
+          setBusy('export')
+          try {
+            downloadBackup(await buildBackup(backendAvailable))
+          } catch (e) {
+            reportError(e, 'Settings')
+          } finally {
+            setBusy(null)
+          }
+        }}
+      >
+        <Download className="size-3.5" /> Export
+      </Button>
+      <Button size="xs" variant="outline" disabled={busy !== null} onClick={() => fileRef.current?.click()}>
+        <Upload className="size-3.5" /> Import
+      </Button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0]
+          e.target.value = ''
+          if (!file) return
+          setBusy('import')
+          setImported(false)
+          try {
+            await applyBackup(JSON.parse(await file.text()))
+            setImported(true)
+          } catch (err) {
+            reportError(err, 'Settings')
+          } finally {
+            setBusy(null)
+          }
+        }}
+      />
+      {imported && <span className="text-xs text-emerald-600 dark:text-emerald-500">Settings imported.</span>}
+      {!backendAvailable && (
+        <span className="text-xs text-muted-foreground">Backend off — AI / Runbooks settings excluded.</span>
+      )}
+    </div>
   )
 }
 
