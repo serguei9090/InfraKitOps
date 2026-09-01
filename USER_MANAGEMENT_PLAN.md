@@ -1,9 +1,11 @@
 # User management module (U)
 
-Status: **approved design, 2026-09-01. Not started.** Supersedes
+Status: **U0 + U1 done 2026-09-01** (`711c812`, `458996a`) — the shared-login
+milestone: multi-user mode works end-to-end, all data still common. U2+
+(per-user data) not started. Supersedes
 [`USER_MANAGEMENT_PROPOSAL.md`](USER_MANAGEMENT_PROPOSAL.md) — all 10 open
-decisions are now resolved (§2). Big module: backend-first, touches every
-backend subsystem plus a new frontend auth layer.
+decisions resolved (§2). Backend-first, touches every backend subsystem plus a
+new frontend auth layer.
 
 ---
 
@@ -159,8 +161,8 @@ Each phase is a green checkpoint; commit per checkpoint bullet.
 
 | Phase | Scope | Milestone |
 |-------|-------|-----------|
-| **U0** | `internal/auth` (auth.db, users, sessions, Argon2id, throttle, audit); `--auth` flag + `/health` `authMode`; `sessionAuth` + `moduleGuard` middleware; `/auth/*` + `/users` + `/audit` endpoints; bootstrap-via-setup-token. **No data scoping yet** — auth on = login wall, data still shared. `go test ./...`, curl-verified. | Backend auth works. |
-| **U1** | Frontend: `authStore`, `<RequireAuth>`, `/login` + `/setup`, user menu, 401 handling, rail/route module filtering. Minimal Users admin (list / create / disable / role / modules). | **Login end-to-end; team can share the backend, all data still common.** |
+| **U0** ✅ `711c812` | `internal/auth` (auth.db `auth_user`/`auth_session`/`auth_audit`, Argon2id PHC hashes, opaque sha256-at-rest session tokens w/ 14d sliding expiry, in-memory login throttle, append-only audit, last-admin guard); `--auth` + `--auth-db` flags; `/health` `authMode`; `sessionAuth` + `accessGuard` (viewer write-gate + per-user module ACL via `moduleOf`) middleware; `/auth/*` + `/users` + `/audit`; bootstrap-via-`SETUP-TOKEN`. **No data scoping** — auth on = login wall, data shared. 7 tests, curl-verified. | Backend auth works. |
+| **U1** ✅ `458996a` | Frontend: `authStore` (mode from `/health`, session in `localStorage`, 401→drop), `backendClient`/`sseClient` session-token priority, `App.tsx` gate → `<AuthGate>` (login + first-run setup screens), `<UserMenu>` (role / change-pw / sign-out), rail + shell-route filter by `me.allowedModules`, admin-only Settings → **Users** (list / create / role / disable / delete / module-access checkboxes / password reset). `--auth off` = no auth UI, full rail, unchanged. Browser-verified. | **Login end-to-end; team can share the backend, all data still common.** |
 | **U2** | Vault registry (per-user `vault/<id>.enc`); `SecretResolver` → user-scoped, threaded through MCP + orchestrator + executors. AI data scoping: `owner_id` on `llm_*` + `mcp_server`, query filters, migration. | Per-user AI + secrets. |
 | **U3** | Runbooks + History scoping: `owner_id` on runbooks (draft visibility) / runs / schedules / history; `runbook_settings` split instance vs user. Multi-user **approval gate** (`requiresApproval` → SSE pause → different operator `POST /runs/{id}/approve`, reuses the A4c pause/resume pattern). | Per-user runbooks + shared published + approvals. |
 | **U4** | Prompt Library server-side: `prompt*` tables + `/prompts/*` + `BackendPromptRepo`; owner-scoped + published gallery; client repo switch by `authMode`. | Per-user prompts + shared templates. |
