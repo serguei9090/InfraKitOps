@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/tools/neighbor"
 )
@@ -13,7 +14,7 @@ func NeighborTable(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	result, err := neighbor.List(r.Context())
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}
 	env := envelope.Envelope{

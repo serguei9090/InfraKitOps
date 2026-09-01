@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/tools/snmp"
 )
@@ -31,11 +32,11 @@ type snmpRequest struct {
 func SNMP(w http.ResponseWriter, r *http.Request) {
 	var req snmpRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if strings.TrimSpace(req.Host) == "" {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "a host is required"})
+		apierr.Write(w, apierr.Validation("a host is required"))
 		return
 	}
 	mode := req.Mode

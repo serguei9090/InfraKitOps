@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/tools/dnslookup"
 )
@@ -24,11 +25,11 @@ type dnsRequest struct {
 func DNSLookup(w http.ResponseWriter, r *http.Request) {
 	var req dnsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if strings.TrimSpace(req.Name) == "" {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "a name is required"})
+		apierr.Write(w, apierr.Validation("a name is required"))
 		return
 	}
 	recursion := true
@@ -46,7 +47,7 @@ func DNSLookup(w http.ResponseWriter, r *http.Request) {
 		Timeout:   time.Duration(req.TimeoutMs) * time.Millisecond,
 	})
 	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 

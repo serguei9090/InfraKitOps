@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/sse"
 	"github.com/infrakit/backend/internal/tools/ipgeo"
@@ -21,7 +22,7 @@ func TracerouteStream(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	host := strings.TrimSpace(q.Get("host"))
 	if host == "" {
-		sse.Reject(w, "a host is required")
+		sse.RejectCoded(w, string(apierr.CodeValidation), "a host is required", "")
 		return
 	}
 

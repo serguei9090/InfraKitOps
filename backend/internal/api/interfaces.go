@@ -4,6 +4,8 @@ import (
 	"net"
 	"net/http"
 	"sort"
+
+	"github.com/infrakit/backend/internal/apierr"
 )
 
 type ifaceAddr struct {
@@ -29,7 +31,7 @@ type ifaceInfo struct {
 func Interfaces(w http.ResponseWriter, _ *http.Request) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}
 

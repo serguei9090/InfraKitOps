@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/sse"
 	"github.com/infrakit/backend/internal/tools/ping"
 )
@@ -20,7 +21,7 @@ func PingMonitorStream(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	hosts := splitList(q.Get("hosts"))
 	if len(hosts) == 0 {
-		sse.Reject(w, "at least one host is required")
+		sse.RejectCoded(w, string(apierr.CodeValidation), "at least one host is required", "")
 		return
 	}
 

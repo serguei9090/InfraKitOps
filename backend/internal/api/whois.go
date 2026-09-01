@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/tools/whois"
 )
@@ -19,12 +20,12 @@ type whoisRequest struct {
 func Whois(w http.ResponseWriter, r *http.Request) {
 	var req whoisRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	query := strings.TrimSpace(req.Query)
 	if query == "" {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "a domain or IP is required"})
+		apierr.Write(w, apierr.Validation("a domain or IP is required"))
 		return
 	}
 

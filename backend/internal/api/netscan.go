@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/sse"
 	"github.com/infrakit/backend/internal/tools/netscan"
@@ -21,14 +22,14 @@ func NetScanStream(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	hosts := splitList(q.Get("hosts"))
 	if len(hosts) == 0 {
-		sse.Reject(w, "at least one host is required")
+		sse.RejectCoded(w, string(apierr.CodeValidation), "at least one host is required", "")
 		return
 	}
 	var ports []int
 	if p := q.Get("ports"); p != "" {
 		parsed, err := portscan.ParsePorts(p)
 		if err != nil {
-			sse.Reject(w, err.Error())
+			sse.RejectCoded(w, string(apierr.CodeValidation), err.Error(), "")
 			return
 		}
 		ports = parsed

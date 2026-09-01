@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/tools/iperf"
 )
@@ -31,11 +32,11 @@ type iperfRequest struct {
 func Iperf3(w http.ResponseWriter, r *http.Request) {
 	var req iperfRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	if strings.TrimSpace(req.Host) == "" {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "a server host is required"})
+		apierr.Write(w, apierr.Validation("a server host is required"))
 		return
 	}
 
@@ -100,7 +101,7 @@ func Iperf3Server(w http.ResponseWriter, r *http.Request) {
 				WriteJSON(w, http.StatusServiceUnavailable, map[string]any{"error": err.Error(), "notInstalled": true})
 				return
 			}
-			WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			apierr.Write(w, apierr.Internal(err.Error()))
 			return
 		}
 	} else {

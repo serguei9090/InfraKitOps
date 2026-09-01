@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/tools/connections"
 	"github.com/infrakit/backend/internal/tools/ipgeo"
@@ -18,7 +19,7 @@ func Connections(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 	result, err := connections.List(kind)
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Internal(err.Error()))
 		return
 	}
 	env := envelope.Envelope{
@@ -45,7 +46,7 @@ type wolRequest struct {
 func WakeOnLAN(w http.ResponseWriter, r *http.Request) {
 	var req wolRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	started := time.Now()
@@ -80,12 +81,12 @@ type ipGeoRequest struct {
 func IPGeolocation(w http.ResponseWriter, r *http.Request) {
 	var req ipGeoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	query := strings.TrimSpace(req.Query)
 	if query == "" {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "an IP or hostname is required"})
+		apierr.Write(w, apierr.Validation("an IP or hostname is required"))
 		return
 	}
 

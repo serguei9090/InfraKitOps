@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/envelope"
 	"github.com/infrakit/backend/internal/tools/sntp"
 )
@@ -20,12 +21,12 @@ type sntpRequest struct {
 func SNTP(w http.ResponseWriter, r *http.Request) {
 	var req sntpRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		apierr.Write(w, apierr.Validation(err.Error()))
 		return
 	}
 	servers := cleanList(req.Servers)
 	if len(servers) == 0 {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "at least one server is required"})
+		apierr.Write(w, apierr.Validation("at least one server is required"))
 		return
 	}
 
