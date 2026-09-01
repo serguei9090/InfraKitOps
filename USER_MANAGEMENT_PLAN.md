@@ -1,8 +1,9 @@
 # User management module (U)
 
-Status: **U0 + U1 done 2026-09-01** (`711c812`, `458996a`) — the shared-login
-milestone: multi-user mode works end-to-end, all data still common. U2+
-(per-user data) not started. Supersedes
+Status: **U0–U2 done 2026-09-01** (`711c812` U0, `458996a` U1, `7557fbb`+`8a2bad8`
+U2). Multi-user auth + per-user AI data + per-user vaults work end-to-end.
+Left: U3 (Runbooks/History scoping + approvals), U4 (Prompt Library server-
+side), U5 (admin polish + audit viewer), U6 (self-signed TLS). Supersedes
 [`USER_MANAGEMENT_PROPOSAL.md`](USER_MANAGEMENT_PROPOSAL.md) — all 10 open
 decisions resolved (§2). Backend-first, touches every backend subsystem plus a
 new frontend auth layer.
@@ -163,7 +164,7 @@ Each phase is a green checkpoint; commit per checkpoint bullet.
 |-------|-------|-----------|
 | **U0** ✅ `711c812` | `internal/auth` (auth.db `auth_user`/`auth_session`/`auth_audit`, Argon2id PHC hashes, opaque sha256-at-rest session tokens w/ 14d sliding expiry, in-memory login throttle, append-only audit, last-admin guard); `--auth` + `--auth-db` flags; `/health` `authMode`; `sessionAuth` + `accessGuard` (viewer write-gate + per-user module ACL via `moduleOf`) middleware; `/auth/*` + `/users` + `/audit`; bootstrap-via-`SETUP-TOKEN`. **No data scoping** — auth on = login wall, data shared. 7 tests, curl-verified. | Backend auth works. |
 | **U1** ✅ `458996a` | Frontend: `authStore` (mode from `/health`, session in `localStorage`, 401→drop), `backendClient`/`sseClient` session-token priority, `App.tsx` gate → `<AuthGate>` (login + first-run setup screens), `<UserMenu>` (role / change-pw / sign-out), rail + shell-route filter by `me.allowedModules`, admin-only Settings → **Users** (list / create / role / disable / delete / module-access checkboxes / password reset). `--auth off` = no auth UI, full rail, unchanged. Browser-verified. | **Login end-to-end; team can share the backend, all data still common.** |
-| **U2** | Vault registry (per-user `vault/<id>.enc`); `SecretResolver` → user-scoped, threaded through MCP + orchestrator + executors. AI data scoping: `owner_id` on `llm_*` + `mcp_server`, query filters, migration. | Per-user AI + secrets. |
+| **U2** ✅ `7557fbb` (U2a) + `8a2bad8` (U2b) | **U2a** `internal/userctx` (user id on ctx) · `vault.Registry` (one `*Vault` per user, `vault/<id>.enc`, `""` = legacy `vault.enc`) · the 3 `SecretResolver` ifaces gain a ctx arg, threaded through `engine.resolveKey` / mcp `transport`+`buildEnv` / orchestrator `BuildPreview`+`buildExecutorStep`+`Run` · `VaultHandlers`/`RunbookHandlers`/`main.go` wired. **U2b** `owner` column + filter on `llm_connection`/`llm_task`/`mcp_server`/`llm_conversation`/`llm_usage` (additive ALTER; `owner=''` = pre-auth) · store methods take `owner`, handlers pass `owner(r)` · mcp Manager re-checks `store.Get` before reusing a cached session · `Service.OnBootstrap` → `main.go` claims orphans for the first admin. `--auth off` = `owner`/`userctx` are `""` → no-op, byte-identical. Curl-verified: per-user connections + vaults isolated, cross-user DELETE → 404, single-user legacy vault path intact. | Per-user AI + secrets. |
 | **U3** | Runbooks + History scoping: `owner_id` on runbooks (draft visibility) / runs / schedules / history; `runbook_settings` split instance vs user. Multi-user **approval gate** (`requiresApproval` → SSE pause → different operator `POST /runs/{id}/approve`, reuses the A4c pause/resume pattern). | Per-user runbooks + shared published + approvals. |
 | **U4** | Prompt Library server-side: `prompt*` tables + `/prompts/*` + `BackendPromptRepo`; owner-scoped + published gallery; client repo switch by `authMode`. | Per-user prompts + shared templates. |
 | **U5** | Admin polish: full Settings → **Users** (module-access editor, reset password, forced change) + **Audit** viewer; instance-settings section. | Manageable. |
