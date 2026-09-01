@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Boxes, History, Loader2, Paperclip, Pin, RotateCcw, Save, Send, Trash2, X } from 'lucide-react'
+import {
+  Boxes,
+  History,
+  Loader2,
+  MessageSquareText,
+  Paperclip,
+  Pin,
+  RotateCcw,
+  Save,
+  Send,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -7,6 +19,7 @@ import { useLlmStore } from '@/stores/llmStore'
 import { useMcpStore } from '@/stores/mcpStore'
 import type { McpContextBlock } from '@/core/mcp/mcpModel'
 import { ContextPickerDialog } from './ContextPickerDialog'
+import { PromptPickerDialog } from './PromptPickerDialog'
 import { ToolSteps } from './ToolSteps'
 import { cn } from '@/lib/utils'
 
@@ -43,6 +56,7 @@ export function PlaygroundView() {
   const [toolsOn, setToolsOn] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [pickCtx, setPickCtx] = useState(false)
+  const [pickPrompt, setPickPrompt] = useState(false)
   const [attached, setAttached] = useState<McpContextBlock[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -241,6 +255,19 @@ export function PlaygroundView() {
         >
           <Paperclip className="size-3.5" /> Context{attached.length > 0 ? ` (${attached.length})` : ''}
         </Button>
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={enabledServers === 0}
+          onClick={() => setPickPrompt(true)}
+          title={
+            enabledServers === 0
+              ? 'No enabled MCP servers — add one in the MCP tab'
+              : 'Insert a server-provided prompt'
+          }
+        >
+          <MessageSquareText className="size-3.5" /> Prompts
+        </Button>
         <div className="flex-1" />
         <Button
           size="xs"
@@ -350,6 +377,11 @@ export function PlaygroundView() {
         onClose={() => setPickCtx(false)}
         attached={attached.map((b) => b.uri)}
         onAdd={(b) => setAttached((a) => (a.some((x) => x.uri === b.uri) ? a : [...a, b]))}
+      />
+      <PromptPickerDialog
+        open={pickPrompt}
+        onClose={() => setPickPrompt(false)}
+        onPicked={(text) => setDraft((d) => (d.trim() ? `${d}\n\n${text}` : text))}
       />
     </div>
   )

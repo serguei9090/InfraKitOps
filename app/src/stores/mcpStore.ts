@@ -6,6 +6,8 @@ import { create } from 'zustand'
 import * as api from '@/adapters/backend/mcpClient'
 import { reportError } from '@/stores/errorStore'
 import type {
+  McpPrompt,
+  McpPromptResult,
   McpResource,
   McpResourceRead,
   McpResourceTemplate,
@@ -20,16 +22,20 @@ interface McpStore {
   statuses: Record<string, McpServerStatus>
   loaded: boolean
 
-  // A4f — resources (lazy; loaded when a picker opens)
+  // A4f — resources + prompts (lazy; loaded when a picker opens)
   resources: McpResource[]
   resourceTemplates: McpResourceTemplate[]
   resourcesLoaded: boolean
+  prompts: McpPrompt[]
+  promptsLoaded: boolean
 
   refresh: () => Promise<void>
   putServer: (s: Partial<McpServer>) => Promise<string | null>
   removeServer: (id: string) => Promise<void>
   loadResources: (force?: boolean) => Promise<void>
   readResource: (server: string, uri: string) => Promise<McpResourceRead | null>
+  loadPrompts: (force?: boolean) => Promise<void>
+  getPrompt: (server: string, name: string, args: Record<string, string>) => Promise<McpPromptResult | null>
 }
 
 export const useMcpStore = create<McpStore>((set, get) => ({
@@ -39,6 +45,8 @@ export const useMcpStore = create<McpStore>((set, get) => ({
   resources: [],
   resourceTemplates: [],
   resourcesLoaded: false,
+  prompts: [],
+  promptsLoaded: false,
 
   refresh: async () => {
     try {
@@ -84,6 +92,25 @@ export const useMcpStore = create<McpStore>((set, get) => ({
   readResource: async (server, uri) => {
     try {
       return await api.readResource(server, uri)
+    } catch (e) {
+      reportError(e, SRC)
+      return null
+    }
+  },
+
+  loadPrompts: async (force = false) => {
+    if (get().promptsLoaded && !force) return
+    try {
+      set({ prompts: await api.listPrompts(), promptsLoaded: true })
+    } catch (e) {
+      set({ promptsLoaded: true })
+      reportError(e, SRC)
+    }
+  },
+
+  getPrompt: async (server, name, args) => {
+    try {
+      return await api.getPrompt(server, name, args)
     } catch (e) {
       reportError(e, SRC)
       return null
