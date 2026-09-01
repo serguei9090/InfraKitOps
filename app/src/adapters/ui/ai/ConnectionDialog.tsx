@@ -51,7 +51,7 @@ export function ConnectionDialog({ draft, onClose }: Props) {
 
   return (
     <Dialog open={draft != null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-xl flex-col sm:max-w-xl">
+      <DialogContent className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-xl flex-col">
         <DialogHeader>
           <DialogTitle>{draft?.id ? 'Edit connection' : 'New connection'}</DialogTitle>
         </DialogHeader>

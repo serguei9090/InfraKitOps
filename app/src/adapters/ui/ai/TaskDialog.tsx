@@ -39,14 +39,15 @@ export function TaskDialog({ draft, onClose, onSave }: Props) {
           <DialogTitle>{draft?.builtin && !draft.overridden ? 'Customise task' : 'Edit task'}</DialogTitle>
         </DialogHeader>
         <form
-          className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={async (e) => {
             e.preventDefault()
             if (t.id && t.title && t.systemTemplate) await onSave(t)
           }}
         >
-          <div className="flex gap-2">
-            <div className="w-56">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
+          <div className="flex flex-wrap gap-2">
+            <div className="w-full sm:w-56">
               <Label className="text-xs">Task id</Label>
               <Input
                 value={t.id}
@@ -56,11 +57,11 @@ export function TaskDialog({ draft, onClose, onSave }: Props) {
                 className="font-mono text-xs"
               />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <Label className="text-xs">Title</Label>
               <Input value={t.title} onChange={(e) => setT((c) => ({ ...c!, title: e.target.value }))} />
             </div>
-            <div className="w-28">
+            <div className="w-28 shrink-0">
               <Label className="text-xs">Output</Label>
               <Select
                 value={t.outputShape}
@@ -100,8 +101,8 @@ export function TaskDialog({ draft, onClose, onSave }: Props) {
             />
           </div>
 
-          <div className="flex gap-2">
-            <div className="flex-1">
+          <div className="flex flex-wrap gap-2">
+            <div className="min-w-0 flex-1">
               <Label className="text-xs">Input label</Label>
               <Input
                 value={t.inputLabel ?? ''}
@@ -109,7 +110,7 @@ export function TaskDialog({ draft, onClose, onSave }: Props) {
                 placeholder="What to change (optional)"
               />
             </div>
-            <div className="w-24">
+            <div className="w-24 shrink-0">
               <Label className="text-xs">Temp</Label>
               <Input
                 type="number"
@@ -124,8 +125,8 @@ export function TaskDialog({ draft, onClose, onSave }: Props) {
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <div className="flex-1">
+          <div className="flex flex-wrap gap-2">
+            <div className="min-w-0 flex-1 basis-48">
               <Label className="text-xs">Preferred connection</Label>
               <Select
                 value={t.preferredConnectionId || INHERIT}
@@ -158,7 +159,7 @@ export function TaskDialog({ draft, onClose, onSave }: Props) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1 basis-48">
               <Label className="text-xs">Preferred model</Label>
               <Select
                 value={t.preferredModel || INHERIT}
@@ -184,7 +185,9 @@ export function TaskDialog({ draft, onClose, onSave }: Props) {
             </div>
           </div>
 
-          <DialogFooter>
+          </div>
+
+          <DialogFooter className="mt-4">
             <DialogClose render={<Button variant="outline">Cancel</Button>} />
             <Button type="submit" disabled={!t.id || !t.title || !t.systemTemplate}>
               Save
