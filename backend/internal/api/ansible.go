@@ -90,6 +90,8 @@ func (h *AnsibleHandlers) GetSettings(w http.ResponseWriter, r *http.Request) {
 		"containerImage":         nz(s["containerImage"], "infrakit-ansible:local"),
 		"controlNodePipPackages": s["controlNodePipPackages"],
 		"controlNodeCollections": s["controlNodeCollections"],
+		"wslDistro":              s["wslDistro"],
+		"wslSource":              nz(s["wslSource"], "import:"),
 		"os":                     runtime.GOOS,
 		"install":                ansible.InstallLinks,
 		"runners":                h.Engine.Runners(ctx),
@@ -108,6 +110,8 @@ func (h *AnsibleHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		ContainerImage         *string `json:"containerImage"`
 		ControlNodePipPackages *string `json:"controlNodePipPackages"`
 		ControlNodeCollections *string `json:"controlNodeCollections"`
+		WslDistro              *string `json:"wslDistro"`
+		WslSource              *string `json:"wslSource"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 		apierr.Write(w, apierr.Validation(err.Error()))
@@ -125,21 +129,23 @@ func (h *AnsibleHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if b.Runtime != nil {
 		switch *b.Runtime {
-		case "auto", "system", "managed", "container", "":
+		case "auto", "system", "managed", "container", "wsl", "":
 			_ = h.Store.PutSetting("ansibleRuntime", *b.Runtime)
 		default:
-			apierr.Write(w, apierr.Validation(`runtime must be auto | system | managed | container`))
+			apierr.Write(w, apierr.Validation(`runtime must be auto | system | managed | container | wsl`))
 			return
 		}
 	}
-	if b.ContainerImage != nil {
-		_ = h.Store.PutSetting("containerImage", strings.TrimSpace(*b.ContainerImage))
-	}
-	if b.ControlNodePipPackages != nil {
-		_ = h.Store.PutSetting("controlNodePipPackages", strings.TrimSpace(*b.ControlNodePipPackages))
-	}
-	if b.ControlNodeCollections != nil {
-		_ = h.Store.PutSetting("controlNodeCollections", strings.TrimSpace(*b.ControlNodeCollections))
+	for k, v := range map[string]*string{
+		"containerImage":         b.ContainerImage,
+		"controlNodePipPackages": b.ControlNodePipPackages,
+		"controlNodeCollections": b.ControlNodeCollections,
+		"wslDistro":              b.WslDistro,
+		"wslSource":              b.WslSource,
+	} {
+		if v != nil {
+			_ = h.Store.PutSetting(k, strings.TrimSpace(*v))
+		}
 	}
 	h.GetSettings(w, r)
 }

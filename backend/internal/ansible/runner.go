@@ -44,6 +44,13 @@ type RunnerStatus struct {
 	DaemonRunning bool   `json:"daemonRunning,omitempty"`
 	Image         string `json:"image,omitempty"`
 	ImageBuilt    bool   `json:"imageBuilt,omitempty"`
+
+	// wsl
+	WslInstalled  bool     `json:"wslInstalled,omitempty"`
+	Distro        string   `json:"distro,omitempty"`        // the distro ansible runs in
+	Distros       []string `json:"distros,omitempty"`       // installed distros
+	OnlineDistros []string `json:"onlineDistros,omitempty"` // `wsl -l -o`
+	DistroReady   bool     `json:"distroReady,omitempty"`   // target distro exists
 }
 
 // InstallLinks are shown when a runtime the user might want isn't present.
@@ -60,6 +67,7 @@ func pickRunner(ctx context.Context, rt *Runtime, cfgDir string, settings map[st
 	local := &localRunner{rt: rt, mode: RuntimeSystem}
 	managed := &localRunner{rt: rt, mode: RuntimeManaged}
 	container := &containerRunner{cfgDir: cfgDir, image: nz(settings["containerImage"], defaultImage), settings: settings}
+	wsl := &wslRunner{cfgDir: cfgDir, settings: settings}
 
 	switch mode {
 	case RuntimeSystem:
@@ -68,15 +76,13 @@ func pickRunner(ctx context.Context, rt *Runtime, cfgDir string, settings map[st
 		return managed
 	case RuntimeMode("container"):
 		return container
+	case RuntimeMode("wsl"):
+		return wsl
 	default: // auto / ""
-		if local.Probe(ctx).Ready {
-			return local
-		}
-		if managed.Probe(ctx).Ready {
-			return managed
-		}
-		if container.Probe(ctx).Ready {
-			return container
+		for _, r := range []Runner{local, managed, container, wsl} {
+			if r.Probe(ctx).Ready {
+				return r
+			}
 		}
 		return local // report its reason
 	}
@@ -96,6 +102,8 @@ func (e *Engine) runnerFor(mode string) Runner {
 		return &containerRunner{cfgDir: e.cfgDir, image: nz(s["containerImage"], defaultImage), settings: s}
 	case "managed":
 		return &localRunner{rt: e.rt, mode: RuntimeManaged}
+	case "wsl":
+		return &wslRunner{cfgDir: e.cfgDir, settings: e.store.GetSettings()}
 	default:
 		return &localRunner{rt: e.rt, mode: RuntimeSystem}
 	}
@@ -121,6 +129,7 @@ func probeRunners(ctx context.Context, rt *Runtime, cfgDir string, settings map[
 		&localRunner{rt: rt, mode: RuntimeSystem},
 		&localRunner{rt: rt, mode: RuntimeManaged},
 		&containerRunner{cfgDir: cfgDir, image: nz(settings["containerImage"], defaultImage), settings: settings},
+		&wslRunner{cfgDir: cfgDir, settings: settings},
 	} {
 		out[string(r.Name())] = r.Probe(c)
 	}

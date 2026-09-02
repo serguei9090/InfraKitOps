@@ -9,12 +9,20 @@ import {
   Hammer,
   Loader2,
   PackagePlus,
+  SquareTerminal,
   Terminal,
   Trash2,
   XCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import * as api from '@/adapters/backend/ansibleClient'
@@ -23,10 +31,11 @@ import { useAuthStore } from '@/stores/authStore'
 import type { AnsibleSettings, RunnerStatus } from '@/core/ansible/ansibleModel'
 
 const MODE_HINT: Record<string, string> = {
-  auto: 'Pick the first that works: system → managed → container',
+  auto: 'First that works: system → managed → container → wsl',
   system: 'The ansible binaries on your PATH (Linux/macOS)',
   managed: 'An InfraKit-managed uv virtualenv (Linux/macOS)',
   container: 'Run ansible inside a Docker / Podman container — works on Windows',
+  wsl: 'Run ansible inside a WSL2 distro — Windows, no Docker',
 }
 
 const MODE_ICON: Record<string, typeof Cpu> = {
@@ -34,6 +43,7 @@ const MODE_ICON: Record<string, typeof Cpu> = {
   system: Terminal,
   managed: PackagePlus,
   container: Container,
+  wsl: SquareTerminal,
 }
 
 /**
@@ -54,7 +64,10 @@ export function RuntimePanel() {
   if (!settings) return null
 
   const runners = settings.runners ?? {}
-  const modes: string[] = ['auto', 'system', 'managed', 'container']
+  const modes: string[] =
+    settings.os === 'windows'
+      ? ['auto', 'container', 'wsl', 'system', 'managed']
+      : ['auto', 'system', 'managed', 'container', 'wsl']
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">
@@ -148,6 +161,21 @@ export function RuntimePanel() {
             onBuild={() => setupRuntime('container')}
             onTeardown={async () => {
               await api.teardownRuntime('container')
+              void refreshSettings()
+            }}
+            onSave={(patch) => void save(patch)}
+          />
+        )}
+        {settings.runtime === 'wsl' && (
+          <WslSetup
+            settings={settings}
+            status={runners.wsl}
+            busy={busySetup}
+            admin={isAdmin}
+            install={settings.install?.wsl}
+            onSetup={() => setupRuntime('wsl')}
+            onTeardown={async () => {
+              await api.teardownRuntime('wsl')
               void refreshSettings()
             }}
             onSave={(patch) => void save(patch)}
@@ -311,6 +339,142 @@ function ContainerSetup({
             {status?.imageBuilt && (
               <Button size="sm" variant="ghost" onClick={onTeardown}>
                 <Trash2 className="size-4" /> Remove image
+              </Button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function WslSetup({
+  settings,
+  status,
+  busy,
+  admin,
+  install,
+  onSetup,
+  onTeardown,
+  onSave,
+}: {
+  settings: AnsibleSettings
+  status?: RunnerStatus
+  busy: boolean
+  admin: boolean
+  install?: string
+  onSetup: () => void
+  onTeardown: () => void
+  onSave: (patch: Parameters<typeof api.putSettings>[0]) => void
+}) {
+  const DEDICATED = 'InfraKit-Ansible'
+  const distros = status?.distros ?? []
+  const online = status?.onlineDistros ?? []
+  const [distro, setDistro] = useState(settings.wslDistro || DEDICATED)
+  const [source, setSource] = useState(settings.wslSource || 'import:')
+  useEffect(() => {
+    setDistro(settings.wslDistro || DEDICATED)
+    setSource(settings.wslSource || 'import:')
+  }, [settings])
+
+  if (!status?.wslInstalled) {
+    return (
+      <div className="rounded-lg border border-border/60 p-3 text-sm">
+        <p className="mb-2 text-muted-foreground">WSL is not installed.</p>
+        {install && (
+          <a
+            href={install}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-xs hover:bg-accent/40"
+          >
+            Install WSL <ExternalLink className="size-3" />
+          </a>
+        )}
+      </div>
+    )
+  }
+
+  const dedicated = distro === DEDICATED
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border/60 p-3 text-sm">
+      <div className="flex items-center gap-2">
+        {status.ready ? (
+          <CheckCircle2 className="size-4 text-emerald-500" />
+        ) : (
+          <XCircle className="size-4 text-muted-foreground" />
+        )}
+        <span className="font-medium">
+          {status.ready ? `${status.distro} · ${status.ansibleVersion}` : status.reason}
+        </span>
+      </div>
+
+      {admin && (
+        <>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Distro to run ansible in</label>
+            <Select value={distro} onValueChange={(v) => v && setDistro(v)}>
+              <SelectTrigger size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={DEDICATED}>{DEDICATED} (dedicated, InfraKit-managed)</SelectItem>
+                {distros
+                  .filter((d) => d !== DEDICATED)
+                  .map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {dedicated && !status.distroReady && (
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Base image for the new distro</label>
+              <Select value={source} onValueChange={(v) => v && setSource(v)}>
+                <SelectTrigger size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="import:">Ubuntu (download official WSL rootfs)</SelectItem>
+                  {online.map((d) => (
+                    <SelectItem key={d} value={`official:${d}`}>
+                      {d} (from the Microsoft store — installs as “{d}”)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Or paste a rootfs path / URL: use <code>import:C:\path\to\rootfs.tar</code>
+              </p>
+              <Input
+                className="h-8 font-mono text-[11px]"
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+                placeholder="import:  |  import:C:\rootfs.tar  |  official:Debian"
+              />
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                onSave({ wslDistro: distro === DEDICATED ? '' : distro, wslSource: source })
+                onSetup()
+              }}
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : <Hammer className="size-4" />}
+              {status.ready ? 'Reinstall ansible' : dedicated ? 'Set up dedicated distro' : 'Install ansible in ' + distro}
+            </Button>
+            {dedicated && status.distroReady && (
+              <Button size="sm" variant="ghost" onClick={onTeardown}>
+                <Trash2 className="size-4" /> Unregister distro
               </Button>
             )}
           </div>

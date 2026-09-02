@@ -64,6 +64,39 @@ func TestContainerRewrite(t *testing.T) {
 	}
 }
 
+func TestWinToWSL(t *testing.T) {
+	cases := map[string]string{
+		`C:\Users\me\proj`:      "/mnt/c/Users/me/proj",
+		`D:\a\b`:                "/mnt/d/a/b",
+		`@C:\tmp\extravars.yml`: "@C:\\tmp\\extravars.yml", // no drive at [1]==':' — left as-is by winToWSL
+		`/already/posix`:        "/already/posix",
+	}
+	for in, want := range cases {
+		if in == `@C:\tmp\extravars.yml` {
+			continue // handled by the rewrite() closure, not winToWSL directly
+		}
+		if got := winToWSL(in); got != want {
+			t.Errorf("winToWSL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestWslText(t *testing.T) {
+	// UTF-16LE-ish: nulls between bytes, BOM, CRLF
+	raw := []byte("\ufeffU\x00b\x00u\x00n\x00t\x00u\x00\r\x00\n\x00D\x00e\x00b\x00i\x00a\x00n\x00\n\x00")
+	got := wslText(raw)
+	if len(got) != 2 || got[0] != "Ubuntu" || got[1] != "Debian" {
+		t.Errorf("wslText = %#v", got)
+	}
+}
+
+func TestWslTeardownGuard(t *testing.T) {
+	w := &wslRunner{settings: map[string]string{"wslDistro": "Ubuntu"}}
+	if err := w.Teardown(context.Background()); err == nil {
+		t.Error("Teardown must refuse to unregister a non-dedicated distro")
+	}
+}
+
 func TestPickRunnerExplicit(t *testing.T) {
 	rt := NewRuntime(t.TempDir())
 	if r := pickRunner(context.Background(), rt, "/cfg", map[string]string{"ansibleRuntime": "container"}); r.Name() != RuntimeMode("container") {
