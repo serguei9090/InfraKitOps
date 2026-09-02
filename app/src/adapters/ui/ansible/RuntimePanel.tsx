@@ -182,6 +182,16 @@ export function RuntimePanel() {
           />
         )}
 
+        {/* shared control-node deps — apply to any managed / container / wsl runtime */}
+        {isAdmin && ['managed', 'container', 'wsl'].includes(settings.runtime) && (
+          <DepsEditor
+            settings={settings}
+            busy={busySetup}
+            onSave={(patch) => void save(patch)}
+            onApply={() => useAnsibleStore.getState().applyDeps(settings.runtime)}
+          />
+        )}
+
         {/* install links */}
         {settings.os === 'windows' && !runners.container?.engine && (
           <div className="rounded-lg border border-border/60 p-3 text-sm">
@@ -250,13 +260,7 @@ function ContainerSetup({
   onSave: (patch: Parameters<typeof api.putSettings>[0]) => void
 }) {
   const [image, setImage] = useState(settings.containerImage)
-  const [pip, setPip] = useState(settings.controlNodePipPackages)
-  const [colls, setColls] = useState(settings.controlNodeCollections)
-  useEffect(() => {
-    setImage(settings.containerImage)
-    setPip(settings.controlNodePipPackages)
-    setColls(settings.controlNodeCollections)
-  }, [settings])
+  useEffect(() => setImage(settings.containerImage), [settings])
 
   return (
     <div className="space-y-3 rounded-lg border border-border/60 p-3 text-sm">
@@ -297,38 +301,6 @@ function ContainerSetup({
               >
                 Set
               </Button>
-            </div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="space-y-1">
-              <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                <PackagePlus className="size-3" /> Control-node pip packages
-              </label>
-              <Textarea
-                className="font-mono text-[11px]"
-                rows={2}
-                placeholder="boto3, kubernetes, jmespath"
-                value={pip}
-                onChange={(e) => setPip(e.target.value)}
-                onBlur={() =>
-                  pip !== settings.controlNodePipPackages && onSave({ controlNodePipPackages: pip })
-                }
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Boxes className="size-3" /> Collections
-              </label>
-              <Textarea
-                className="font-mono text-[11px]"
-                rows={2}
-                placeholder="community.docker, kubernetes.core"
-                value={colls}
-                onChange={(e) => setColls(e.target.value)}
-                onBlur={() =>
-                  colls !== settings.controlNodeCollections && onSave({ controlNodeCollections: colls })
-                }
-              />
             </div>
           </div>
           <div className="flex gap-2">
@@ -480,6 +452,84 @@ function WslSetup({
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function DepsEditor({
+  settings,
+  busy,
+  onSave,
+  onApply,
+}: {
+  settings: AnsibleSettings
+  busy: boolean
+  onSave: (patch: Parameters<typeof api.putSettings>[0]) => void
+  onApply: () => void
+}) {
+  const [pip, setPip] = useState(settings.controlNodePipPackages)
+  const [colls, setColls] = useState(settings.controlNodeCollections)
+  useEffect(() => {
+    setPip(settings.controlNodePipPackages)
+    setColls(settings.controlNodeCollections)
+  }, [settings])
+
+  const dirty = pip !== settings.controlNodePipPackages || colls !== settings.controlNodeCollections
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border/60 p-3 text-sm">
+      <div className="text-xs font-semibold uppercase text-muted-foreground">Control-node dependencies</div>
+      <p className="text-[11px] text-muted-foreground">
+        Extra Python libs + collections the control node needs — e.g. <code>boto3</code> for{' '}
+        <code>community.aws</code>, <code>jmespath</code> for <code>json_query</code>. Applied to the active
+        runtime.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label className="flex items-center gap-1 text-xs text-muted-foreground">
+            <PackagePlus className="size-3" /> pip packages
+          </label>
+          <Textarea
+            className="font-mono text-[11px]"
+            rows={2}
+            placeholder="boto3, kubernetes, jmespath, netaddr"
+            value={pip}
+            onChange={(e) => setPip(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Boxes className="size-3" /> collections
+          </label>
+          <Textarea
+            className="font-mono text-[11px]"
+            rows={2}
+            placeholder="community.aws, kubernetes.core"
+            value={colls}
+            onChange={(e) => setColls(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!dirty}
+          onClick={() => onSave({ controlNodePipPackages: pip, controlNodeCollections: colls })}
+        >
+          Save
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy || dirty}
+          onClick={onApply}
+          title={dirty ? 'Save first' : undefined}
+        >
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <PackagePlus className="size-4" />}
+          Install deps now
+        </Button>
+      </div>
     </div>
   )
 }

@@ -163,8 +163,7 @@ func (c *containerRunner) Setup(ctx context.Context, emit func(string)) error {
 		return runStreaming(exec.CommandContext(ctx, eng, "pull", c.image), emit, emit)
 	}
 
-	pip := splitList(c.settings["controlNodePipPackages"])
-	colls := splitList(c.settings["controlNodeCollections"])
+	pip, colls := depLists(c.settings)
 	df := buildDockerfile(pip, colls)
 
 	buildDir, err := os.MkdirTemp("", "infrakit-ansible-img-")
@@ -181,6 +180,16 @@ func (c *containerRunner) Setup(ctx context.Context, emit func(string)) error {
 	}
 	cmd := exec.CommandContext(ctx, eng, "build", "-t", defaultImage, buildDir)
 	return runStreaming(cmd, emit, emit)
+}
+
+// ApplyDeps rebuilds the image (docker's layer cache keeps it fast). A
+// user-supplied override image can't be modified — no-op with a note.
+func (c *containerRunner) ApplyDeps(ctx context.Context, emit func(string)) error {
+	if c.image != defaultImage {
+		emit("override image " + c.image + " — add deps to that image yourself")
+		return nil
+	}
+	return c.Setup(ctx, emit)
 }
 
 func (c *containerRunner) Teardown(ctx context.Context) error {

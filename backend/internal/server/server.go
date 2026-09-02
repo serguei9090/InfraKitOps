@@ -260,6 +260,7 @@ func NewRouter(opts Options) http.Handler {
 			r.Get("/settings", anh.GetSettings)
 			r.Put("/settings", anh.PutSettings)
 			r.Get("/runtime/setup/stream", anh.RuntimeSetup)
+			r.Get("/runtime/deps/apply/stream", anh.RuntimeApplyDeps)
 			r.Post("/runtime/teardown", anh.RuntimeTeardown)
 			r.Route("/projects", func(r chi.Router) {
 				r.Get("/", anh.ListProjects)

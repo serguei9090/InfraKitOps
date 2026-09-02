@@ -148,29 +148,47 @@ func (r *Runtime) Bin(ctx context.Context, mode RuntimeMode, name string) string
 	return r.Detect(ctx, mode).Active[name].Path
 }
 
-// EnsureManaged creates/updates the uv venv with ansible-core, streaming uv's
-// output line-by-line to `emit`. `version` "" = latest.
-func (r *Runtime) EnsureManaged(ctx context.Context, version string, emit func(line string)) error {
+// EnsureManaged creates/updates the uv venv with ansible-core, then applies the
+// control-node deps (`pip` packages + `collections`). Streams uv's output.
+func (r *Runtime) EnsureManaged(ctx context.Context, pip, collections []string, emit func(line string)) error {
 	if _, err := exec.LookPath("uv"); err != nil {
 		return fmt.Errorf("`uv` is not on PATH — install it first (https://docs.astral.sh/uv/)")
 	}
 	if err := os.MkdirAll(r.cfgDir, 0o755); err != nil {
 		return err
 	}
-	spec := managedPkg
-	if v := strings.TrimSpace(version); v != "" {
-		spec = managedPkg + "==" + v
-	}
+	py := filepath.Join(r.venvBinDir(), exeName("python"))
 	steps := [][]string{
 		{"venv", r.venvDir()},
-		{"pip", "install", "--python", filepath.Join(r.venvBinDir(), exeName("python")), spec},
+		{"pip", "install", "--python", py, managedPkg, "ansible-lint"},
 	}
 	for _, args := range steps {
 		emit("$ uv " + strings.Join(args, " "))
-		cmd := exec.CommandContext(ctx, "uv", args...)
-		if err := runStreaming(cmd, emit, emit); err != nil {
+		if err := runStreaming(exec.CommandContext(ctx, "uv", args...), emit, emit); err != nil {
 			return fmt.Errorf("uv %s: %w", args[0], err)
 		}
+	}
+	return r.ApplyManagedDeps(ctx, pip, collections, emit)
+}
+
+// ApplyManagedDeps installs the control-node pip packages + collections into an
+// existing venv — no venv rebuild.
+func (r *Runtime) ApplyManagedDeps(ctx context.Context, pip, collections []string, emit func(line string)) error {
+	py := filepath.Join(r.venvBinDir(), exeName("python"))
+	if _, err := os.Stat(py); err != nil {
+		return fmt.Errorf("managed venv not set up yet")
+	}
+	if len(pip) > 0 {
+		args := append([]string{"pip", "install", "--python", py}, pip...)
+		emit("$ uv " + strings.Join(args, " "))
+		if err := runStreaming(exec.CommandContext(ctx, "uv", args...), emit, emit); err != nil {
+			return fmt.Errorf("uv pip install: %w", err)
+		}
+	}
+	galaxy := filepath.Join(r.venvBinDir(), exeName("ansible-galaxy"))
+	for _, coll := range collections {
+		emit("$ ansible-galaxy collection install " + coll)
+		_ = runStreaming(exec.CommandContext(ctx, galaxy, "collection", "install", coll), emit, emit)
 	}
 	emit("✓ managed ansible ready")
 	return nil

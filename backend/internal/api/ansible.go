@@ -190,6 +190,46 @@ func (h *AnsibleHandlers) RuntimeSetup(w http.ResponseWriter, r *http.Request) {
 	sw.Pump(ctx, ch)
 }
 
+// RuntimeApplyDeps: GET /ansible/runtime/deps/apply/stream?mode= (SSE) — admin.
+// Installs just the control-node pip packages + collections into an existing
+// runtime — no full rebuild.
+func (h *AnsibleHandlers) RuntimeApplyDeps(w http.ResponseWriter, r *http.Request) {
+	if !h.ok() {
+		sse.RejectCoded(w, string(apierr.CodeInternal), "the Ansible module is not available", "")
+		return
+	}
+	if !userctx.IsAdmin(r.Context()) {
+		sse.RejectCoded(w, string(apierr.CodePermission), "admin only", "")
+		return
+	}
+	mode := nz(r.URL.Query().Get("mode"), "managed")
+	sw, err := sse.New(w)
+	if err != nil {
+		return
+	}
+	ch := make(chan sse.Message, 64)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancel()
+	go func() {
+		defer close(ch)
+		err := h.Engine.ApplyRuntimeDeps(ctx, mode, func(line string) {
+			select {
+			case ch <- sse.Message{Event: "stdout", Data: map[string]string{"text": line}}:
+			case <-ctx.Done():
+			}
+		})
+		ev, data := "done", map[string]any{"ok": true}
+		if err != nil {
+			ev, data = "error", map[string]any{"ok": false, "error": err.Error()}
+		}
+		select {
+		case ch <- sse.Message{Event: ev, Data: data}:
+		case <-ctx.Done():
+		}
+	}()
+	sw.Pump(ctx, ch)
+}
+
 // RuntimeTeardown: POST /ansible/runtime/teardown { mode } — admin.
 func (h *AnsibleHandlers) RuntimeTeardown(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) || !requireAdmin(w, r) {

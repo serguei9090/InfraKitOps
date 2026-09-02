@@ -187,6 +187,7 @@ interface AnsibleStore {
   refreshSettings: () => Promise<void>
   saveSettings: (patch: { workspaceDir?: string; runtime?: string }) => Promise<void>
   setupRuntime: (mode: string) => void
+  applyDeps: (mode: string) => void
   refreshProjects: () => Promise<void>
   select: (id: string | null) => Promise<void>
   addProject: (body: {
@@ -270,6 +271,28 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
     } catch (e) {
       reportError(e, SRC)
     }
+  },
+
+  applyDeps: (mode) => {
+    if (get().busySetup) return
+    set({ busySetup: true, setupLog: [] })
+    api.applyRuntimeDeps(mode, {
+      onEvent: (name, data) => {
+        const d = data as Record<string, unknown>
+        if (name === 'stdout') set((s) => ({ setupLog: [...s.setupLog, String(d.text ?? '')] }))
+        else if (name === 'done') {
+          set({ busySetup: false })
+          void get().refreshSettings()
+        } else if (name === 'error') {
+          set((s) => ({ busySetup: false, setupLog: [...s.setupLog, `error: ${String(d.error ?? '')}`] }))
+        }
+      },
+      onClose: () => set({ busySetup: false }),
+      onError: (err) => {
+        reportError(err, SRC)
+        set({ busySetup: false })
+      },
+    })
   },
 
   setupRuntime: (mode) => {

@@ -172,8 +172,8 @@ func (w *wslRunner) Setup(ctx context.Context, emit func(string)) error {
 		}
 	}
 
-	pip := strings.Join(splitList(w.settings["controlNodePipPackages"]), " ")
-	colls := splitList(w.settings["controlNodeCollections"])
+	pipList, colls := depLists(w.settings)
+	pip := strings.Join(pipList, " ")
 	script := "set -e\n" +
 		"export DEBIAN_FRONTEND=noninteractive\n" +
 		"apt-get update -qq\n" +
@@ -187,6 +187,27 @@ func (w *wslRunner) Setup(ctx context.Context, emit func(string)) error {
 	emit("Installing ansible in " + target + " …")
 	cmd := exec.CommandContext(ctx, "wsl.exe", "-d", target, "-u", "root", "--", "bash", "-lc", script)
 	return runStreaming(cmd, emit, emit)
+}
+
+// ApplyDeps re-runs just pip3 + ansible-galaxy in the distro (no apt).
+func (w *wslRunner) ApplyDeps(ctx context.Context, emit func(string)) error {
+	if runtime.GOOS != "windows" {
+		return fmt.Errorf("WSL is Windows-only")
+	}
+	target := w.distro()
+	if !containsFold(wslList(ctx, "-l", "-q"), target) {
+		return fmt.Errorf("distro %q not set up", target)
+	}
+	pipList, colls := depLists(w.settings)
+	script := "set -e\n"
+	if len(pipList) > 0 {
+		script += "pip3 install --break-system-packages -q " + strings.Join(pipList, " ") + "\n"
+	}
+	for _, coll := range colls {
+		script += "ansible-galaxy collection install " + shellQuote(coll) + " || true\n"
+	}
+	emit("Applying deps to " + target + " …")
+	return runStreaming(exec.CommandContext(ctx, "wsl.exe", "-d", target, "-u", "root", "--", "bash", "-lc", script), emit, emit)
 }
 
 // provision creates the dedicated distro from settings["wslSource"]:

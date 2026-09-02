@@ -38,6 +38,11 @@ export function setupRuntime(mode: string, handlers: StreamHandlers): () => void
   return openStream('/ansible/runtime/setup/stream', { mode }, handlers)
 }
 
+/** Install just the control-node pip packages + collections — no full rebuild. */
+export function applyRuntimeDeps(mode: string, handlers: StreamHandlers): () => void {
+  return openStream('/ansible/runtime/deps/apply/stream', { mode }, handlers)
+}
+
 export const teardownRuntime = (mode: string) =>
   backendRequest<{ status: string }>('POST', '/ansible/runtime/teardown', { mode })
 

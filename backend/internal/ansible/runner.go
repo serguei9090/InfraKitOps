@@ -27,8 +27,17 @@ type Runner interface {
 	// Setup provisions the runner (build image, install ansible, …), streaming
 	// progress lines. No-op for a plain PATH runner.
 	Setup(ctx context.Context, emit func(string)) error
+	// ApplyDeps installs just the control-node pip packages + collections
+	// (settings `controlNodePipPackages` / `controlNodeCollections`) into an
+	// already-provisioned runtime — no full rebuild.
+	ApplyDeps(ctx context.Context, emit func(string)) error
 	// Teardown removes what Setup created.
 	Teardown(ctx context.Context) error
+}
+
+// depLists parses the shared control-node dependency settings.
+func depLists(settings map[string]string) (pip, collections []string) {
+	return splitList(settings["controlNodePipPackages"]), splitList(settings["controlNodeCollections"])
 }
 
 // RunnerStatus is one entry of capabilities.ansible.runners.
@@ -64,8 +73,8 @@ var InstallLinks = map[string]string{
 // pickRunner returns the Runner for `mode`, resolving "auto".
 func pickRunner(ctx context.Context, rt *Runtime, cfgDir string, settings map[string]string) Runner {
 	mode := RuntimeMode(settings["ansibleRuntime"])
-	local := &localRunner{rt: rt, mode: RuntimeSystem}
-	managed := &localRunner{rt: rt, mode: RuntimeManaged}
+	local := &localRunner{rt: rt, mode: RuntimeSystem, settings: settings}
+	managed := &localRunner{rt: rt, mode: RuntimeManaged, settings: settings}
 	container := &containerRunner{cfgDir: cfgDir, image: nz(settings["containerImage"], defaultImage), settings: settings}
 	wsl := &wslRunner{cfgDir: cfgDir, settings: settings}
 
@@ -96,16 +105,16 @@ func (e *Engine) Runners(ctx context.Context) map[string]RunnerStatus {
 // runnerFor builds one runner by mode name ("system"|"managed"|"container"),
 // ignoring the configured default.
 func (e *Engine) runnerFor(mode string) Runner {
+	s := e.store.GetSettings()
 	switch mode {
 	case "container":
-		s := e.store.GetSettings()
 		return &containerRunner{cfgDir: e.cfgDir, image: nz(s["containerImage"], defaultImage), settings: s}
 	case "managed":
-		return &localRunner{rt: e.rt, mode: RuntimeManaged}
+		return &localRunner{rt: e.rt, mode: RuntimeManaged, settings: s}
 	case "wsl":
-		return &wslRunner{cfgDir: e.cfgDir, settings: e.store.GetSettings()}
+		return &wslRunner{cfgDir: e.cfgDir, settings: s}
 	default:
-		return &localRunner{rt: e.rt, mode: RuntimeSystem}
+		return &localRunner{rt: e.rt, mode: RuntimeSystem, settings: s}
 	}
 }
 
@@ -113,6 +122,11 @@ func (e *Engine) runnerFor(mode string) Runner {
 // streaming progress.
 func (e *Engine) SetupRuntime(ctx context.Context, mode string, emit func(string)) error {
 	return e.runnerFor(mode).Setup(ctx, emit)
+}
+
+// ApplyRuntimeDeps installs just the control-node deps for `mode`.
+func (e *Engine) ApplyRuntimeDeps(ctx context.Context, mode string, emit func(string)) error {
+	return e.runnerFor(mode).ApplyDeps(ctx, emit)
 }
 
 // TeardownRuntime removes what SetupRuntime created for `mode`.
@@ -126,8 +140,8 @@ func probeRunners(ctx context.Context, rt *Runtime, cfgDir string, settings map[
 	defer cancel()
 	out := map[string]RunnerStatus{}
 	for _, r := range []Runner{
-		&localRunner{rt: rt, mode: RuntimeSystem},
-		&localRunner{rt: rt, mode: RuntimeManaged},
+		&localRunner{rt: rt, mode: RuntimeSystem, settings: settings},
+		&localRunner{rt: rt, mode: RuntimeManaged, settings: settings},
 		&containerRunner{cfgDir: cfgDir, image: nz(settings["containerImage"], defaultImage), settings: settings},
 		&wslRunner{cfgDir: cfgDir, settings: settings},
 	} {
@@ -139,8 +153,9 @@ func probeRunners(ctx context.Context, rt *Runtime, cfgDir string, settings map[
 // --- localRunner: system / managed (today's behaviour) ------------
 
 type localRunner struct {
-	rt   *Runtime
-	mode RuntimeMode
+	rt       *Runtime
+	mode     RuntimeMode
+	settings map[string]string
 }
 
 func (l *localRunner) Name() RuntimeMode { return l.mode }
@@ -180,9 +195,18 @@ func (l *localRunner) Command(ctx context.Context, tool, dir string, argv, env [
 
 func (l *localRunner) Setup(ctx context.Context, emit func(string)) error {
 	if l.mode != RuntimeManaged {
-		return nil
+		return fmt.Errorf("the system runtime uses ansible on your PATH — nothing to set up")
 	}
-	return l.rt.EnsureManaged(ctx, "", emit)
+	pip, colls := depLists(l.settings)
+	return l.rt.EnsureManaged(ctx, pip, colls, emit)
+}
+
+func (l *localRunner) ApplyDeps(ctx context.Context, emit func(string)) error {
+	if l.mode != RuntimeManaged {
+		return fmt.Errorf("the system runtime uses ansible on your PATH — install deps there yourself")
+	}
+	pip, colls := depLists(l.settings)
+	return l.rt.ApplyManagedDeps(ctx, pip, colls, emit)
 }
 
 func (l *localRunner) Teardown(context.Context) error {
