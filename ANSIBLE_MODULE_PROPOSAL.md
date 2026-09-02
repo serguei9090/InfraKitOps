@@ -1,9 +1,65 @@
-# Ansible Manager — proposal (not a plan yet)
+# Ansible Manager — proposal
 
-Status: **draft for review, 2026-09-01.** Research + a recommended UI shape.
-Ends with a **Decisions needed** section — answer those and it becomes a
-phased `ANSIBLE_MODULE_PLAN.md`. CLAUDE.md already reserved this:
-*"Ansible + kubectl get their own modules later."*
+Status: **decisions resolved 2026-09-01 — see `ANSIBLE_MODULE_PLAN.md` for the
+phased build.** This doc keeps the research + rationale. CLAUDE.md reserved
+this: *"Ansible + kubectl get their own modules later."*
+
+## Resolved (2026-09-01)
+
+1. **Own module** `ansible` (T7 console, backend-mandatory, "advanced") —
+   *not* a Runbooks section. Reuses Runbooks' backend infra (Vault, SSH-node
+   registry, SSE, scheduler, history, U3 approval gate).
+2. **Runtime = both tiers, user-selectable.** Module setting *Ansible
+   runtime*: **Auto** (system `ansible` if on PATH, else offer the managed
+   venv) · **System** (always PATH) · **Managed** (InfraKit's own
+   `ansible-core` in a `uv` venv, set up / upgrade from the UI).
+   `capabilities.ansible = {system:{found,version}, managed:{found,version},
+   uv:{found}}`. **Execution Environments (containers) deferred** — `run.go`
+   keeps spawning behind one swappable function so an EE runner slots in later.
+3. **Bundled streaming callback plugin** — ~60-line Python data file shipped
+   next to the sidecar, loaded via `ANSIBLE_CALLBACK_PLUGINS`; emits one JSON
+   event per line (`v2_playbook_on_play_start` / `_task_start` /
+   `v2_runner_on_ok|failed|skipped|unreachable` / `v2_playbook_on_stats`).
+   **Not** a Python dependency of the Go binary. Falls back to raw stdout
+   streaming if it can't load.
+4. **Project source:** local folder for v1; **git-repo projects land in AN5.**
+5. **Inventory lives as files in the Project** (INI/YAML), edited through a UI
+   tree editor — ansible is too file-native to fight (dynamic inventory,
+   `group_vars/` dir convention, `ansible-inventory --graph`). Plus one small
+   DB-backed "scratch inventory" for ad-hoc runs not tied to a project.
+6. **Surveys = FormFlow.** Attach an optional FormFlow schema to a Job;
+   on launch render the FormFlow runner, map its values tree → `-e @vars.json`.
+   No new form engine.
+7. **ansible-vault bridge:** vault password is a normal InfraKit Vault secret,
+   fed to `ansible-vault` / `ansible-playbook` via a temp `--vault-password-file`
+   (0600, auto-deleted) — same flow as SSH keys. Encrypted files stay in the
+   Project folder.
+8. **Scope ceiling:** AN0–AN5 = the module. **Workflows deferred** — Runbooks
+   already chains steps; later a runbook step runs an Ansible Job (the bridge).
+   **Execution Environments deferred** (see 2).
+9. **kubectl:** build Ansible standalone; keep `internal/ansible` + the T7
+   console clean enough that a future `kubectl` / `terraform` module copies
+   the workspace-folder model, the SSE run-tree, the runtime toggle, and
+   history replay. No abstract "CLI manager" now.
+
+### Workspace folder model
+
+One **workspace base directory** — an instance setting (admin-set in
+multi-user), default `<OS config dir>/InfraKitStudio/ansible/`. On first
+module open: a one-time *"Ansible projects folder: [default] [Change…]"* step.
+
+Inside it, **Projects** — each a self-contained ansible directory:
+- **New Project** → InfraKit scaffolds `ansible.cfg` · `inventory/` ·
+  `group_vars/` · `host_vars/` · `roles/` · `collections/` ·
+  `requirements.yml` · a starter playbook.
+- **Add existing** → register any absolute path (an existing checkout, a
+  shared mount). The Project row stores `path`.
+- `ansible-galaxy` installs **project-local** (`roles/` + `collections/`,
+  per `requirements.yml` + `ansible.cfg` paths).
+- Projects are `owner`-scoped; `published` = shared/runnable by other
+  operators.
+
+---
 
 ---
 
