@@ -23,7 +23,7 @@ import { reportError } from '@/stores/errorStore'
 
 const SRC = 'Ansible'
 
-export type Section = 'projects' | 'inventory' | 'jobs' | 'adhoc' | 'editor' | 'history'
+export type Section = 'projects' | 'inventory' | 'jobs' | 'adhoc' | 'editor' | 'content' | 'history'
 
 function msg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
@@ -160,6 +160,8 @@ interface AnsibleStore {
   lastSpec: RunSpec | null
   busySetup: boolean
   setupLog: string[]
+  galaxyBusy: boolean
+  galaxyLog: string[]
 
   setSection: (s: Section) => void
   setShowRuntime: (v: boolean) => void
@@ -179,6 +181,7 @@ interface AnsibleStore {
   rerun: () => void
   startJobRun: (jobId: string, projectId: string) => void
   startAdhoc: (spec: api.AdhocSpec) => void
+  galaxyInstall: (opts: { type?: 'role' | 'collection'; name?: string }) => void
   openReplay: (runId: number) => Promise<void>
   clearLive: () => void
 }
@@ -201,6 +204,8 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
   lastSpec: null,
   busySetup: false,
   setupLog: [],
+  galaxyBusy: false,
+  galaxyLog: [],
 
   setSection: (section) => {
     set({ section })
@@ -370,6 +375,30 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
     streamRun(set, get, { projectId: spec.projectId } as RunSpec, () =>
       api.openAdhocStream(spec, streamHandlers(set, get, spec.projectId)),
     )
+  },
+
+  galaxyInstall: (opts) => {
+    const id = get().selectedId
+    if (!id || get().galaxyBusy) return
+    set({ galaxyBusy: true, galaxyLog: [] })
+    api.openGalaxyInstallStream(id, opts, {
+      onEvent: (name, data) => {
+        const d = data as Record<string, unknown>
+        if (name === 'stdout' || name === 'stderr') {
+          set((s) => ({ galaxyLog: [...s.galaxyLog, String(d.text ?? '')] }))
+        } else if (name === 'run-end') {
+          set({ galaxyBusy: false })
+          void get().select(id) // rescan tree for the new roles/collections
+        } else if (name === 'error') {
+          set((s) => ({ galaxyBusy: false, galaxyLog: [...s.galaxyLog, `error: ${String(d.error ?? '')}`] }))
+        }
+      },
+      onClose: () => set({ galaxyBusy: false }),
+      onError: (err) => {
+        reportError(err, SRC)
+        set({ galaxyBusy: false })
+      },
+    })
   },
 
   openReplay: async (runId) => {

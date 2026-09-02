@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { FileCode2, FolderGit2, History, ListChecks, Network, Settings2, Zap } from 'lucide-react'
+import { Boxes, FileCode2, FolderGit2, History, ListChecks, Network, Settings2, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useBackendStore } from '@/stores/backendStore'
 import { useAnsibleStore, type Section } from '@/stores/ansibleStore'
@@ -9,6 +9,7 @@ import { InventoryView } from './InventoryView'
 import { JobsView } from './JobsView'
 import { AdhocView } from './AdhocView'
 import { EditorView } from './EditorView'
+import { ContentView } from './ContentView'
 import { HistoryView } from './HistoryView'
 import { RuntimePanel } from './RuntimePanel'
 import { RunView } from './RunView'
@@ -19,6 +20,7 @@ const NAV: { id: Section; label: string; icon: typeof History }[] = [
   { id: 'jobs', label: 'Jobs', icon: ListChecks },
   { id: 'adhoc', label: 'Ad-hoc', icon: Zap },
   { id: 'editor', label: 'Editor', icon: FileCode2 },
+  { id: 'content', label: 'Content', icon: Boxes },
   { id: 'history', label: 'History', icon: History },
 ]
 
@@ -122,6 +124,8 @@ export function AnsibleConsoleScaffold() {
           <AdhocView />
         ) : section === 'editor' ? (
           <EditorView />
+        ) : section === 'content' ? (
+          <ContentView />
         ) : (
           <HistoryView />
         )}

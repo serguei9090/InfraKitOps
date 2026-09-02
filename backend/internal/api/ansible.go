@@ -473,6 +473,43 @@ func (h *AnsibleHandlers) AdhocStream(w http.ResponseWriter, r *http.Request) {
 	sw.Pump(ctx, ch)
 }
 
+// GalaxySearch: GET /ansible/galaxy/search?type=collection|role&q=
+func (h *AnsibleHandlers) GalaxySearch(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	items, err := ansible.GalaxySearch(r.Context(), r.URL.Query().Get("type"), r.URL.Query().Get("q"))
+	if err != nil {
+		apierr.Write(w, apierr.ClassifyNet(err))
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// GalaxyInstallStream: GET /ansible/projects/{id}/galaxy/install/stream?type=&name=
+// name="" installs everything in the project's requirements.yml.
+func (h *AnsibleHandlers) GalaxyInstallStream(w http.ResponseWriter, r *http.Request) {
+	if !h.ok() {
+		sse.RejectCoded(w, string(apierr.CodeInternal), "the Ansible module is not available", "")
+		return
+	}
+	q := r.URL.Query()
+	audit(r, "ansible_galaxy_install", nz(q.Get("name"), "requirements.yml"), nil)
+
+	sw, err := sse.New(w)
+	if err != nil {
+		return
+	}
+	ch := make(chan sse.Message, 128)
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	go func() {
+		h.Engine.GalaxyInstall(ctx, owner(r), h.mode(), chi.URLParam(r, "id"), q.Get("type"), q.Get("name"), ch)
+		close(ch)
+	}()
+	sw.Pump(ctx, ch)
+}
+
 // Doc: GET /ansible/doc?module=
 func (h *AnsibleHandlers) Doc(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {

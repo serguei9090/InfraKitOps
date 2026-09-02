@@ -136,6 +136,32 @@ export const lint = (projectId: string, path: string) =>
     (r) => r.result,
   )
 
+// --- galaxy content ----------------------------------------------
+
+export interface GalaxyItem {
+  type: 'role' | 'collection'
+  name: string
+  description?: string
+  version?: string
+  downloads?: number
+}
+export const galaxySearch = (type: '' | 'role' | 'collection', q: string) =>
+  backendGet<{ items: GalaxyItem[] | null }>(
+    `/ansible/galaxy/search?q=${encodeURIComponent(q)}${type ? `&type=${type}` : ''}`,
+  ).then((r) => arr(r.items))
+
+/** Install one item, or everything in requirements.yml when name is omitted. */
+export function openGalaxyInstallStream(
+  projectId: string,
+  opts: { type?: 'role' | 'collection'; name?: string },
+  handlers: StreamHandlers,
+): () => void {
+  const p: Record<string, string> = {}
+  if (opts.type) p.type = opts.type
+  if (opts.name) p.name = opts.name
+  return openStream(`/ansible/projects/${projectId}/galaxy/install/stream`, p, handlers)
+}
+
 // --- runs -------------------------------------------------------
 
 export const listRuns = (projectId?: string, limit = 100) =>

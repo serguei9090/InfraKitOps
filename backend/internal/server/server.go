@@ -270,10 +270,12 @@ func NewRouter(opts Options) http.Handler {
 				r.Get("/{id}/inventory", anh.Inventory)
 				r.Post("/{id}/syntax-check", anh.SyntaxCheck)
 				r.Post("/{id}/lint", anh.Lint)
+				r.Get("/{id}/galaxy/install/stream", anh.GalaxyInstallStream)
 				r.Get("/{id}/run/stream", anh.RunStream)
 			})
 			r.Get("/adhoc/stream", anh.AdhocStream)
 			r.Get("/doc", anh.Doc)
+			r.Get("/galaxy/search", anh.GalaxySearch)
 			r.Route("/jobs", func(r chi.Router) {
 				r.Get("/", anh.ListJobs)
 				r.Post("/", anh.PutJob)
