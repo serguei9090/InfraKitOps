@@ -461,8 +461,20 @@ Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
   FE: Editor right sidebar Docs/Generate/Explain (`<AiPanel>`), Vault
   toolbar dialog (`SecretPicker` reused), SchedulesView tab, Job survey
   JSON field + run-time survey dialog, `taskGroups` `ansible.` group.
-- **AN5 not started.** AN5 = git projects + dynamic inventory + multi-user.
-  AN6 deferred = Execution Environments, Workflows.
+- **AN5 done** (`a65bd61`): `git.go` (`CloneRepo`/`PullRepo` via `git`
+  binary — private https uses a Vault secret as `http.extraHeader` Bearer,
+  SSH uses the agent; `mode "git"` on create + `POST /projects/{id}/pull`);
+  multi-user **publish** (`POST /projects|jobs/{id}/publish`, visibility
+  already owner-scoped) + **run approval gate** (`Job.RequiresApproval` →
+  run parks `awaiting_approval`, `gate()` reuses the orchestrator's
+  `awaitRunApproval`/`ResumeRun`/`ErrApproveSelf`; `/runs/pending-approvals`
+  + `/runs/{id}/approve`); dynamic inventory = `ProjectFile` PUT chmods a
+  shebang script under `inventory/` 0755. FE: Git mode in the New Project
+  dialog, Pull/Publish buttons, per-job Publish + "requires approval",
+  `ApprovalsView` tab (multi-user), RunView awaiting state. Scaffold now
+  only forces Runtime when there's no workspace folder.
+- **AN0–AN5 complete.** AN6 deferred = Execution Environments, Workflows,
+  fact-cache browser.
 
 ### Shared error handling (started 2026-08-31, E0–E2 done)
 
