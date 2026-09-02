@@ -434,11 +434,20 @@ Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
   History-row → read-only replay, RunView Re-run. **Note: ansible's control
   node does not run on native Windows** (`check_blocking_io` WinError 87) —
   a green play/task/host tree needs Linux/WSL.
-- **AN2–AN5 not started.** AN2 = Ad-hoc + CodeMirror editor (first new FE
-  dep); AN3 = Galaxy (roles/collections install); AN4 = ansible-vault↔
-  InfraKit Vault + FormFlow surveys + schedules + AI; AN5 = git projects +
-  dynamic inventory + multi-user. AN6 deferred = Execution Environments,
-  Workflows.
+- **AN2 done** (`130bb01`): `run.go` `execRun()` extracted (shared
+  record/spawn/tail/SSE core); `adhoc.go` (`RunAdhoc` — `ansible <pat> -m`
+  with synthetic play+task so the tree renders); `doc.go`
+  (`ansible-doc -j`); `check.go` (`--syntax-check` + `ansible-lint -f json`,
+  lint gated on install). Endpoints `/ansible/adhoc/stream`,
+  `/ansible/doc?module=`, `POST /ansible/projects/{id}/{syntax-check,lint}`.
+  FE: **first CodeMirror 6 dep** (`codemirror` + `@codemirror/lang-yaml`,
+  lazy — own 106 KB gz chunk, entry budget untouched); `CodeEditor.tsx`
+  wrapper; Editor tab (file picker + editor + Save + Syntax check + Lint +
+  `ansible-doc` sidebar); Ad-hoc tab.
+- **AN3–AN5 not started.** AN3 = Galaxy (roles/collections install);
+  AN4 = ansible-vault↔InfraKit Vault + FormFlow surveys + schedules + AI;
+  AN5 = git projects + dynamic inventory + multi-user. AN6 deferred =
+  Execution Environments, Workflows.
 
 ### Shared error handling (started 2026-08-31, E0–E2 done)
 
