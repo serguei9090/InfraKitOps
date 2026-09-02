@@ -473,17 +473,24 @@ Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
   dialog, Pull/Publish buttons, per-job Publish + "requires approval",
   `ApprovalsView` tab (multi-user), RunView awaiting state. Scaffold now
   only forces Runtime when there's no workspace folder.
-- **AN0–AN5 complete.** **AN6 planned** ([`ANSIBLE_RUNTIME_PLAN.md`](ANSIBLE_RUNTIME_PLAN.md))
-  — pluggable execution backends: a `Runner` interface with Local / Container
-  (docker·podman) / WSL / SSH-remote impls, chosen at first-open + Settings, so
-  the module runs from a **Windows** host (ansible's control node can't run on
-  native Windows — `check_blocking_io` WinError 87). Phases AN6a (Runner seam +
-  LocalRunner refactor) → AN6b (ContainerRunner — Windows unlock) → AN6c
-  (WslRunner — official `wsl -l -o` list *or* custom `--import` rootfs) → AN6d
-  (SshRunner — remote Linux control node, reuses R2 SSH executor) → AN6e
-  (unified control-node pip/collections deps) → AN6f (fact-cache browser).
-  Workflows **killed** (ordered `roles:` + `block/rescue` cover the solo case).
-  No new deps.
+- **AN0–AN5 complete.** **AN6a + AN6b done** (`e889f5e`,
+  [`ANSIBLE_RUNTIME_PLAN.md`](ANSIBLE_RUNTIME_PLAN.md)): `internal/ansible/runner.go`
+  `Runner` interface (`Name`/`Probe`/`Command`/`TempDir`/`Setup`/`Teardown`) is
+  now the module's one ansible* spawn point — all 7 exec sites route through
+  `e.activeRunner(ctx).Command(...)`. `localRunner` = today's system/managed
+  unchanged. `containerRunner` (`runner_container.go`) runs ansible in
+  `docker`/`podman run` (`-v <project>:/infra-project` + tmp + callback mounts,
+  Windows-backslash path rewrite, `ANSIBLE_CONFIG` past the world-writable
+  guard); `Setup` builds `infrakit-ansible:local` from a generated Dockerfile
+  (ansible-core + `controlNodePipPackages`/`Collections` from settings) or pulls
+  an override. `/ansible/settings` gains `os`/`install`/`runners`/container
+  fields; `/runtime/setup/stream?mode=` + `/runtime/teardown`. RuntimePanel =
+  4-mode chooser + container setup block + install links. **Verified on Windows
+  + Docker Desktop: build image → run playbook in container → full
+  play/task/host tree.** — **AN6c** (WSL: official `wsl -l -o` list *or* custom
+  `--import` rootfs) → **AN6d** (SshRunner — remote Linux control node) →
+  **AN6e** (unified pip/collections deps) → **AN6f** (fact-cache browser) still
+  to come. Workflows **killed**. No new deps.
 
 ### Shared error handling (started 2026-08-31, E0–E2 done)
 

@@ -1,8 +1,15 @@
 # Ansible Manager — AN6: pluggable execution backends
 
-Status: **planned, not started.** Supersedes the one-line "AN6 (deferred)" in
+Status: **AN6a + AN6b done** (`e889f5e`) — the module runs from Windows via a
+container. AN6c–AN6f pending. Supersedes the one-line "AN6 (deferred)" in
 [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md) §4. Prereq: AN0–AN5 done
 (`1919de0`…`a65bd61`).
+
+**Implementation note:** the `Runner` types live in `package ansible`
+(`runner.go`, `runner_container.go`), not a `runner/` sub-package — avoids a
+`RuntimeMode` import cycle. `Engine.activeRunner(ctx)` picks by the
+`ansibleRuntime` setting; `Engine.SetupRuntime` / `Runners` / `TeardownRuntime`
+are the exported entry points.
 
 ## 1. Why
 
@@ -269,8 +276,8 @@ env; `EventFile` is already a host path. `Setup` for `managed` = the existing
 
 | Phase | Scope | Milestone |
 |-------|-------|-----------|
-| **AN6a** | `runner.Runner` iface + `LocalRunner` (refactor today's exec behind it, zero behaviour change) · `Detect` → per-runner `Probe` · `capabilities.runners` + `os` + `install` · `RuntimePanel` mode chooser (only `system`/`managed` selectable yet) · install-link row | Nothing regresses; the seam exists. |
-| **AN6b** | **`ContainerRunner`** (docker + podman detect, `Setup` builds `infrakit-ansible:local` or pulls an override, `Exec` with binds + event-file tail + ssh mount) · Settings container block · pip-packages + collections editors feeding the Dockerfile | **Run a playbook from Windows with Docker.** Play/task/host tree works. |
+| **AN6a** ✅ `e889f5e` | `Runner` iface (in `package ansible`, not a sub-package) + `localRunner` (all 7 exec sites route through `e.activeRunner(ctx).Command`, zero behaviour change) · per-runner `Probe` · `/ansible/settings` → `runners` + `os` + `install` · `RuntimePanel` 4-mode chooser · install-link row | Nothing regressed; the seam exists. |
+| **AN6b** ✅ `e889f5e` | `containerRunner` (docker + podman, `containerEngineName` fast-path for exec + `containerEngine` w/ daemon check for Probe/Setup, `Setup` builds `infrakit-ansible:local` from a generated Dockerfile or pulls an override, `Command` with `/infra-project` `/infra-tmp` `/infra-cb` binds + `~/.ssh` mount + Windows-backslash path rewrite + `ANSIBLE_CONFIG` past the world-writable guard) · Settings container block · pip/collections editors · `/runtime/teardown` | **Verified: run a playbook from Windows in a container, full play/task/host tree.** |
 | **AN6c** | **`WslRunner`** — detect, `wsl -l -o` list, official `wsl --install -d` **and** custom `wsl --import` (+ optional pinned-Debian download w/ SHA-256), streamed `apt`+`pip` setup, `/mnt/c` path translation, live pip-packages/collections apply, teardown | **Run a playbook from Windows via a dedicated WSL distro.** |
 | **AN6d** | **`SshRunner`** — `ssh_node`-backed remote control node, project sync (`tar`/`rsync`) or remote-path mode, dual-channel stdout + event tail, remote setup + test | Thin client, remote Linux control node. |
 | **AN6e** | Unify the **control-node dependency lists** (pip packages + collections) across all four runners — one settings pair, each runner's `Setup` consumes it; "Apply deps" without a full rebuild where possible (`docker build` cache, `wsl … pip install`, `ssh … pip install`) | One place to add `boto3` / `kubernetes` / `jmespath`. |
