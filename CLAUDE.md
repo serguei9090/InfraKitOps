@@ -495,8 +495,14 @@ Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
   install; `Teardown` = `wsl --unregister` (refuses non-dedicated distros).
   `wslDistro`/`wslSource` settings, `RuntimePanel` `wsl` card + `WslSetup`
   block. **Verified: point at the user's Ubuntu distro → run playbook →
-  full play/task/host tree.** — **AN6d** (SshRunner — remote Linux control
-  node) → **AN6e** (unified pip/collections deps) → **AN6f** (fact-cache
+  full play/task/host tree.** — **AN6e done** (`a08d1dd`): `Runner.ApplyDeps`
+  + `depLists(settings)` — one `controlNodePipPackages`/`Collections` pair
+  feeds every runner. `Runtime.EnsureManaged(pip, collections)` + `ApplyManagedDeps`
+  (venv-only). container `ApplyDeps` = rebuild (layer cache); wsl = `pip3` +
+  galaxy skipping apt. SSE `GET /ansible/runtime/deps/apply/stream?mode=`.
+  FE: shared `DepsEditor` (managed/container/wsl) with Save + "Install deps now".
+  **Verified: `jmespath` applied to the WSL distro with no reprovision.** —
+  **AN6d** (SshRunner — remote Linux control node) → **AN6f** (fact-cache
   browser) still to come. Workflows **killed**. No new deps.
 
 ### Shared error handling (started 2026-08-31, E0–E2 done)

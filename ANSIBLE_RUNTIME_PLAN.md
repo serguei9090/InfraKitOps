@@ -1,7 +1,8 @@
 # Ansible Manager — AN6: pluggable execution backends
 
-Status: **AN6a + AN6b + AN6c done** (`e889f5e`, `d1dbafd`) — the module runs
-from Windows via a container **or** a WSL2 distro. AN6d–AN6f pending. Supersedes the one-line "AN6 (deferred)" in
+Status: **AN6a–AN6c + AN6e done** (`e889f5e`, `d1dbafd`, `a08d1dd`) — the module
+runs from Windows via a container **or** a WSL2 distro, with one shared
+control-node dependency list. AN6d (SSH-remote) + AN6f (fact cache) pending. Supersedes the one-line "AN6 (deferred)" in
 [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md) §4. Prereq: AN0–AN5 done
 (`1919de0`…`a65bd61`).
 
@@ -280,7 +281,7 @@ env; `EventFile` is already a host path. `Setup` for `managed` = the existing
 | **AN6b** ✅ `e889f5e` | `containerRunner` (docker + podman, `containerEngineName` fast-path for exec + `containerEngine` w/ daemon check for Probe/Setup, `Setup` builds `infrakit-ansible:local` from a generated Dockerfile or pulls an override, `Command` with `/infra-project` `/infra-tmp` `/infra-cb` binds + `~/.ssh` mount + Windows-backslash path rewrite + `ANSIBLE_CONFIG` past the world-writable guard) · Settings container block · pip/collections editors · `/runtime/teardown` | **Verified: run a playbook from Windows in a container, full play/task/host tree.** |
 | **AN6c** ✅ `d1dbafd` | `wslRunner` — `wslText` UTF-16LE decode, `wsl -l -q` / `-l -o`, `winToWSL` path translation, `--cd` + `ANSIBLE_CONFIG`, `Setup` provisions the dedicated `InfraKit-Ansible` distro (`official:<name>` OR `wsl --import` a local `.tar` / a downloaded Canonical Ubuntu WSL rootfs — `download.go`, pinned in `vendor-tools/TOOLS.md`) then streamed `apt`+`pip3`, `Teardown` `wsl --unregister` (dedicated-only guard). `WslSetup` panel. | **Verified: run a playbook from Windows in a WSL distro, full tree.** |
 | **AN6d** | **`SshRunner`** — `ssh_node`-backed remote control node, project sync (`tar`/`rsync`) or remote-path mode, dual-channel stdout + event tail, remote setup + test | Thin client, remote Linux control node. |
-| **AN6e** | Unify the **control-node dependency lists** (pip packages + collections) across all four runners — one settings pair, each runner's `Setup` consumes it; "Apply deps" without a full rebuild where possible (`docker build` cache, `wsl … pip install`, `ssh … pip install`) | One place to add `boto3` / `kubernetes` / `jmespath`. |
+| **AN6e** ✅ `a08d1dd` | `Runner.ApplyDeps` + `depLists(settings)` — one `controlNodePipPackages`/`Collections` pair feeds every runner. `EnsureManaged(pip, collections)` + `ApplyManagedDeps` (venv-only); container `ApplyDeps` = rebuild (layer cache); wsl = `pip3` + `ansible-galaxy` skipping apt. SSE `GET /ansible/runtime/deps/apply/stream?mode=`; shared `DepsEditor` panel (managed / container / wsl). | **Verified: `jmespath` applied to a WSL distro, no reprovision.** |
 | **AN6f** | **Fact-cache browser** — enable `fact_caching = jsonfile` (cache dir under the project or config), a Facts tab: per-host tree of gathered facts from the last run, search, "gather facts now" (ad-hoc `setup`) | Inspect what ansible knows about each host. |
 
 **AN6a+AN6b = Windows-usable.** AN6c for the no-Docker Windows case. AN6d for
