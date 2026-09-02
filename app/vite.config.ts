@@ -1,8 +1,13 @@
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, mergeConfig } from 'vite'
 import { defineConfig as defineVitestConfig } from 'vitest/config'
+
+const appVersion = JSON.parse(
+  readFileSync(path.resolve(import.meta.dirname, './package.json'), 'utf8'),
+).version as string
 
 // https://vite.dev/config/  https://vitest.dev/config/
 // Merged rather than built with vitest/config's defineConfig directly — vitest
@@ -12,6 +17,9 @@ import { defineConfig as defineVitestConfig } from 'vitest/config'
 // and merging the `test` block in separately sidesteps that.
 const viteConfig = defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),

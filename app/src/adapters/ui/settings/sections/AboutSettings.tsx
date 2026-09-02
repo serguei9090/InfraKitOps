@@ -16,7 +16,10 @@ export function AboutSettings() {
   return (
     <>
       <SettingsGroup title="InfraKit Studio">
-        <SettingsRow label="Frontend">
+        <SettingsRow label="Version">
+          <span className="font-mono text-xs">{__APP_VERSION__}</span>
+        </SettingsRow>
+        <SettingsRow label="Frontend build">
           <span className="font-mono text-xs">{import.meta.env.MODE}</span>
         </SettingsRow>
         <SettingsRow label="Backend">
