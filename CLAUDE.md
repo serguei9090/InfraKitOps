@@ -451,9 +451,18 @@ Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
   `/ansible/galaxy/search`, `/ansible/projects/{id}/galaxy/install/stream`.
   FE **Content tab** — `requirements.yml` CodeMirror editor + Galaxy
   search pane + Installed panel.
-- **AN4–AN5 not started.** AN4 = ansible-vault↔InfraKit Vault + FormFlow
-  surveys + schedules + AI; AN5 = git projects + dynamic inventory +
-  multi-user. AN6 deferred = Execution Environments, Workflows.
+- **AN4 done** (`1dd3634`): `vault.go` (`Engine.Vault` — ansible-vault
+  encrypt/decrypt/view/rekey, password = InfraKit Vault secret → 0600 temp
+  `--vault-password-file`, `POST /ansible/projects/{id}/vault`);
+  `Job.SurveySchema` + `JobRunStream ?extraVars=` override; `scheduler.go`
+  + `ansible_schedule` table (cron-fire a Job, reuses `orchestrator.ParseCron`,
+  30s poll, `/ansible/schedules` CRUD, `NewScheduler` in main.go);
+  `internal/llm/task.go` builtins `ansible.gen-playbook` + `ansible.explain-task`.
+  FE: Editor right sidebar Docs/Generate/Explain (`<AiPanel>`), Vault
+  toolbar dialog (`SecretPicker` reused), SchedulesView tab, Job survey
+  JSON field + run-time survey dialog, `taskGroups` `ansible.` group.
+- **AN5 not started.** AN5 = git projects + dynamic inventory + multi-user.
+  AN6 deferred = Execution Environments, Workflows.
 
 ### Shared error handling (started 2026-08-31, E0–E2 done)
 
