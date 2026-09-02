@@ -28,6 +28,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/infrakit/backend/internal/ansible"
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/auth"
 	"github.com/infrakit/backend/internal/history"
@@ -51,6 +52,7 @@ func main() {
 	maxPerTarget := flag.Int("history-max-per-target", 20, "default history runs kept per (tool,target)")
 	runbookDBPath := flag.String("runbook-db", "", `runbooks database path ("" = OS config dir, "off" = disabled)`)
 	llmDBPath := flag.String("llm-db", "", `AI-layer database path ("" = OS config dir, "off" = disabled)`)
+	ansibleDBPath := flag.String("ansible-db", "", `Ansible-module database path ("" = OS config dir, "off" = disabled)`)
 	vaultPath := flag.String("vault", "", `vault file path ("" = OS config dir, "off" = disabled)`)
 	vaultAutoLock := flag.Duration("vault-autolock", 15*time.Minute, "lock the vault after this idle time (0 = never)")
 	maxConcurrentRuns := flag.Int("max-concurrent-runs", 4, "cap on runbooks executing at once (0 = unlimited)")
@@ -148,6 +150,11 @@ func main() {
 			llmEngine.SetToolRunner(mcpToolRunner{mcpManager})
 		}
 	}
+	ansibleStore, ansibleEngine, ansibleRuntime := openAnsible(*ansibleDBPath)
+	if ansibleStore != nil {
+		defer ansibleStore.Close()
+	}
+
 	defer iperf.StopServer() // kill any managed `iperf3 -s` child
 
 	var authSvc *auth.Service
@@ -185,6 +192,9 @@ func main() {
 			}
 			if promptStore != nil {
 				_ = promptStore.ClaimOrphans(adminID)
+			}
+			if ansibleStore != nil {
+				_ = ansibleStore.ClaimOrphans(adminID)
 			}
 		}
 		if tok := svc.SetupToken(); tok != "" {
@@ -227,21 +237,24 @@ func main() {
 
 	wd := server.NewWatchdog(*idleTimeout, *parentPID)
 	handler := server.NewRouter(server.Options{
-		Token:         tok,
-		Auth:          authSvc,
-		CORSOrigins:   corsOrigins,
-		OnActivity:    wd.Touch,
-		History:       store,
-		Orchestrator:  orch,
-		RunbookEngine: engine,
-		Vault:         vlt,
-		LLM:           llmStore,
-		LLMEngine:     llmEngine,
-		MCP:           mcpManager,
-		LLMHistory:    llmHistory,
-		LLMUsage:      llmUsage,
-		Prompts:       promptStore,
-		AppVersion:    api.Version,
+		Token:          tok,
+		Auth:           authSvc,
+		CORSOrigins:    corsOrigins,
+		OnActivity:     wd.Touch,
+		History:        store,
+		Orchestrator:   orch,
+		RunbookEngine:  engine,
+		Vault:          vlt,
+		LLM:            llmStore,
+		LLMEngine:      llmEngine,
+		MCP:            mcpManager,
+		LLMHistory:     llmHistory,
+		LLMUsage:       llmUsage,
+		Prompts:        promptStore,
+		AnsibleStore:   ansibleStore,
+		AnsibleEngine:  ansibleEngine,
+		AnsibleRuntime: ansibleRuntime,
+		AppVersion:     api.Version,
 		HistoryPolicy: history.PrunePolicy{
 			RetentionDays: *retentionDays,
 			MaxPerTarget:  *maxPerTarget,
@@ -385,6 +398,37 @@ func openLLM(path string) *llm.Store {
 	}
 	log.Printf("llm: %s", path)
 	return s
+}
+
+// openAnsible resolves the Ansible-module DB path, opens the store, and builds
+// the runtime + run engine. A failure is logged, not fatal — the /ansible
+// endpoints then 503 and the UI shows the connect state.
+func openAnsible(path string) (*ansible.Store, *ansible.Engine, *ansible.Runtime) {
+	if path == "off" {
+		return nil, nil, nil
+	}
+	cfgDir, err := appDataDir()
+	if err != nil {
+		log.Printf("ansible: config dir: %v (module disabled)", err)
+		return nil, nil, nil
+	}
+	if path == "" {
+		path = filepath.Join(cfgDir, "ansible.db")
+	}
+	s, err := ansible.Open("file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	if err != nil {
+		log.Printf("ansible: open %s: %v (module disabled)", path, err)
+		return nil, nil, nil
+	}
+	rt := ansible.NewRuntime(cfgDir)
+	eng, err := ansible.NewEngine(s, rt, cfgDir)
+	if err != nil {
+		log.Printf("ansible: engine: %v (module disabled)", err)
+		_ = s.Close()
+		return nil, nil, nil
+	}
+	log.Printf("ansible: %s", path)
+	return s, eng, rt
 }
 
 // openAuth resolves the auth DB path and opens the store. Fatal on failure —

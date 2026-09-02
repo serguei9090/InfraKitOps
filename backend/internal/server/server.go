@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/infrakit/backend/internal/ansible"
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/auth"
 	"github.com/infrakit/backend/internal/history"
@@ -60,6 +61,11 @@ type Options struct {
 	// Prompts is the server-side Prompt Library store (U4). Only set in
 	// multi-user mode; nil → /prompts* 503 and the client keeps its local repo.
 	Prompts *promptstore.Store
+	// AnsibleStore / AnsibleEngine / AnsibleRuntime back the Ansible Manager
+	// module (ANSIBLE_MODULE_PLAN.md). Nil → /ansible* endpoints 503.
+	AnsibleStore   *ansible.Store
+	AnsibleEngine  *ansible.Engine
+	AnsibleRuntime *ansible.Runtime
 }
 
 // NewRouter returns the fully wired API handler.
@@ -87,6 +93,7 @@ func NewRouter(opts Options) http.Handler {
 		History: opts.LLMHistory, Usage: opts.LLMUsage,
 	}
 	mh := &api.MCPHandlers{Manager: opts.MCP}
+	anh := &api.AnsibleHandlers{Store: opts.AnsibleStore, Engine: opts.AnsibleEngine, Runtime: opts.AnsibleRuntime}
 	ph := &api.PromptHandlers{Store: opts.Prompts}
 	ah := &api.AuthHandlers{
 		Service: opts.Auth,
@@ -246,6 +253,22 @@ func NewRouter(opts Options) http.Handler {
 			r.Post("/resources/read", mh.ReadResource)
 			r.Get("/prompts", mh.ListPrompts)
 			r.Post("/prompts/get", mh.GetPrompt)
+		})
+
+		// Ansible Manager module (ANSIBLE_MODULE_PLAN.md §4).
+		r.Route("/ansible", func(r chi.Router) {
+			r.Get("/settings", anh.GetSettings)
+			r.Put("/settings", anh.PutSettings)
+			r.Get("/runtime/setup/stream", anh.RuntimeSetup)
+			r.Route("/projects", func(r chi.Router) {
+				r.Get("/", anh.ListProjects)
+				r.Post("/", anh.CreateProject)
+				r.Delete("/{id}", anh.DeleteProject)
+				r.Get("/{id}/tree", anh.ProjectTree)
+				r.Get("/{id}/run/stream", anh.RunStream)
+			})
+			r.Get("/runs", anh.ListRuns)
+			r.Get("/runs/{id}", anh.GetRun)
 		})
 
 		r.Route("/vault", func(r chi.Router) {

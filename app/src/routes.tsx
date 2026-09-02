@@ -101,6 +101,9 @@ export const router = createBrowserRouter([
       { path: 'tools/runbook', lazy: () => import('./adapters/ui/tools/RunbookScreen').then((m) => ({ Component: m.RunbookScreen })) },
       { path: 'tools/runbook/edit/:id', lazy: () => import('./adapters/ui/tools/RunbookEditorScreen').then((m) => ({ Component: m.RunbookEditorScreen })) },
       { path: 'tools/ai', lazy: () => import('./adapters/ui/tools/AiScreen').then((m) => ({ Component: m.AiScreen })) },
+
+      // Ansible Manager
+      { path: 'tools/ansible', lazy: () => import('./adapters/ui/tools/AnsibleScreen').then((m) => ({ Component: m.AnsibleScreen })) },
       { path: 'settings', lazy: () => import('./adapters/ui/settings/SettingsScreen').then((m) => ({ Component: m.SettingsScreen })) },
       { path: 'settings/:section', lazy: () => import('./adapters/ui/settings/SettingsScreen').then((m) => ({ Component: m.SettingsScreen })) },
 

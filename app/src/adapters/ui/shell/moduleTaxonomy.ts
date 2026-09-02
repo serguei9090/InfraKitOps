@@ -656,6 +656,23 @@ export const kModuleTaxonomy: ModuleDef[] = [
     ],
   },
   {
+    id: 'ansible',
+    title: 'Ansible',
+    icon: ServerCog,
+    // Single-tool shell module — the full "Console Workspace" (own top nav).
+    // Backend-mandatory. See ANSIBLE_MODULE_PLAN.md.
+    hideToolPane: true,
+    tools: [
+      {
+        id: 'ansible',
+        name: 'Ansible Manager',
+        description: 'Run playbooks with a live play/task/host tree; manage projects, roles & inventory',
+        icon: ServerCog,
+        route: '/tools/ansible',
+      },
+    ],
+  },
+  {
     id: 'ai',
     title: 'AI Hub',
     icon: Sparkles,
