@@ -23,13 +23,21 @@ const arr = <T,>(v: T[] | null | undefined): T[] => v ?? []
 
 export const getSettings = () => backendGet<AnsibleSettings>('/ansible/settings')
 
-export const putSettings = (patch: { workspaceDir?: string; runtime?: string }) =>
-  backendRequest<AnsibleSettings>('PUT', '/ansible/settings', patch)
+export const putSettings = (patch: {
+  workspaceDir?: string
+  runtime?: string
+  containerImage?: string
+  controlNodePipPackages?: string
+  controlNodeCollections?: string
+}) => backendRequest<AnsibleSettings>('PUT', '/ansible/settings', patch)
 
-/** Stream `uv venv` + `uv pip install ansible-core` output. Returns an abort fn. */
-export function setupManagedRuntime(version: string | undefined, handlers: StreamHandlers): () => void {
-  return openStream('/ansible/runtime/setup/stream', version ? { version } : {}, handlers)
+/** Provision a runtime: mode "managed" → uv venv, "container" → build/pull the image. */
+export function setupRuntime(mode: string, handlers: StreamHandlers): () => void {
+  return openStream('/ansible/runtime/setup/stream', { mode }, handlers)
 }
+
+export const teardownRuntime = (mode: string) =>
+  backendRequest<{ status: string }>('POST', '/ansible/runtime/teardown', { mode })
 
 // --- projects -----------------------------------------------------
 

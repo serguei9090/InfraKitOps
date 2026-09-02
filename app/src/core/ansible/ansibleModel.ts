@@ -3,7 +3,19 @@
  * `internal/ansible` package. See ANSIBLE_MODULE_PLAN.md.
  */
 
-export type RuntimeMode = 'auto' | 'system' | 'managed'
+export type RuntimeMode = 'auto' | 'system' | 'managed' | 'container'
+
+export interface RunnerStatus {
+  mode: string
+  ready: boolean
+  reason?: string
+  ansibleVersion?: string
+  engine?: string // "docker" | "podman"
+  engineVersion?: string
+  daemonRunning?: boolean
+  image?: string
+  imageBuilt?: boolean
+}
 
 export interface AnsibleBin {
   path?: string
@@ -26,6 +38,12 @@ export interface AnsibleSettings {
   workspaceDir: string
   runtime: RuntimeMode
   defaultWorkspace: string
+  containerImage: string
+  controlNodePipPackages: string
+  controlNodeCollections: string
+  os: string // 'windows' | 'linux' | 'darwin' | …
+  install: Record<string, string> // tool → install-docs URL
+  runners: Record<string, RunnerStatus>
   capabilities: AnsibleCapabilities
 }
 

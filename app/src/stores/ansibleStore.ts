@@ -186,7 +186,7 @@ interface AnsibleStore {
   setShowRuntime: (v: boolean) => void
   refreshSettings: () => Promise<void>
   saveSettings: (patch: { workspaceDir?: string; runtime?: string }) => Promise<void>
-  setupManaged: (version?: string) => void
+  setupRuntime: (mode: string) => void
   refreshProjects: () => Promise<void>
   select: (id: string | null) => Promise<void>
   addProject: (body: {
@@ -272,10 +272,10 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
     }
   },
 
-  setupManaged: (version) => {
+  setupRuntime: (mode) => {
     if (get().busySetup) return
     set({ busySetup: true, setupLog: [] })
-    api.setupManagedRuntime(version, {
+    api.setupRuntime(mode, {
       onEvent: (name, data) => {
         const d = data as Record<string, unknown>
         if (name === 'stdout') {

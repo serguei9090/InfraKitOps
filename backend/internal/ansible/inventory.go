@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -37,11 +36,6 @@ func (e *Engine) Inventory(ctx context.Context, owner string, mode RuntimeMode, 
 	if err != nil {
 		return nil, err
 	}
-	bin := e.rt.Bin(ctx, mode, "ansible-inventory")
-	if bin == "" {
-		return nil, fmt.Errorf("ansible-inventory not available — check the Ansible runtime")
-	}
-
 	inv := ""
 	if s := strings.TrimSpace(src); s != "" {
 		if strings.Contains(s, ",") {
@@ -60,11 +54,12 @@ func (e *Engine) Inventory(ctx context.Context, owner string, mode RuntimeMode, 
 		if inv != "" {
 			args = append([]string{"-i", inv}, args...)
 		}
-		c, cancel := context.WithTimeout(ctx, 30*time.Second)
+		c, cancel := context.WithTimeout(ctx, 40*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(c, bin, args...)
-		cmd.Dir = proj.Path
-		cmd.Env = baseEnv()
+		cmd, cerr := e.activeRunner(c).Command(c, "ansible-inventory", proj.Path, args, nil)
+		if cerr != nil {
+			return nil, cerr
+		}
 		return cmd.Output()
 	}
 
@@ -113,13 +108,4 @@ func (e *Engine) Inventory(ctx context.Context, owner string, mode RuntimeMode, 
 		}
 	}
 	return res, nil
-}
-
-// trimExecErr turns an *exec.ExitError into its stderr text when present.
-func trimExecErr(err error) error {
-	var ee *exec.ExitError
-	if asExit(err, &ee) && len(ee.Stderr) > 0 {
-		return fmt.Errorf("%s", strings.TrimSpace(string(ee.Stderr)))
-	}
-	return err
 }

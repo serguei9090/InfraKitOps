@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -32,13 +31,13 @@ func (e *Engine) Doc(ctx context.Context, mode RuntimeMode, module string) (*Mod
 	if module == "" {
 		return nil, fmt.Errorf("a module name is required")
 	}
-	bin := e.rt.Bin(ctx, mode, "ansible-doc")
-	if bin == "" {
-		return nil, fmt.Errorf("ansible-doc not available — check the Ansible runtime")
-	}
-	c, cancel := context.WithTimeout(ctx, 20*time.Second)
+	c, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(c, bin, "-j", module).Output()
+	cmd, cerr := e.activeRunner(c).Command(c, "ansible-doc", "", []string{"-j", module}, nil)
+	if cerr != nil {
+		return nil, cerr
+	}
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("ansible-doc %s: %w", module, trimExecErr(err))
 	}

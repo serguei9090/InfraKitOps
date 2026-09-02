@@ -3,7 +3,6 @@ package ansible
 import (
 	"context"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -36,11 +35,7 @@ func (e *Engine) RunAdhoc(ctx context.Context, owner string, mode RuntimeMode, s
 		send("error", map[string]string{"error": "project not found"})
 		return 0
 	}
-	bin := e.rt.Bin(ctx, mode, "ansible")
-	if bin == "" {
-		send("error", map[string]string{"error": "ansible not available — check the Ansible runtime"})
-		return 0
-	}
+	runner := e.activeRunner(ctx)
 
 	pattern := nz(spec.Pattern, "all")
 	module := nz(spec.Module, "command")
@@ -62,7 +57,7 @@ func (e *Engine) RunAdhoc(ctx context.Context, owner string, mode RuntimeMode, s
 		args = append(args, "--one-line")
 	}
 
-	evFile, everr := os.CreateTemp("", "infrakit-ansible-events-*.ndjson")
+	evFile, everr := os.CreateTemp(runner.TempDir(), "infrakit-ansible-events-*.ndjson")
 	if everr != nil {
 		send("error", map[string]string{"error": everr.Error()})
 		return 0
@@ -71,14 +66,11 @@ func (e *Engine) RunAdhoc(ctx context.Context, owner string, mode RuntimeMode, s
 	_ = evFile.Close()
 	defer os.Remove(evPath)
 
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Dir = proj.Path
-	cmd.Env = append(baseEnv(),
-		"ANSIBLE_CALLBACK_PLUGINS="+e.cbDir,
-		"ANSIBLE_CALLBACKS_ENABLED=infrakit_events",
-		"ANSIBLE_LOAD_CALLBACK_PLUGINS=1",
-		"INFRAKIT_EVENT_FILE="+evPath,
-	)
+	cmd, cerr := runner.Command(ctx, "ansible", proj.Path, args, e.callbackEnv(evPath))
+	if cerr != nil {
+		send("error", map[string]string{"error": cerr.Error()})
+		return 0
+	}
 
 	redArgv := "ansible " + strings.Join(args, " ")
 	run := &Run{

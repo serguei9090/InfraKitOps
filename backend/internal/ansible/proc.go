@@ -2,10 +2,21 @@ package ansible
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"sync"
 )
+
+// trimExecErr turns an *exec.ExitError into its stderr text when present.
+func trimExecErr(err error) error {
+	var ee *exec.ExitError
+	if asExit(err, &ee) && len(ee.Stderr) > 0 {
+		return fmt.Errorf("%s", strings.TrimSpace(string(ee.Stderr)))
+	}
+	return err
+}
 
 // runStreaming starts cmd, scans stdout and stderr line-by-line into their
 // handlers, and blocks until the process exits. ctx cancellation should be

@@ -45,6 +45,11 @@ func NewEngine(store *Store, rt *Runtime, cfgDir string) (*Engine, error) {
 	return &Engine{store: store, rt: rt, cfgDir: cfgDir, cbDir: cb, approves: map[int64]pendingApproval{}}, nil
 }
 
+// activeRunner resolves the Runner for the configured RuntimeMode (AN6).
+func (e *Engine) activeRunner(ctx context.Context) Runner {
+	return pickRunner(ctx, e.rt, e.cfgDir, e.store.GetSettings())
+}
+
 var errApproveSelf = errors.New("a run must be approved by a different operator")
 
 // ErrApproveSelf is exported for the handler to map to a 403.
@@ -172,17 +177,18 @@ func (e *Engine) Run(ctx context.Context, owner string, mode RuntimeMode, trigge
 		return runID
 	}
 
-	bin := e.rt.Bin(ctx, mode, "ansible-playbook")
-	if bin == "" {
+	runner := e.activeRunner(ctx)
+
+	fail := func(msg string) int64 {
 		_ = e.store.FinishRun(runID, StatusFailed, "", "")
-		send("error", map[string]string{"error": "ansible-playbook not available — check the Ansible runtime"})
+		send("error", map[string]string{"error": msg})
 		send("run-end", map[string]any{"runId": runID, "status": StatusFailed})
 		return runID
 	}
 
-	// extra-vars → a temp file passed as -e @file
+	// extra-vars → a temp file passed as -e @file (in the runner's shared tmp)
 	if strings.TrimSpace(spec.ExtraVars) != "" {
-		if f, ferr := os.CreateTemp("", "infrakit-extravars-*.yml"); ferr == nil {
+		if f, ferr := os.CreateTemp(runner.TempDir(), "infrakit-extravars-*.yml"); ferr == nil {
 			_, _ = f.WriteString(spec.ExtraVars)
 			_ = f.Close()
 			args = append(args, "-e", "@"+f.Name())
@@ -191,26 +197,30 @@ func (e *Engine) Run(ctx context.Context, owner string, mode RuntimeMode, trigge
 	}
 
 	// the callback writes NDJSON events here
-	evFile, everr := os.CreateTemp("", "infrakit-ansible-events-*.ndjson")
+	evFile, everr := os.CreateTemp(runner.TempDir(), "infrakit-ansible-events-*.ndjson")
 	if everr != nil {
-		_ = e.store.FinishRun(runID, StatusFailed, "", "")
-		send("error", map[string]string{"error": everr.Error()})
-		send("run-end", map[string]any{"runId": runID, "status": StatusFailed})
-		return runID
+		return fail(everr.Error())
 	}
 	evPath := evFile.Name()
 	_ = evFile.Close()
 	defer os.Remove(evPath)
 
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Dir = proj.Path
-	cmd.Env = append(baseEnv(),
-		"ANSIBLE_CALLBACK_PLUGINS="+e.cbDir,
+	cmd, cerr := runner.Command(ctx, "ansible-playbook", proj.Path, args, e.callbackEnv(evPath))
+	if cerr != nil {
+		return fail(cerr.Error())
+	}
+	return e.execRun(ctx, cmd, evPath, run, runID, nil, out)
+}
+
+// callbackEnv is the environment that enables the streaming callback plugin and
+// points it at the NDJSON event file. Runners translate the paths.
+func (e *Engine) callbackEnv(eventFile string) []string {
+	return []string{
+		"ANSIBLE_CALLBACK_PLUGINS=" + e.cbDir,
 		"ANSIBLE_CALLBACKS_ENABLED=infrakit_events",
 		"ANSIBLE_LOAD_CALLBACK_PLUGINS=1",
-		"INFRAKIT_EVENT_FILE="+evPath,
-	)
-	return e.execRun(ctx, cmd, evPath, run, runID, nil, out)
+		"INFRAKIT_EVENT_FILE=" + eventFile,
+	}
 }
 
 // gate blocks a real multi-user run until a second operator approves it.

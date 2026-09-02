@@ -76,7 +76,13 @@ export function AnsibleConsoleScaffold() {
     }
   }, [status, refreshSettings, refreshProjects, refreshVault, multiUser, refreshApprovals])
 
-  const ready = settings?.capabilities.ready ?? false
+  // active-runner readiness (AN6). "auto" = any runner ready.
+  const ready = (() => {
+    if (!settings) return false
+    const rs = settings.runners ?? {}
+    if (settings.runtime === 'auto') return Object.values(rs).some((r) => r.ready)
+    return rs[settings.runtime]?.ready ?? settings.capabilities.ready
+  })()
   // amber dot on the Runtime tab whenever the toolchain or folder isn't ready…
   const needsSetup = settings != null && (!ready || !settings.workspaceDir)
   // …but only *force* the panel when there's genuinely no workspace folder —
@@ -187,7 +193,7 @@ export function AnsibleConsoleScaffold() {
       <div className="flex h-8 shrink-0 items-center gap-3 border-t border-border/60 bg-card px-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span className={cn('size-1.5 rounded-full', ready ? 'bg-emerald-500' : 'bg-amber-500')} />
-          {ready ? `ansible ${settings?.capabilities.runtime}` : 'ansible not ready'}
+          {ready ? `ansible via ${settings?.runtime}` : 'ansible not ready'}
         </span>
         <span>·</span>
         <span className="truncate">workspace: {settings?.workspaceDir || '(not set)'}</span>

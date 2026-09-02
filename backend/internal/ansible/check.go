@@ -3,7 +3,6 @@ package ansible
 import (
 	"context"
 	"encoding/json"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -36,15 +35,12 @@ func (e *Engine) SyntaxCheck(ctx context.Context, owner string, mode RuntimeMode
 	if err != nil {
 		return nil, err
 	}
-	bin := e.rt.Bin(ctx, mode, "ansible-playbook")
-	if bin == "" {
-		return &CheckResult{Kind: "syntax", Ran: false, Reason: "ansible-playbook not available"}, nil
-	}
-	c, cancel := context.WithTimeout(ctx, 30*time.Second)
+	c, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(c, bin, "--syntax-check", abs)
-	cmd.Dir = proj.Path
-	cmd.Env = baseEnv()
+	cmd, cerr := e.activeRunner(c).Command(c, "ansible-playbook", proj.Path, []string{"--syntax-check", abs}, nil)
+	if cerr != nil {
+		return &CheckResult{Kind: "syntax", Ran: false, Reason: cerr.Error()}, nil
+	}
 	out, err := cmd.CombinedOutput()
 	return &CheckResult{
 		Kind:   "syntax",
@@ -65,15 +61,12 @@ func (e *Engine) Lint(ctx context.Context, owner string, mode RuntimeMode, proje
 	if err != nil {
 		return nil, err
 	}
-	bin := e.rt.Bin(ctx, mode, "ansible-lint")
-	if bin == "" {
+	c, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	cmd, cerr := e.activeRunner(c).Command(c, "ansible-lint", proj.Path, []string{"-f", "json", abs}, nil)
+	if cerr != nil {
 		return &CheckResult{Kind: "lint", Ran: false, Reason: "ansible-lint is not installed (pip install ansible-lint)"}, nil
 	}
-	c, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(c, bin, "-f", "json", abs)
-	cmd.Dir = proj.Path
-	cmd.Env = baseEnv()
 	out, _ := cmd.Output() // non-zero exit == findings; parse anyway
 
 	res := &CheckResult{Kind: "lint", Ran: true}

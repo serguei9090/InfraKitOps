@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -24,9 +23,10 @@ type VaultResult struct {
 	Output  string `json:"output,omitempty"`
 }
 
-// writePwFile drops a secret into a 0600 temp file for --vault-password-file.
-func writePwFile(secret string) (string, func(), error) {
-	f, err := os.CreateTemp("", "infrakit-vault-pw-*")
+// writePwFile drops a secret into a 0600 temp file (in `dir`) for
+// --vault-password-file.
+func writePwFile(dir, secret string) (string, func(), error) {
+	f, err := os.CreateTemp(dir, "infrakit-vault-pw-*")
 	if err != nil {
 		return "", func() {}, err
 	}
@@ -55,15 +55,12 @@ func (e *Engine) Vault(ctx context.Context, owner string, mode RuntimeMode, spec
 	if _, err := os.Stat(abs); err != nil {
 		return nil, fmt.Errorf("file not found: %s", spec.Path)
 	}
-	bin := e.rt.Bin(ctx, mode, "ansible-vault")
-	if bin == "" {
-		return nil, fmt.Errorf("ansible-vault not available — check the Ansible runtime")
-	}
 	if strings.TrimSpace(password) == "" {
 		return nil, fmt.Errorf("a vault password is required")
 	}
+	runner := e.activeRunner(ctx)
 
-	pwFile, cleanup, err := writePwFile(password)
+	pwFile, cleanup, err := writePwFile(runner.TempDir(), password)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +74,7 @@ func (e *Engine) Vault(ctx context.Context, owner string, mode RuntimeMode, spec
 		if strings.TrimSpace(newPassword) == "" {
 			return nil, fmt.Errorf("a new password is required to rekey")
 		}
-		newFile, newCleanup, nerr := writePwFile(newPassword)
+		newFile, newCleanup, nerr := writePwFile(runner.TempDir(), newPassword)
 		if nerr != nil {
 			return nil, nerr
 		}
@@ -89,9 +86,10 @@ func (e *Engine) Vault(ctx context.Context, owner string, mode RuntimeMode, spec
 
 	c, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(c, bin, args...)
-	cmd.Dir = proj.Path
-	cmd.Env = baseEnv()
+	cmd, cerr := runner.Command(c, "ansible-vault", proj.Path, args, nil)
+	if cerr != nil {
+		return nil, cerr
+	}
 	out, runErr := cmd.CombinedOutput()
 
 	res := &VaultResult{Op: spec.Op, OK: runErr == nil}

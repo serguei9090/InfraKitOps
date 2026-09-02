@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -171,11 +170,7 @@ func (e *Engine) GalaxyInstall(ctx context.Context, owner string, mode RuntimeMo
 		send("error", map[string]string{"error": "project not found"})
 		return
 	}
-	bin := e.rt.Bin(ctx, mode, "ansible-galaxy")
-	if bin == "" {
-		send("error", map[string]string{"error": "ansible-galaxy not available — check the Ansible runtime"})
-		return
-	}
+	runner := e.activeRunner(ctx)
 
 	type step struct {
 		label string
@@ -203,9 +198,12 @@ func (e *Engine) GalaxyInstall(ctx context.Context, owner string, mode RuntimeMo
 	failed := false
 	for _, s := range steps {
 		send("stdout", map[string]string{"text": "$ ansible-galaxy " + strings.Join(s.args, " ")})
-		cmd := exec.CommandContext(ctx, bin, s.args...)
-		cmd.Dir = proj.Path
-		cmd.Env = baseEnv()
+		cmd, cerr := runner.Command(ctx, "ansible-galaxy", proj.Path, s.args, nil)
+		if cerr != nil {
+			send("error", map[string]string{"error": cerr.Error()})
+			send("run-end", map[string]string{"status": "failed"})
+			return
+		}
 		err := runStreaming(cmd,
 			func(l string) { send("stdout", map[string]string{"text": l}) },
 			func(l string) { send("stderr", map[string]string{"text": l}) },

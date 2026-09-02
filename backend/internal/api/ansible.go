@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -78,14 +79,21 @@ func (h *AnsibleHandlers) GetSettings(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 	s := h.Store.GetSettings()
+	caps := h.Runtime.Detect(ctx, h.mode())
 	WriteJSON(w, http.StatusOK, map[string]any{
-		"workspaceDir":     s["workspaceDir"],
-		"runtime":          nz(s["ansibleRuntime"], "auto"),
-		"defaultWorkspace": ansible.DefaultWorkspace(),
-		"capabilities":     h.Runtime.Detect(ctx, h.mode()),
+		"workspaceDir":           s["workspaceDir"],
+		"runtime":                nz(s["ansibleRuntime"], "auto"),
+		"defaultWorkspace":       ansible.DefaultWorkspace(),
+		"containerImage":         nz(s["containerImage"], "infrakit-ansible:local"),
+		"controlNodePipPackages": s["controlNodePipPackages"],
+		"controlNodeCollections": s["controlNodeCollections"],
+		"os":                     runtime.GOOS,
+		"install":                ansible.InstallLinks,
+		"runners":                h.Engine.Runners(ctx),
+		"capabilities":           caps,
 	})
 }
 
@@ -95,8 +103,11 @@ func (h *AnsibleHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var b struct {
-		WorkspaceDir *string `json:"workspaceDir"`
-		Runtime      *string `json:"runtime"`
+		WorkspaceDir           *string `json:"workspaceDir"`
+		Runtime                *string `json:"runtime"`
+		ContainerImage         *string `json:"containerImage"`
+		ControlNodePipPackages *string `json:"controlNodePipPackages"`
+		ControlNodeCollections *string `json:"controlNodeCollections"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 		apierr.Write(w, apierr.Validation(err.Error()))
@@ -114,17 +125,27 @@ func (h *AnsibleHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if b.Runtime != nil {
 		switch *b.Runtime {
-		case "auto", "system", "managed", "":
+		case "auto", "system", "managed", "container", "":
 			_ = h.Store.PutSetting("ansibleRuntime", *b.Runtime)
 		default:
-			apierr.Write(w, apierr.Validation(`runtime must be "auto", "system" or "managed"`))
+			apierr.Write(w, apierr.Validation(`runtime must be auto | system | managed | container`))
 			return
 		}
+	}
+	if b.ContainerImage != nil {
+		_ = h.Store.PutSetting("containerImage", strings.TrimSpace(*b.ContainerImage))
+	}
+	if b.ControlNodePipPackages != nil {
+		_ = h.Store.PutSetting("controlNodePipPackages", strings.TrimSpace(*b.ControlNodePipPackages))
+	}
+	if b.ControlNodeCollections != nil {
+		_ = h.Store.PutSetting("controlNodeCollections", strings.TrimSpace(*b.ControlNodeCollections))
 	}
 	h.GetSettings(w, r)
 }
 
-// RuntimeSetup: GET /ansible/runtime/setup/stream?version= (SSE) — admin.
+// RuntimeSetup: GET /ansible/runtime/setup/stream?mode= (SSE) — admin.
+// mode "managed" builds the uv venv; "container" builds/pulls the image.
 func (h *AnsibleHandlers) RuntimeSetup(w http.ResponseWriter, r *http.Request) {
 	if !h.ok() {
 		sse.RejectCoded(w, string(apierr.CodeInternal), "the Ansible module is not available", "")
@@ -134,16 +155,17 @@ func (h *AnsibleHandlers) RuntimeSetup(w http.ResponseWriter, r *http.Request) {
 		sse.RejectCoded(w, string(apierr.CodePermission), "admin only", "")
 		return
 	}
+	mode := nz(r.URL.Query().Get("mode"), "managed")
 	sw, err := sse.New(w)
 	if err != nil {
 		return
 	}
 	ch := make(chan sse.Message, 64)
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Minute)
 	defer cancel()
 	go func() {
 		defer close(ch)
-		err := h.Runtime.EnsureManaged(ctx, r.URL.Query().Get("version"), func(line string) {
+		err := h.Engine.SetupRuntime(ctx, mode, func(line string) {
 			select {
 			case ch <- sse.Message{Event: "stdout", Data: map[string]string{"text": line}}:
 			case <-ctx.Done():
@@ -160,6 +182,22 @@ func (h *AnsibleHandlers) RuntimeSetup(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	sw.Pump(ctx, ch)
+}
+
+// RuntimeTeardown: POST /ansible/runtime/teardown { mode } — admin.
+func (h *AnsibleHandlers) RuntimeTeardown(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) || !requireAdmin(w, r) {
+		return
+	}
+	var b struct {
+		Mode string `json:"mode"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	if err := h.Engine.TeardownRuntime(r.Context(), nz(b.Mode, "managed")); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"status": "removed"})
 }
 
 // --- projects -----------------------------------------------------
