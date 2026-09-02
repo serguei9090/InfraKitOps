@@ -437,6 +437,89 @@ func (h *AnsibleHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 	h.streamRun(w, r, spec, "local")
 }
 
+// AdhocStream: GET /ansible/adhoc/stream?projectId=&pattern=&module=&args=&inventory=&become=
+func (h *AnsibleHandlers) AdhocStream(w http.ResponseWriter, r *http.Request) {
+	if !h.ok() {
+		sse.RejectCoded(w, string(apierr.CodeInternal), "the Ansible module is not available", "")
+		return
+	}
+	q := r.URL.Query()
+	spec := ansible.AdhocSpec{
+		ProjectID: q.Get("projectId"),
+		Pattern:   q.Get("pattern"),
+		Module:    q.Get("module"),
+		Args:      q.Get("args"),
+		Inventory: q.Get("inventory"),
+		Become:    q.Get("become") == "1" || q.Get("become") == "true",
+		OneLine:   q.Get("oneLine") == "1",
+	}
+	if strings.TrimSpace(spec.ProjectID) == "" {
+		sse.RejectCoded(w, string(apierr.CodeValidation), "a projectId is required", "")
+		return
+	}
+	audit(r, "ansible_adhoc", nz(spec.Module, "command"), map[string]string{"pattern": spec.Pattern})
+
+	sw, err := sse.New(w)
+	if err != nil {
+		return
+	}
+	ch := make(chan sse.Message, 256)
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	go func() {
+		h.Engine.RunAdhoc(ctx, owner(r), h.mode(), spec, ch)
+		close(ch)
+	}()
+	sw.Pump(ctx, ch)
+}
+
+// Doc: GET /ansible/doc?module=
+func (h *AnsibleHandlers) Doc(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	doc, err := h.Engine.Doc(r.Context(), h.mode(), r.URL.Query().Get("module"))
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"doc": doc})
+}
+
+// SyntaxCheck: POST /ansible/projects/{id}/syntax-check { playbook }
+func (h *AnsibleHandlers) SyntaxCheck(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var b struct {
+		Playbook string `json:"playbook"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	res, err := h.Engine.SyntaxCheck(r.Context(), owner(r), h.mode(), chi.URLParam(r, "id"), b.Playbook)
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"result": res})
+}
+
+// Lint: POST /ansible/projects/{id}/lint { path }
+func (h *AnsibleHandlers) Lint(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var b struct {
+		Path string `json:"path"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	res, err := h.Engine.Lint(r.Context(), owner(r), h.mode(), chi.URLParam(r, "id"), b.Path)
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"result": res})
+}
+
 func (h *AnsibleHandlers) streamRun(w http.ResponseWriter, r *http.Request, spec ansible.RunSpec, triggeredBy string) {
 	sw, err := sse.New(w)
 	if err != nil {

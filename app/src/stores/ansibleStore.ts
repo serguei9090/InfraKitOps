@@ -23,7 +23,7 @@ import { reportError } from '@/stores/errorStore'
 
 const SRC = 'Ansible'
 
-export type Section = 'projects' | 'inventory' | 'jobs' | 'history'
+export type Section = 'projects' | 'inventory' | 'jobs' | 'adhoc' | 'editor' | 'history'
 
 function msg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
@@ -178,6 +178,7 @@ interface AnsibleStore {
   startRun: (spec: RunSpec) => void
   rerun: () => void
   startJobRun: (jobId: string, projectId: string) => void
+  startAdhoc: (spec: api.AdhocSpec) => void
   openReplay: (runId: number) => Promise<void>
   clearLive: () => void
 }
@@ -361,6 +362,13 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
     set({ lastSpec: null })
     streamRun(set, get, { projectId } as RunSpec, () =>
       api.openJobRunStream(jobId, streamHandlers(set, get, projectId)),
+    )
+  },
+
+  startAdhoc: (spec) => {
+    set({ lastSpec: null })
+    streamRun(set, get, { projectId: spec.projectId } as RunSpec, () =>
+      api.openAdhocStream(spec, streamHandlers(set, get, spec.projectId)),
     )
   },
 

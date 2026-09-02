@@ -141,11 +141,37 @@ func (e *Engine) Run(ctx context.Context, owner string, mode RuntimeMode, trigge
 		Owner: owner, ProjectID: proj.ID, JobID: spec.JobID, Playbook: spec.Playbook, Status: StatusRunning,
 		Argv: redArgv, TriggeredBy: nz(triggeredBy, "local"), StartedAt: time.Now().UnixMilli(),
 	}
+	return e.execRun(ctx, cmd, evPath, run, redArgv, nil, out)
+}
+
+// execRun records `run`, spawns `cmd`, tails the callback event file at
+// `evPath`, and streams everything to `out` as SSE. `preEvents` are synthetic
+// events (used by ad-hoc to give the tree a play + task node) forwarded before
+// the process starts. Returns the run id.
+func (e *Engine) execRun(
+	ctx context.Context, cmd *exec.Cmd, evPath string, run *Run, redArgv string,
+	preEvents []map[string]any, out chan<- sse.Message,
+) int64 {
+	send := func(ev string, data any) {
+		select {
+		case out <- sse.Message{Event: ev, Data: data}:
+		case <-ctx.Done():
+		}
+	}
+
 	runID, _ := e.store.InsertRun(run)
 	send("run-start", map[string]any{"runId": runID, "argv": redArgv})
 
-	// tail the event file concurrently and forward parsed events
 	var events strings.Builder
+	for _, ev := range preEvents {
+		if b, err := json.Marshal(ev); err == nil {
+			events.Write(b)
+			events.WriteByte('\n')
+		}
+		name, _ := ev["e"].(string)
+		send("ansible-"+strings.ReplaceAll(name, "_", "-"), ev)
+	}
+
 	var recap json.RawMessage
 	tailDone := make(chan struct{})
 	go func() {
@@ -163,7 +189,6 @@ func (e *Engine) Run(ctx context.Context, owner string, mode RuntimeMode, trigge
 		})
 	}()
 
-	// raw stdout/stderr for the Console toggle
 	runErr := runStreaming(cmd,
 		func(l string) { send("stdout", map[string]string{"text": l}) },
 		func(l string) { send("stderr", map[string]string{"text": l}) },

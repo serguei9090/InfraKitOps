@@ -268,8 +268,12 @@ func NewRouter(opts Options) http.Handler {
 				r.Get("/{id}/file", anh.ProjectFile)
 				r.Put("/{id}/file", anh.ProjectFile)
 				r.Get("/{id}/inventory", anh.Inventory)
+				r.Post("/{id}/syntax-check", anh.SyntaxCheck)
+				r.Post("/{id}/lint", anh.Lint)
 				r.Get("/{id}/run/stream", anh.RunStream)
 			})
+			r.Get("/adhoc/stream", anh.AdhocStream)
+			r.Get("/doc", anh.Doc)
 			r.Route("/jobs", func(r chi.Router) {
 				r.Get("/", anh.ListJobs)
 				r.Post("/", anh.PutJob)

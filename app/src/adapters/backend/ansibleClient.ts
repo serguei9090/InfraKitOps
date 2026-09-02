@@ -83,6 +83,59 @@ export function openJobRunStream(jobId: string, handlers: StreamHandlers): () =>
   return openStream(`/ansible/jobs/${jobId}/run/stream`, {}, handlers)
 }
 
+// --- ad-hoc, doc, checks --------------------------------------------
+
+export interface AdhocSpec {
+  projectId: string
+  pattern: string
+  module: string
+  args: string
+  inventory?: string
+  become?: boolean
+}
+
+export function openAdhocStream(spec: AdhocSpec, handlers: StreamHandlers): () => void {
+  const p: Record<string, string> = {
+    projectId: spec.projectId,
+    pattern: spec.pattern || 'all',
+    module: spec.module || 'command',
+    args: spec.args ?? '',
+  }
+  if (spec.inventory) p.inventory = spec.inventory
+  if (spec.become) p.become = '1'
+  return openStream('/ansible/adhoc/stream', p, handlers)
+}
+
+export interface ModuleDoc {
+  module: string
+  shortDescription: string
+  description: string[]
+  options: Record<
+    string,
+    { description: string[]; type?: string; required?: boolean; default?: unknown; choices?: unknown }
+  >
+  examples: string
+}
+export const moduleDoc = (module: string) =>
+  backendGet<{ doc: ModuleDoc }>(`/ansible/doc?module=${encodeURIComponent(module)}`).then((r) => r.doc)
+
+export interface CheckResult {
+  kind: 'syntax' | 'lint'
+  ok: boolean
+  output?: string
+  issues?: { rule: string; message: string; severity: string; line: number; path: string }[]
+  ran: boolean
+  reason?: string
+}
+export const syntaxCheck = (projectId: string, playbook: string) =>
+  backendRequest<{ result: CheckResult }>('POST', `/ansible/projects/${projectId}/syntax-check`, {
+    playbook,
+  }).then((r) => r.result)
+export const lint = (projectId: string, path: string) =>
+  backendRequest<{ result: CheckResult }>('POST', `/ansible/projects/${projectId}/lint`, { path }).then(
+    (r) => r.result,
+  )
+
 // --- runs -------------------------------------------------------
 
 export const listRuns = (projectId?: string, limit = 100) =>

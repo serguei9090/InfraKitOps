@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { FolderGit2, History, ListChecks, Network, Settings2 } from 'lucide-react'
+import { FileCode2, FolderGit2, History, ListChecks, Network, Settings2, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useBackendStore } from '@/stores/backendStore'
 import { useAnsibleStore, type Section } from '@/stores/ansibleStore'
@@ -7,6 +7,8 @@ import { BackendUnavailable } from '@/adapters/ui/network/BackendUnavailable'
 import { ProjectsView } from './ProjectsView'
 import { InventoryView } from './InventoryView'
 import { JobsView } from './JobsView'
+import { AdhocView } from './AdhocView'
+import { EditorView } from './EditorView'
 import { HistoryView } from './HistoryView'
 import { RuntimePanel } from './RuntimePanel'
 import { RunView } from './RunView'
@@ -15,6 +17,8 @@ const NAV: { id: Section; label: string; icon: typeof History }[] = [
   { id: 'projects', label: 'Projects', icon: FolderGit2 },
   { id: 'inventory', label: 'Inventory', icon: Network },
   { id: 'jobs', label: 'Jobs', icon: ListChecks },
+  { id: 'adhoc', label: 'Ad-hoc', icon: Zap },
+  { id: 'editor', label: 'Editor', icon: FileCode2 },
   { id: 'history', label: 'History', icon: History },
 ]
 
@@ -67,7 +71,7 @@ export function AnsibleConsoleScaffold() {
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <Header>
-        <nav className="flex items-center gap-0.5">
+        <nav className="flex items-center gap-0.5 overflow-x-auto">
           {NAV.map((n) => (
             <button
               key={n.id}
@@ -114,6 +118,10 @@ export function AnsibleConsoleScaffold() {
           <InventoryView />
         ) : section === 'jobs' ? (
           <JobsView />
+        ) : section === 'adhoc' ? (
+          <AdhocView />
+        ) : section === 'editor' ? (
+          <EditorView />
         ) : (
           <HistoryView />
         )}
