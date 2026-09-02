@@ -3,7 +3,11 @@ import { Search } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
+import { canSeeModule } from '@/core/auth/authModel'
 import { DEFAULT_SECTION, SETTINGS_SECTIONS } from './registry'
+
+/** Settings sections that belong to a rail module — hidden if the user can't see it. */
+const SECTION_MODULE: Record<string, string> = { ai: 'ai', runbooks: 'runbook', network: 'network' }
 
 /**
  * The Settings page — a plain shell screen (not a T-scaffold): left menu of
@@ -15,12 +19,20 @@ export function SettingsScaffold() {
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const authMode = useAuthStore((s) => s.mode)
-  const isAdmin = useAuthStore((s) => s.me?.role === 'admin')
+  const me = useAuthStore((s) => s.me)
+  const isAdmin = me?.role === 'admin'
 
   const sections = useMemo(
-    // an adminOnly section is hidden in single-user mode and for non-admins
-    () => SETTINGS_SECTIONS.filter((s) => !s.adminOnly || (authMode === 'on' && isAdmin)),
-    [authMode, isAdmin],
+    () =>
+      SETTINGS_SECTIONS.filter((s) => {
+        // adminOnly → hidden in single-user mode and for non-admins
+        if (s.adminOnly && !(authMode === 'on' && isAdmin)) return false
+        // a module's settings section is hidden if the user can't open the module
+        const mod = SECTION_MODULE[s.id]
+        if (mod && !canSeeModule(me, mod)) return false
+        return true
+      }),
+    [authMode, isAdmin, me],
   )
   const activeId = sections.some((s) => s.id === section) ? section! : DEFAULT_SECTION
   const active = sections.find((s) => s.id === activeId) ?? sections[0]

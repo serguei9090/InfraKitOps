@@ -23,6 +23,8 @@ import { cn } from '@/lib/utils'
 import { useThemeStore } from '@/stores/themeStore'
 import { useModuleVisibilityStore } from '@/stores/moduleVisibilityStore'
 import { useBackendStore } from '@/stores/backendStore'
+import { useAuthStore } from '@/stores/authStore'
+import { canSeeModule } from '@/core/auth/authModel'
 import { reportError } from '@/stores/errorStore'
 import { kModuleTaxonomy, type ModuleDef } from '@/adapters/ui/shell/moduleTaxonomy'
 import { SettingsGroup, SettingsRow } from '../SettingsScaffold'
@@ -135,11 +137,14 @@ function BackupControls() {
 }
 
 function ModuleOrderList() {
-  const order = useModuleVisibilityStore((s) => s.order)
+  const storeOrder = useModuleVisibilityStore((s) => s.order)
   const hiddenIds = useModuleVisibilityStore((s) => s.hiddenIds)
   const reorder = useModuleVisibilityStore((s) => s.reorder)
   const toggleHidden = useModuleVisibilityStore((s) => s.toggleHidden)
+  const me = useAuthStore((s) => s.me)
   const byId = new Map(kModuleTaxonomy.map((m) => [m.id, m]))
+  // multi-user: only list modules this account may actually open
+  const order = storeOrder.filter((id) => canSeeModule(me, id))
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -149,8 +154,9 @@ function ModuleOrderList() {
   function onDragEnd(e: DragEndEvent) {
     const { active, over } = e
     if (!over || active.id === over.id) return
-    const from = order.indexOf(String(active.id))
-    const to = order.indexOf(String(over.id))
+    // indices are against the full store order, not the filtered view
+    const from = storeOrder.indexOf(String(active.id))
+    const to = storeOrder.indexOf(String(over.id))
     if (from === -1 || to === -1) return
     reorder(from, to)
   }
