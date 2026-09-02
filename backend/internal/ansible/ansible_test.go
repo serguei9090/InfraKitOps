@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -144,6 +145,51 @@ func TestStoreJobs(t *testing.T) {
 	}
 	if err := s.DeleteJob("alice", j.ID); err != nil {
 		t.Errorf("owner DeleteJob: %v", err)
+	}
+}
+
+func TestGitAuthArgs(t *testing.T) {
+	if len(gitAuthArgs("git@github.com:me/repo.git", "tok")) != 0 {
+		t.Error("ssh URL should get no auth args")
+	}
+	if len(gitAuthArgs("https://github.com/me/repo.git", "")) != 0 {
+		t.Error("no token → no auth args")
+	}
+	a := gitAuthArgs("https://github.com/me/repo.git", "tok")
+	if len(a) != 2 || a[0] != "-c" || !strings.Contains(a[1], "Bearer tok") {
+		t.Errorf("https+token args = %v", a)
+	}
+}
+
+func TestPendingApprovalsAndProjectPublish(t *testing.T) {
+	s := openTestStore(t)
+	// a private project is hidden from other users until published
+	p, _ := s.PutProject("alice", Project{Name: "p", Path: "/tmp/p"})
+	if _, err := s.GetProject("bob", p.ID); err != ErrNotFound {
+		t.Fatal("private project leaked")
+	}
+	p.Published = true
+	if _, err := s.PutProject("alice", p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetProject("bob", p.ID); err != nil {
+		t.Errorf("published project should be visible: %v", err)
+	}
+
+	// a parked run shows up in pending approvals for everyone
+	id, _ := s.InsertRun(&Run{Owner: "alice", ProjectID: p.ID, Playbook: "x.yml", Status: StatusAwaitingApproval, Argv: "a", StartedAt: 1})
+	pend, err := s.ListPendingApprovals()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pend) != 1 || pend[0].ID != id {
+		t.Fatalf("ListPendingApprovals = %+v", pend)
+	}
+	if err := s.setRunStatus(id, StatusOK); err != nil {
+		t.Fatal(err)
+	}
+	if pend, _ := s.ListPendingApprovals(); len(pend) != 0 {
+		t.Error("run should no longer be pending after status change")
 	}
 }
 

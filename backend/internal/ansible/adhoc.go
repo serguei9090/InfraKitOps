@@ -85,9 +85,16 @@ func (e *Engine) RunAdhoc(ctx context.Context, owner string, mode RuntimeMode, s
 		Owner: owner, ProjectID: proj.ID, Playbook: "(ad-hoc) " + module, Status: StatusRunning,
 		Argv: redArgv, TriggeredBy: "adhoc", StartedAt: time.Now().UnixMilli(),
 	}
+	runID, _ := e.store.InsertRun(run)
+	send("run-start", map[string]any{"runId": runID, "argv": redArgv})
+
+	taskName := module
+	if spec.Args != "" {
+		taskName = module + " " + spec.Args
+	}
 	pre := []map[string]any{
 		{"e": "play_start", "play": "ad-hoc: " + pattern, "hosts": []string{}},
-		{"e": "task_start", "task": module + (map[bool]string{true: " " + spec.Args, false: ""}[spec.Args != ""]), "action": module, "uuid": "adhoc-0"},
+		{"e": "task_start", "task": taskName, "action": module, "uuid": "adhoc-0"},
 	}
-	return e.execRun(ctx, cmd, evPath, run, redArgv, pre, out)
+	return e.execRun(ctx, cmd, evPath, run, runID, pre, out)
 }

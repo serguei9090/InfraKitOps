@@ -29,12 +29,20 @@ export interface AnsibleSettings {
   capabilities: AnsibleCapabilities
 }
 
+export interface GitConfig {
+  url: string
+  ref?: string
+  secret?: string
+  lastSync?: number
+}
+
 export interface Project {
   id: string
   owner?: string
   name: string
   path: string
-  source: string // "local" | "git" (AN5)
+  source: string // "local" | "git"
+  git?: GitConfig
   published: boolean
   createdAt: number
 }
@@ -81,6 +89,7 @@ export interface Job {
   verbosity?: number
   forks?: number
   surveySchema?: string
+  requiresApproval?: boolean
   published: boolean
   createdAt: number
 }
@@ -107,7 +116,7 @@ export interface InventoryResult {
   source: string
 }
 
-export type RunStatus = 'running' | 'ok' | 'failed' | 'unreachable' | 'cancelled'
+export type RunStatus = 'running' | 'ok' | 'failed' | 'unreachable' | 'cancelled' | 'awaiting_approval'
 
 export interface Run {
   id: number

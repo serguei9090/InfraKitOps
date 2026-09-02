@@ -36,11 +36,36 @@ export function setupManagedRuntime(version: string | undefined, handlers: Strea
 export const listProjects = () =>
   backendGet<{ projects: Project[] | null }>('/ansible/projects').then((r) => arr(r.projects))
 
-export const createProject = (body: { name: string; mode: 'new' | 'existing'; path?: string }) =>
-  backendRequest<{ project: Project }>('POST', '/ansible/projects', body).then((r) => r.project)
+export const createProject = (body: {
+  name: string
+  mode: 'new' | 'existing' | 'git'
+  path?: string
+  gitUrl?: string
+  gitRef?: string
+  gitSecret?: string
+}) => backendRequest<{ project: Project }>('POST', '/ansible/projects', body).then((r) => r.project)
 
 export const deleteProject = (id: string) =>
   backendRequest<unknown>('DELETE', `/ansible/projects/${id}`)
+
+export const pullProject = (id: string) =>
+  backendRequest<{ output: string; project: Project }>('POST', `/ansible/projects/${id}/pull`)
+
+export const publishProject = (id: string, published: boolean) =>
+  backendRequest<{ project: Project }>('POST', `/ansible/projects/${id}/publish`, { published }).then(
+    (r) => r.project,
+  )
+
+export const publishJob = (id: string, published: boolean) =>
+  backendRequest<{ job: Job }>('POST', `/ansible/jobs/${id}/publish`, { published }).then((r) => r.job)
+
+// --- run approvals (U3) ---------------------------------------
+
+export const listPendingApprovals = () =>
+  backendGet<{ runs: Run[] | null }>('/ansible/runs/pending-approvals').then((r) => arr(r.runs))
+
+export const approveRun = (id: number, approved: boolean) =>
+  backendRequest<{ status: string; approved: boolean }>('POST', `/ansible/runs/${id}/approve`, { approved })
 
 export const projectTree = (id: string) =>
   backendGet<{ tree: ProjectTree }>(`/ansible/projects/${id}/tree`).then((r) => r.tree)

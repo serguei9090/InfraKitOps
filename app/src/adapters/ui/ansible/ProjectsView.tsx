@@ -1,10 +1,14 @@
 import { useMemo, useState } from 'react'
 import {
+  Eye,
+  EyeOff,
   FileCode2,
   FolderGit2,
   FolderPlus,
+  GitBranch,
   Play,
   Plus,
+  RefreshCw,
   Settings2,
   Trash2,
 } from 'lucide-react'
@@ -13,6 +17,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SecretPicker } from '@/adapters/ui/runbook/SecretPicker'
+import { useVaultStore } from '@/stores/vaultStore'
 import {
   Select,
   SelectContent,
@@ -80,6 +86,8 @@ function ProjectDetail({ onDelete }: { onDelete: () => void }) {
   const selectedId = useAnsibleStore((s) => s.selectedId)
   const tree = useAnsibleStore((s) => s.tree)
   const startRun = useAnsibleStore((s) => s.startRun)
+  const pull = useAnsibleStore((s) => s.pullProject)
+  const publish = useAnsibleStore((s) => s.publishProject)
   const p = projects.find((x) => x.id === selectedId)!
 
   const playbooks = tree?.playbooks ?? []
@@ -121,12 +129,41 @@ function ProjectDetail({ onDelete }: { onDelete: () => void }) {
     <div className="space-y-5 p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold">{p.name}</h2>
+          <h2 className="flex items-center gap-2 text-base font-semibold">
+            {p.name}
+            {p.source === 'git' && (
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                git
+              </span>
+            )}
+            {p.published && (
+              <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
+                published
+              </span>
+            )}
+          </h2>
           <p className="truncate font-mono text-xs text-muted-foreground">{p.path}</p>
+          {p.git && (
+            <p className="truncate font-mono text-[11px] text-muted-foreground">
+              {p.git.url}
+              {p.git.ref ? `@${p.git.ref}` : ''}
+            </p>
+          )}
         </div>
-        <Button variant="ghost" size="sm" onClick={onDelete}>
-          <Trash2 className="size-4" /> Remove
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          {p.source === 'git' && (
+            <Button variant="ghost" size="sm" onClick={() => void pull(p.id)}>
+              <RefreshCw className="size-4" /> Pull
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => void publish(p.id, !p.published)}>
+            {p.published ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            {p.published ? 'Unpublish' : 'Publish'}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onDelete}>
+            <Trash2 className="size-4" /> Remove
+          </Button>
+        </div>
       </div>
 
       {tree && (
@@ -323,21 +360,35 @@ function TreeList({
 function NewProjectDialog() {
   const add = useAnsibleStore((s) => s.addProject)
   const settings = useAnsibleStore((s) => s.settings)
+  const vaultUnlocked = useVaultStore((s) => s.status?.unlocked ?? false)
   const [open, setOpen] = useState(false)
-  const [mode, setMode] = useState<'new' | 'existing'>('new')
+  const [mode, setMode] = useState<'new' | 'existing' | 'git'>('new')
   const [name, setName] = useState('')
   const [path, setPath] = useState('')
+  const [gitUrl, setGitUrl] = useState('')
+  const [gitRef, setGitRef] = useState('')
+  const [gitSecret, setGitSecret] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setBusy(true)
-    const p = await add({ name: name.trim(), mode, path: path.trim() || undefined })
+    const p = await add({
+      name: name.trim(),
+      mode,
+      path: path.trim() || undefined,
+      gitUrl: gitUrl.trim() || undefined,
+      gitRef: gitRef.trim() || undefined,
+      gitSecret: gitSecret || undefined,
+    })
     setBusy(false)
     if (p) {
       setOpen(false)
       setName('')
       setPath('')
+      setGitUrl('')
+      setGitRef('')
+      setGitSecret('')
     }
   }
 
@@ -370,7 +421,15 @@ function NewProjectDialog() {
               size="sm"
               onClick={() => setMode('existing')}
             >
-              <FolderGit2 className="size-4" /> Existing folder
+              <FolderGit2 className="size-4" /> Existing
+            </Button>
+            <Button
+              type="button"
+              variant={mode === 'git' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setMode('git')}
+            >
+              <GitBranch className="size-4" /> Git
             </Button>
           </div>
 
@@ -379,12 +438,13 @@ function NewProjectDialog() {
             <Input id="ap-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
           </div>
 
-          {mode === 'new' ? (
+          {mode === 'new' && (
             <p className="text-xs text-muted-foreground">
               Scaffolds a fresh layout under{' '}
               <code className="text-xs">{settings?.workspaceDir || settings?.defaultWorkspace}</code>.
             </p>
-          ) : (
+          )}
+          {mode === 'existing' && (
             <div className="space-y-1">
               <Label htmlFor="ap-path">Absolute path</Label>
               <Input
@@ -396,13 +456,53 @@ function NewProjectDialog() {
               />
             </div>
           )}
+          {mode === 'git' && (
+            <>
+              <div className="space-y-1">
+                <Label htmlFor="ap-git">Repository URL</Label>
+                <Input
+                  id="ap-git"
+                  value={gitUrl}
+                  onChange={(e) => setGitUrl(e.target.value)}
+                  placeholder="https://github.com/org/ansible.git"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="ap-ref">Branch / tag (optional)</Label>
+                <Input id="ap-ref" value={gitRef} onChange={(e) => setGitRef(e.target.value)} placeholder="main" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Token (private https repos — an InfraKit Vault secret)</Label>
+                {vaultUnlocked ? (
+                  <SecretPicker value={gitSecret} onChange={setGitSecret} by="id" placeholder="none (public repo)" />
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Public repo, or unlock the Vault to pick a token.
+                  </p>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Clones into <code className="text-xs">{settings?.workspaceDir || settings?.defaultWorkspace}</code>.
+                SSH URLs use your agent.
+              </p>
+            </>
+          )}
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={busy || !name.trim() || (mode === 'existing' && !path.trim())}>
-              Add
+            <Button
+              type="submit"
+              disabled={
+                busy ||
+                !name.trim() ||
+                (mode === 'existing' && !path.trim()) ||
+                (mode === 'git' && !gitUrl.trim())
+              }
+            >
+              {busy && mode === 'git' ? 'Cloning…' : 'Add'}
             </Button>
           </div>
         </form>

@@ -9,15 +9,25 @@ var (
 	ErrNoWorkspace = errors.New("the ansible workspace folder is not set")
 )
 
-// Project is one ansible project directory (AN0: local only; git in AN5).
+// Project is one ansible project directory.
 type Project struct {
-	ID        string `json:"id"`
-	Owner     string `json:"owner,omitempty"`
-	Name      string `json:"name"`
-	Path      string `json:"path"`   // absolute
-	Source    string `json:"source"` // "local" | "git" (AN5)
-	Published bool   `json:"published"`
-	CreatedAt int64  `json:"createdAt"`
+	ID        string     `json:"id"`
+	Owner     string     `json:"owner,omitempty"`
+	Name      string     `json:"name"`
+	Path      string     `json:"path"`   // absolute
+	Source    string     `json:"source"` // "local" | "git"
+	Git       *GitConfig `json:"git,omitempty"`
+	Published bool       `json:"published"`
+	CreatedAt int64      `json:"createdAt"`
+}
+
+// GitConfig is set on a "git" project. Secret is an InfraKit Vault secret id
+// (an https token or an ssh key) — never the credential itself.
+type GitConfig struct {
+	URL      string `json:"url"`
+	Ref      string `json:"ref,omitempty"` // branch / tag / sha; "" = default branch
+	Secret   string `json:"secret,omitempty"`
+	LastSync int64  `json:"lastSync,omitempty"`
 }
 
 // ProjectTree is the live scan of a project's contents (not persisted).
@@ -33,19 +43,20 @@ type ProjectTree struct {
 // RunSpec is one playbook run request. AN0 is credential-free (ambient SSH /
 // ansible.cfg); AN1 adds vault + SSH secret refs.
 type RunSpec struct {
-	ProjectID string `json:"projectId"`
-	JobID     string `json:"jobId,omitempty"` // set when a saved Job launched this run
-	Playbook  string `json:"playbook"`        // relative to the project
-	Inventory string `json:"inventory,omitempty"`
-	Limit     string `json:"limit,omitempty"`
-	Tags      string `json:"tags,omitempty"`
-	SkipTags  string `json:"skipTags,omitempty"`
-	ExtraVars string `json:"extraVars,omitempty"` // YAML/JSON blob → -e @file
-	Check     bool   `json:"check,omitempty"`
-	Diff      bool   `json:"diff,omitempty"`
-	Become    bool   `json:"become,omitempty"`
-	Verbosity int    `json:"verbosity,omitempty"` // 0..4 → -v..-vvvv
-	Forks     int    `json:"forks,omitempty"`
+	ProjectID        string `json:"projectId"`
+	JobID            string `json:"jobId,omitempty"` // set when a saved Job launched this run
+	RequiresApproval bool   `json:"requiresApproval,omitempty"`
+	Playbook         string `json:"playbook"` // relative to the project
+	Inventory        string `json:"inventory,omitempty"`
+	Limit            string `json:"limit,omitempty"`
+	Tags             string `json:"tags,omitempty"`
+	SkipTags         string `json:"skipTags,omitempty"`
+	ExtraVars        string `json:"extraVars,omitempty"` // YAML/JSON blob → -e @file
+	Check            bool   `json:"check,omitempty"`
+	Diff             bool   `json:"diff,omitempty"`
+	Become           bool   `json:"become,omitempty"`
+	Verbosity        int    `json:"verbosity,omitempty"` // 0..4 → -v..-vvvv
+	Forks            int    `json:"forks,omitempty"`
 }
 
 // Job is a saved run configuration (the AWX "Job Template" / Semaphore "Task
@@ -70,8 +81,10 @@ type Job struct {
 	// SurveySchema is a FormFlow schema (JSON) shown before a run; its answers
 	// are merged into extra-vars. AN4c.
 	SurveySchema string `json:"surveySchema,omitempty"`
-	Published    bool   `json:"published"`
-	CreatedAt    int64  `json:"createdAt"`
+	// RequiresApproval gates a run behind a second operator's OK (AN5, U3).
+	RequiresApproval bool  `json:"requiresApproval,omitempty"`
+	Published        bool  `json:"published"`
+	CreatedAt        int64 `json:"createdAt"`
 }
 
 // Spec turns a Job into a RunSpec.
@@ -80,6 +93,7 @@ func (j Job) Spec() RunSpec {
 		ProjectID: j.ProjectID, JobID: j.ID, Playbook: j.Playbook, Inventory: j.Inventory,
 		Limit: j.Limit, Tags: j.Tags, SkipTags: j.SkipTags, ExtraVars: j.ExtraVars,
 		Check: j.Check, Diff: j.Diff, Become: j.Become, Verbosity: j.Verbosity, Forks: j.Forks,
+		RequiresApproval: j.RequiresApproval,
 	}
 }
 
@@ -117,9 +131,10 @@ type Schedule struct {
 }
 
 const (
-	StatusRunning     = "running"
-	StatusOK          = "ok"
-	StatusFailed      = "failed"
-	StatusUnreachable = "unreachable"
-	StatusCancelled   = "cancelled"
+	StatusRunning          = "running"
+	StatusOK               = "ok"
+	StatusFailed           = "failed"
+	StatusUnreachable      = "unreachable"
+	StatusCancelled        = "cancelled"
+	StatusAwaitingApproval = "awaiting_approval"
 )

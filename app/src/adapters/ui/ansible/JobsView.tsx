@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ClipboardList, ListChecks, Pencil, Play, Plus, Trash2 } from 'lucide-react'
+import { ClipboardList, Eye, EyeOff, ListChecks, Pencil, Play, Plus, ShieldQuestion, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -29,6 +29,7 @@ export function JobsView() {
   const tree = useAnsibleStore((s) => s.tree)
   const saveJob = useAnsibleStore((s) => s.saveJob)
   const removeJob = useAnsibleStore((s) => s.removeJob)
+  const publishJob = useAnsibleStore((s) => s.publishJob)
   const startJobRun = useAnsibleStore((s) => s.startJobRun)
   const [editing, setEditing] = useState<Partial<Job> | null>(null)
   const [survey, setSurvey] = useState<Job | null>(null)
@@ -70,7 +71,15 @@ export function JobsView() {
               >
                 <ListChecks className="size-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{j.name}</div>
+                  <div className="flex items-center gap-1.5 truncate text-sm font-medium">
+                    {j.name}
+                    {j.requiresApproval && <ShieldQuestion className="size-3.5 text-amber-500" />}
+                    {j.published && (
+                      <span className="rounded bg-emerald-500/15 px-1 text-[9px] text-emerald-600 dark:text-emerald-400">
+                        pub
+                      </span>
+                    )}
+                  </div>
                   <div className="truncate font-mono text-xs text-muted-foreground">
                     {j.playbook}
                     {j.tags ? ` · tags:${j.tags}` : ''}
@@ -80,6 +89,14 @@ export function JobsView() {
                 </div>
                 <Button size="sm" onClick={() => run(j)}>
                   {j.surveySchema?.trim() ? <ClipboardList className="size-4" /> : <Play className="size-4" />} Run
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => void publishJob(j.id, !j.published)}
+                  aria-label={j.published ? 'Unpublish' : 'Publish'}
+                >
+                  {j.published ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </Button>
                 <Button size="icon" variant="ghost" onClick={() => setEditing(j)} aria-label="Edit">
                   <Pencil className="size-4" />
@@ -330,6 +347,13 @@ function JobForm({
             --{k}
           </label>
         ))}
+        <label className="flex items-center gap-1.5 text-xs">
+          <Checkbox
+            checked={!!j.requiresApproval}
+            onCheckedChange={(c) => patch({ requiresApproval: c === true })}
+          />
+          requires approval
+        </label>
       </div>
 
       <div className="space-y-1">

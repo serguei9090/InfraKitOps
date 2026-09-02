@@ -188,9 +188,12 @@ func (h *AnsibleHandlers) CreateProject(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var b struct {
-		Name string `json:"name"`
-		Mode string `json:"mode"`
-		Path string `json:"path"`
+		Name      string `json:"name"`
+		Mode      string `json:"mode"` // "new" | "existing" | "git"
+		Path      string `json:"path"`
+		GitURL    string `json:"gitUrl"`
+		GitRef    string `json:"gitRef"`
+		GitSecret string `json:"gitSecret"` // InfraKit Vault secret id (https token)
 	}
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 		apierr.Write(w, apierr.Validation(err.Error()))
@@ -202,38 +205,190 @@ func (h *AnsibleHandlers) CreateProject(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var path string
+	project := ansible.Project{Name: b.Name, Source: "local"}
 	switch b.Mode {
 	case "existing":
-		path = filepath.Clean(strings.TrimSpace(b.Path))
-		if !filepath.IsAbs(path) {
+		project.Path = filepath.Clean(strings.TrimSpace(b.Path))
+		if !filepath.IsAbs(project.Path) {
 			apierr.Write(w, apierr.Validation("an absolute path is required"))
 			return
 		}
-		if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
+		if fi, err := os.Stat(project.Path); err != nil || !fi.IsDir() {
 			apierr.Write(w, apierr.Validation("that folder doesn't exist"))
 			return
 		}
-	default: // "new"
-		ws := h.workspace()
-		if ws == "" {
-			ws = ansible.DefaultWorkspace()
-			_ = h.Store.PutSetting("workspaceDir", ws)
+	case "git":
+		if strings.TrimSpace(b.GitURL) == "" {
+			apierr.Write(w, apierr.Validation("a git URL is required"))
+			return
 		}
-		path = filepath.Join(ws, slug(b.Name))
-		if err := ansible.Scaffold(path); err != nil {
+		ws := h.workspaceOrDefault()
+		project.Path = filepath.Join(ws, slug(b.Name))
+		token := ""
+		if b.GitSecret != "" && h.Vault != nil {
+			token, _ = h.vaultSecret(r, b.GitSecret)
+		}
+		if err := ansible.CloneRepo(r.Context(), project.Path, b.GitURL, b.GitRef, token); err != nil {
+			apierr.Write(w, apierr.Validation(err.Error()))
+			return
+		}
+		project.Source = "git"
+		project.Git = &ansible.GitConfig{URL: b.GitURL, Ref: b.GitRef, Secret: b.GitSecret, LastSync: nowMillis()}
+	default: // "new"
+		project.Path = filepath.Join(h.workspaceOrDefault(), slug(b.Name))
+		if err := ansible.Scaffold(project.Path); err != nil {
 			apierr.Write(w, apierr.Conflict(err.Error()))
 			return
 		}
 	}
 
-	saved, err := h.Store.PutProject(owner(r), ansible.Project{Name: b.Name, Path: path, Source: "local"})
+	saved, err := h.Store.PutProject(owner(r), project)
 	if err != nil {
 		ansibleErr(w, err)
 		return
 	}
-	audit(r, "ansible_project_create", saved.Name, map[string]string{"path": path})
+	audit(r, "ansible_project_create", saved.Name, map[string]string{"path": saved.Path})
 	WriteJSON(w, http.StatusOK, map[string]any{"project": saved})
+}
+
+func (h *AnsibleHandlers) workspaceOrDefault() string {
+	if ws := h.workspace(); ws != "" {
+		return ws
+	}
+	ws := ansible.DefaultWorkspace()
+	_ = h.Store.PutSetting("workspaceDir", ws)
+	return ws
+}
+
+func nowMillis() int64 { return time.Now().UnixMilli() }
+
+// vaultSecret resolves an InfraKit Vault secret by id then name for the request
+// user; "" on any failure (caller decides whether that is fatal).
+func (h *AnsibleHandlers) vaultSecret(r *http.Request, ref string) (string, error) {
+	if h.Vault == nil || ref == "" {
+		return "", nil
+	}
+	v := h.Vault.For(userctx.From(r.Context()))
+	if s, err := v.Resolve(ref); err == nil {
+		return s, nil
+	}
+	return v.ResolveByName(ref)
+}
+
+// PullProject: POST /ansible/projects/{id}/pull — git projects only.
+func (h *AnsibleHandlers) PullProject(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	p, err := h.Store.GetProject(owner(r), chi.URLParam(r, "id"))
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	if p.Source != "git" || p.Git == nil {
+		apierr.Write(w, apierr.Validation("not a git project"))
+		return
+	}
+	token := ""
+	if p.Git.Secret != "" {
+		token, _ = h.vaultSecret(r, p.Git.Secret)
+	}
+	out, err := ansible.PullRepo(r.Context(), p.Path, p.Git.URL, p.Git.Ref, token)
+	if err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	p.Git.LastSync = nowMillis()
+	if _, err := h.Store.PutProject(owner(r), *p); err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	audit(r, "ansible_project_pull", p.Name, nil)
+	WriteJSON(w, http.StatusOK, map[string]any{"output": out, "project": p})
+}
+
+// PublishProject: POST /ansible/projects/{id}/publish { published }
+func (h *AnsibleHandlers) PublishProject(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	p, err := h.Store.GetProject(owner(r), chi.URLParam(r, "id"))
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	var b struct {
+		Published bool `json:"published"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	p.Published = b.Published
+	saved, err := h.Store.PutProject(owner(r), *p)
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	audit(r, "ansible_project_publish", p.Name, map[string]any{"published": b.Published})
+	WriteJSON(w, http.StatusOK, map[string]any{"project": saved})
+}
+
+// PublishJob: POST /ansible/jobs/{id}/publish { published }
+func (h *AnsibleHandlers) PublishJob(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	job, err := h.Store.GetJob(owner(r), chi.URLParam(r, "id"))
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	var b struct {
+		Published bool `json:"published"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	job.Published = b.Published
+	saved, err := h.Store.PutJob(owner(r), *job)
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	audit(r, "ansible_job_publish", job.Name, map[string]any{"published": b.Published})
+	WriteJSON(w, http.StatusOK, map[string]any{"job": saved})
+}
+
+// PendingApprovals: GET /ansible/runs/pending-approvals
+func (h *AnsibleHandlers) PendingApprovals(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	runs, err := h.Store.ListPendingApprovals()
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"runs": runs})
+}
+
+// ApproveRun: POST /ansible/runs/{id}/approve { approved }
+func (h *AnsibleHandlers) ApproveRun(w http.ResponseWriter, r *http.Request) {
+	if !h.ok() {
+		apierr.Write(w, apierr.Unavailable("the Ansible module"))
+		return
+	}
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	var b struct {
+		Approved bool `json:"approved"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	err := h.Engine.ResumeRun(id, owner(r), b.Approved)
+	switch {
+	case err == nil:
+		audit(r, "ansible_run_approve", chi.URLParam(r, "id"), map[string]any{"approved": b.Approved})
+		WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "approved": b.Approved})
+	case errors.Is(err, ansible.ErrApproveSelf()):
+		apierr.Write(w, apierr.Permission("a run must be approved by a different operator"))
+	default:
+		apierr.Write(w, apierr.NotFound("no run is waiting for that approval"))
+	}
 }
 
 // DeleteProject: DELETE /ansible/projects/{id} — unregisters; never deletes files.
@@ -308,10 +463,17 @@ func (h *AnsibleHandlers) ProjectFile(w http.ResponseWriter, r *http.Request) {
 			apierr.Write(w, apierr.Validation(err.Error()))
 			return
 		}
-		if err := os.WriteFile(abs, []byte(b.Content), 0o644); err != nil {
+		mode := os.FileMode(0o644)
+		// a dynamic-inventory script (shebang, under inventory/) must stay executable
+		if strings.HasPrefix(filepath.ToSlash(filepath.Clean(rel)), "inventory/") &&
+			strings.HasPrefix(b.Content, "#!") {
+			mode = 0o755
+		}
+		if err := os.WriteFile(abs, []byte(b.Content), mode); err != nil {
 			apierr.Write(w, apierr.Validation(err.Error()))
 			return
 		}
+		_ = os.Chmod(abs, mode)
 		audit(r, "ansible_project_file_write", rel, map[string]string{"project": p.ID})
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "saved"})
 		return

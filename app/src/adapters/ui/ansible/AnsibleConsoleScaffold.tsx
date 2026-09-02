@@ -8,11 +8,13 @@ import {
   ListChecks,
   Network,
   Settings2,
+  ShieldQuestion,
   Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useBackendStore } from '@/stores/backendStore'
 import { useVaultStore } from '@/stores/vaultStore'
+import { useAuthStore } from '@/stores/authStore'
 import { useAnsibleStore, type Section } from '@/stores/ansibleStore'
 import { BackendUnavailable } from '@/adapters/ui/network/BackendUnavailable'
 import { ProjectsView } from './ProjectsView'
@@ -22,6 +24,7 @@ import { AdhocView } from './AdhocView'
 import { EditorView } from './EditorView'
 import { ContentView } from './ContentView'
 import { SchedulesView } from './SchedulesView'
+import { ApprovalsView } from './ApprovalsView'
 import { HistoryView } from './HistoryView'
 import { RuntimePanel } from './RuntimePanel'
 import { RunView } from './RunView'
@@ -56,6 +59,9 @@ export function AnsibleConsoleScaffold() {
   const showRuntime = useAnsibleStore((s) => s.showRuntime)
   const setShowRuntime = useAnsibleStore((s) => s.setShowRuntime)
   const refreshVault = useVaultStore((s) => s.refresh)
+  const refreshApprovals = useAnsibleStore((s) => s.refreshApprovals)
+  const pendingCount = useAnsibleStore((s) => s.pendingApprovals.length)
+  const multiUser = useAuthStore((s) => s.mode === 'on')
 
   useEffect(() => {
     if (status === 'unknown') void refreshBackend()
@@ -66,11 +72,16 @@ export function AnsibleConsoleScaffold() {
       void refreshSettings()
       void refreshProjects()
       void refreshVault()
+      if (multiUser) void refreshApprovals()
     }
-  }, [status, refreshSettings, refreshProjects, refreshVault])
+  }, [status, refreshSettings, refreshProjects, refreshVault, multiUser, refreshApprovals])
 
   const ready = settings?.capabilities.ready ?? false
+  // amber dot on the Runtime tab whenever the toolchain or folder isn't ready…
   const needsSetup = settings != null && (!ready || !settings.workspaceDir)
+  // …but only *force* the panel when there's genuinely no workspace folder —
+  // projects can be created / cloned without ansible present.
+  const mustSetup = settings != null && !settings.workspaceDir
 
   if (status === 'unavailable' || status === 'connecting' || status === 'unknown') {
     return (
@@ -83,7 +94,7 @@ export function AnsibleConsoleScaffold() {
     )
   }
 
-  const forceRuntime = showRuntime || (needsSetup && !showRuntime && section === 'projects')
+  const forceRuntime = showRuntime || (mustSetup && !showRuntime && section === 'projects')
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
@@ -108,6 +119,29 @@ export function AnsibleConsoleScaffold() {
               {n.label}
             </button>
           ))}
+          {multiUser && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowRuntime(false)
+                setSection('approvals')
+              }}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm',
+                section === 'approvals' && !forceRuntime
+                  ? 'bg-primary/15 text-primary font-medium'
+                  : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
+              )}
+            >
+              <ShieldQuestion className="size-4" />
+              Approvals
+              {pendingCount > 0 && (
+                <span className="rounded-full bg-amber-500 px-1.5 text-[10px] font-semibold text-white">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          )}
         </nav>
         <div className="flex-1" />
         <button
@@ -143,6 +177,8 @@ export function AnsibleConsoleScaffold() {
           <ContentView />
         ) : section === 'schedules' ? (
           <SchedulesView />
+        ) : section === 'approvals' ? (
+          <ApprovalsView />
         ) : (
           <HistoryView />
         )}

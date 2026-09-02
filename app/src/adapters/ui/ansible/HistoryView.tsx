@@ -10,6 +10,7 @@ const ICON: Record<RunStatus, { node: React.ReactNode }> = {
   failed: { node: <XCircle className="size-4 text-red-500" /> },
   unreachable: { node: <XCircle className="size-4 text-fuchsia-500" /> },
   cancelled: { node: <CircleSlash className="size-4 text-amber-500" /> },
+  awaiting_approval: { node: <CircleSlash className="size-4 text-amber-500" /> },
 }
 
 export function HistoryView() {

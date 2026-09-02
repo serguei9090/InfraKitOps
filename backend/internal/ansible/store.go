@@ -414,6 +414,33 @@ func (s *Store) FinishRun(id int64, status, events, recap string) error {
 	return err
 }
 
+// setRunStatus updates only the status (used for the approval-gate transitions,
+// which must not stamp finished_at).
+func (s *Store) setRunStatus(id int64, status string) error {
+	_, err := s.db.Exec(`UPDATE ansible_run SET status = ? WHERE id = ?`, status, id)
+	return err
+}
+
+// ListPendingApprovals returns runs parked awaiting approval. Any authenticated
+// operator may see (and approve) another's — that's the point of the gate.
+func (s *Store) ListPendingApprovals() ([]Run, error) {
+	rows, err := s.db.Query(`SELECT ` + runCols + ` FROM ansible_run WHERE status = 'awaiting_approval' ORDER BY started_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Run{}
+	for rows.Next() {
+		r, err := scanRun(rows)
+		if err != nil {
+			return nil, err
+		}
+		r.Events = ""
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 const runCols = `id, owner, project_id, job_id, playbook, status, argv, events, recap, triggered_by, started_at, finished_at`
 
 func scanRun(sc interface{ Scan(...any) error }) (Run, error) {

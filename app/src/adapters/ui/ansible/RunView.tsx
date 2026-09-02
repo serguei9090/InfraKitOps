@@ -1,5 +1,16 @@
 import { useState } from 'react'
-import { CheckCircle2, ChevronRight, CircleDot, Loader2, MinusCircle, PlugZap, RotateCw, X, XCircle } from 'lucide-react'
+import {
+  CheckCircle2,
+  ChevronRight,
+  CircleDot,
+  Loader2,
+  MinusCircle,
+  PlugZap,
+  RotateCw,
+  ShieldQuestion,
+  X,
+  XCircle,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAnsibleStore } from '@/stores/ansibleStore'
@@ -32,12 +43,15 @@ export function RunView() {
   const [showConsole, setShowConsole] = useState(false)
   if (!live) return null
 
-  const running = !replaying && (live.status === 'starting' || live.status === 'running')
+  const awaiting = live.status === 'awaiting_approval'
+  const running = !replaying && (live.status === 'starting' || live.status === 'running' || awaiting)
 
   return (
     <div className="absolute inset-x-0 bottom-8 top-14 z-20 flex flex-col border-t border-border bg-background shadow-2xl">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border/60 px-4">
-        {running ? (
+        {awaiting ? (
+          <ShieldQuestion className="size-4 text-amber-500" />
+        ) : running ? (
           <Loader2 className="size-4 animate-spin text-primary" />
         ) : live.status === 'ok' ? (
           <CheckCircle2 className="size-4 text-emerald-500" />
@@ -45,7 +59,15 @@ export function RunView() {
           <XCircle className="size-4 text-red-500" />
         )}
         <span className="text-sm font-medium">
-          {replaying ? 'Replay' : running ? 'Running' : live.status === 'ok' ? 'Completed' : live.status}
+          {awaiting
+            ? 'Waiting for a second operator to approve…'
+            : replaying
+              ? 'Replay'
+              : running
+                ? 'Running'
+                : live.status === 'ok'
+                  ? 'Completed'
+                  : live.status}
         </span>
         {live.runId != null && <span className="text-xs text-muted-foreground">run #{live.runId}</span>}
         {live.error && <span className="truncate text-xs text-red-500">{live.error}</span>}

@@ -32,6 +32,7 @@ export type Section =
   | 'editor'
   | 'content'
   | 'schedules'
+  | 'approvals'
   | 'history'
 
 function msg(e: unknown): string {
@@ -73,6 +74,13 @@ function foldEvent(live: LiveRun, name: string, d: Record<string, unknown>, cur:
   switch (name) {
     case 'run-start':
       next.runId = (d.runId as number) ?? null
+      next.status = 'running'
+      break
+    case 'approval-required':
+      next.runId = (d.runId as number) ?? next.runId
+      next.status = 'awaiting_approval'
+      break
+    case 'approval-granted':
       next.status = 'running'
       break
     case 'ansible-play-start':
@@ -162,6 +170,7 @@ interface AnsibleStore {
   tree: ProjectTree | null
   jobs: Job[]
   schedules: Schedule[]
+  pendingApprovals: Run[]
   inventory: InventoryResult | null
   inventoryError: string | null
   runs: Run[]
@@ -180,7 +189,14 @@ interface AnsibleStore {
   setupManaged: (version?: string) => void
   refreshProjects: () => Promise<void>
   select: (id: string | null) => Promise<void>
-  addProject: (body: { name: string; mode: 'new' | 'existing'; path?: string }) => Promise<Project | null>
+  addProject: (body: {
+    name: string
+    mode: 'new' | 'existing' | 'git'
+    path?: string
+    gitUrl?: string
+    gitRef?: string
+    gitSecret?: string
+  }) => Promise<Project | null>
   removeProject: (id: string) => Promise<void>
   loadInventory: (src?: string) => Promise<void>
   refreshJobs: () => Promise<void>
@@ -189,6 +205,11 @@ interface AnsibleStore {
   refreshSchedules: () => Promise<void>
   saveSchedule: (s: Partial<Schedule>) => Promise<Schedule | null>
   removeSchedule: (id: string) => Promise<void>
+  refreshApprovals: () => Promise<void>
+  approveRun: (id: number, approved: boolean) => Promise<void>
+  publishProject: (id: string, published: boolean) => Promise<void>
+  publishJob: (id: string, published: boolean) => Promise<void>
+  pullProject: (id: string) => Promise<void>
   refreshRuns: () => Promise<void>
   startRun: (spec: RunSpec) => void
   rerun: () => void
@@ -210,6 +231,7 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
   tree: null,
   jobs: [],
   schedules: [],
+  pendingApprovals: [],
   inventory: null,
   inventoryError: null,
   runs: [],
@@ -229,6 +251,7 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
       void get().refreshJobs()
       void get().refreshSchedules()
     }
+    if (section === 'approvals') void get().refreshApprovals()
     if (section === 'history') void get().refreshRuns()
   },
   setShowRuntime: (showRuntime) => set({ showRuntime }),
@@ -386,6 +409,50 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
     try {
       await api.deleteSchedule(id)
       await get().refreshSchedules()
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
+  refreshApprovals: async () => {
+    try {
+      set({ pendingApprovals: await api.listPendingApprovals() })
+    } catch {
+      /* single-user or no store — ignore */
+    }
+  },
+
+  approveRun: async (id, approved) => {
+    try {
+      await api.approveRun(id, approved)
+      await get().refreshApprovals()
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
+  publishProject: async (id, published) => {
+    try {
+      await api.publishProject(id, published)
+      await get().refreshProjects()
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
+  publishJob: async (id, published) => {
+    try {
+      await api.publishJob(id, published)
+      await get().refreshJobs()
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
+  pullProject: async (id) => {
+    try {
+      await api.pullProject(id)
+      await get().select(id)
     } catch (e) {
       reportError(e, SRC)
     }
