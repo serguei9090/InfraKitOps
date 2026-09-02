@@ -205,9 +205,10 @@ Each is a green checkpoint; commit per checkpoint bullet.
 | **AN3** | **Content** — `requirements.yml` editor, Galaxy search, install/list roles + collections (project-local) | Dependency management. |
 | **AN4** | **ansible-vault** helpers · **Surveys** (FormFlow → `-e @vars.json`) · **Schedules** (cron a Job via `orchestrator/scheduler`) · AI tasks (`ansible.gen-playbook`, `ansible.explain-task`) in the Editor | Parameterised + scheduled + AI. |
 | **AN5** | **git-repo Projects** (clone/pull/ref, creds via Vault) · **dynamic inventory** (script/plugin) · multi-user: publish + approval gate + per-user vault passwords · dynamic-inventory test | Team-ready. |
-| **AN6** *(deferred)* | Execution Environments (Podman) · Workflows (chain Jobs) · fact-cache browser | AWX-parity extras. |
+| **AN6** *(planned — own doc)* | Pluggable execution backends — a `Runner` interface with `Local` / `Container` (docker·podman) / `WSL` / `SSH-remote` implementations, chosen at first-open + in Settings. Makes the module usable from a **Windows** host. + fact-cache browser. Workflows **killed**. Full design + AN6a–AN6f order: [`ANSIBLE_RUNTIME_PLAN.md`](ANSIBLE_RUNTIME_PLAN.md). | Run playbooks from Windows. |
 
 **AN0–AN1 = a usable module.** AN2–AN4 make it comfortable. AN5 = multi-user.
+**AN6 = runs anywhere** (Windows via Docker/WSL, or a remote Linux control node).
 
 ---
 
@@ -221,8 +222,10 @@ Each is a green checkpoint; commit per checkpoint bullet.
   `@codemirror/lang-yaml`, `@codemirror/commands`) — small, tree-shakeable,
   the one genuine add. Used for the playbook + inventory + `requirements.yml`
   editors; Prompt Library / Runbooks can adopt it later.
-- **Execution Environments (AN6):** would need Podman/Docker on PATH — never
-  bundled, detected.
+- **AN6 execution backends:** `docker` / `podman` / `wsl.exe` / `ssh` invoked
+  like `git` — none bundled, all detected with an install link. Optional pinned
+  WSL rootfs is a fetched+SHA-verified data file. See
+  [`ANSIBLE_RUNTIME_PLAN.md`](ANSIBLE_RUNTIME_PLAN.md).
 
 Related: [[runbook-module-plan]] (infra reuse — vault, SSH nodes, SSE,
 scheduler, history, approval gate), [[user-management-plan]] (owner scoping,
