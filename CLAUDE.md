@@ -387,6 +387,48 @@ phases: [`SETTINGS_MODULE_PLAN.md`](SETTINGS_MODULE_PLAN.md).
   (theme, module order, network blob, endpoint override) → client
   `IStoragePort` / `localStorage`.
 
+### Ansible Manager module (started 2026-09-02, AN0 done)
+
+**Ansible** (`moduleTaxonomy.ts` id `ansible`, route `/tools/ansible`) — a
+**backend-mandatory** dedicated module (its own T7 console, NOT a Runbooks
+section) for running Ansible playbooks with a live play→task→host tree.
+Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
+(AN0–AN5, +AN6 deferred). Proposal:
+[`ANSIBLE_MODULE_PROPOSAL.md`](ANSIBLE_MODULE_PROPOSAL.md).
+
+- **Backend** `internal/ansible/` + new `ansible.db` (sibling of
+  `orchestrator.db`, `--ansible-db` flag). **No new Go deps** — shells out
+  to the user's `ansible*` on PATH (Tier 1) or an InfraKit-managed `uv`
+  venv with `ansible-core` (Tier 2); `RuntimeMode` auto/system/managed,
+  `EnsureManaged` streams `uv venv` + `uv pip install` over SSE.
+- **Streaming event model**: a shipped Python callback plugin
+  (`callback/infrakit_events.py`, `CALLBACK_TYPE=notification`,
+  `NEEDS_ENABLED`) writes NDJSON to `$INFRAKIT_EVENT_FILE`; `embed.go`
+  materializes it, `run.go`'s `Engine` tails the file and folds events
+  into SSE (`run-start` / `ansible-*` / `stdout` / `stderr` / `run-end`).
+  It is a data file, not a Go dependency; `ANSIBLE_CALLBACK_PLUGINS`
+  points only at its dir.
+- **Projects** = local folders. `Scaffold` writes a conventional layout;
+  `ScanTree` finds playbooks (by YAML shape) / roles / collections /
+  inventories. Owner-scoped + `ClaimOrphans` (U2). Playbook paths jailed
+  with `safeJoin` (`filepath.Clean` + prefix check). Extra-vars → temp
+  `-e @file`.
+- **Endpoints**: `/ansible/settings` (+admin PUT), `/ansible/runtime/setup/stream`
+  (SSE), `/ansible/projects[/{id}]` CRUD + `/tree`, `/ansible/projects/{id}/run/stream`
+  (SSE), `/ansible/runs[/{id}]`. `capabilities.ansible`; `moduleOf` → `"ansible"`.
+- **Frontend**: `src/core/ansible/**` (framework-free), `ansibleClient.ts`,
+  `ansibleStore.ts` (thin cache + live-run tree fold). `adapters/ui/ansible/`
+  — T7 `AnsibleConsoleScaffold` (own top nav + runtime strip),
+  `RuntimePanel`, `ProjectsView` (list + New/Add-existing dialog + file
+  tree + run form), `RunView` (bottom-sheet play→task→host tree, per-host
+  OK/CHANGED/FAILED/SKIPPED/UNREACHABLE badges + console toggle + recap),
+  `HistoryView`. Single-tool shell module (`hideToolPane`).
+- **AN1–AN5 not started.** AN1 = Inventory + Jobs + full History; AN2 =
+  Ad-hoc + CodeMirror editor (first new FE dep); AN3 = Galaxy (roles/
+  collections install); AN4 = ansible-vault↔InfraKit Vault + FormFlow
+  surveys + schedules + AI; AN5 = git projects + dynamic inventory +
+  multi-user. AN6 deferred = Execution Environments, Workflows.
+
 ### Shared error handling (started 2026-08-31, E0–E2 done)
 
 One classify-and-present system for backend/transport failures across every
