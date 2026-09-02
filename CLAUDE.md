@@ -484,13 +484,20 @@ Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
   guard); `Setup` builds `infrakit-ansible:local` from a generated Dockerfile
   (ansible-core + `controlNodePipPackages`/`Collections` from settings) or pulls
   an override. `/ansible/settings` gains `os`/`install`/`runners`/container
-  fields; `/runtime/setup/stream?mode=` + `/runtime/teardown`. RuntimePanel =
-  4-mode chooser + container setup block + install links. **Verified on Windows
-  + Docker Desktop: build image → run playbook in container → full
-  play/task/host tree.** — **AN6c** (WSL: official `wsl -l -o` list *or* custom
-  `--import` rootfs) → **AN6d** (SshRunner — remote Linux control node) →
-  **AN6e** (unified pip/collections deps) → **AN6f** (fact-cache browser) still
-  to come. Workflows **killed**. No new deps.
+  fields; `/runtime/setup/stream?mode=` + `/runtime/teardown`. **Verified on
+  Windows + Docker Desktop.** — **AN6c done** (`d1dbafd`): `runner_wsl.go` —
+  run ansible in a WSL2 distro. `wslText` decodes `wsl.exe`'s UTF-16LE;
+  `winToWSL` (`C:\X → /mnt/c/X`) rewrites the project dir + argv/env paths;
+  `--cd` + `ANSIBLE_CONFIG` past the world-writable guard. `Setup` provisions a
+  dedicated `InfraKit-Ansible` distro (`official:<name>` via `wsl --install`, or
+  `wsl --import` a local `.tar` / a downloaded Canonical Ubuntu WSL rootfs —
+  `download.go`, pinned in `vendor-tools/TOOLS.md`) then streamed `apt`+`pip3`
+  install; `Teardown` = `wsl --unregister` (refuses non-dedicated distros).
+  `wslDistro`/`wslSource` settings, `RuntimePanel` `wsl` card + `WslSetup`
+  block. **Verified: point at the user's Ubuntu distro → run playbook →
+  full play/task/host tree.** — **AN6d** (SshRunner — remote Linux control
+  node) → **AN6e** (unified pip/collections deps) → **AN6f** (fact-cache
+  browser) still to come. Workflows **killed**. No new deps.
 
 ### Shared error handling (started 2026-08-31, E0–E2 done)
 
