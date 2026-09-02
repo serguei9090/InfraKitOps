@@ -263,6 +263,149 @@ func (h *AnsibleHandlers) ProjectTree(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{"tree": tree})
 }
 
+// --- project files -----------------------------------------------
+
+const maxProjectFile = 1 << 20 // 1 MiB — inventory / playbook / ansible.cfg
+
+// ProjectFile: GET|PUT /ansible/projects/{id}/file?path=<rel> — path-jailed to
+// the project directory. Text files only.
+func (h *AnsibleHandlers) ProjectFile(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	p, err := h.Store.GetProject(owner(r), chi.URLParam(r, "id"))
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	rel := r.URL.Query().Get("path")
+	if strings.TrimSpace(rel) == "" {
+		apierr.Write(w, apierr.Validation("a path is required"))
+		return
+	}
+	abs, err := ansible.SafeJoin(p.Path, rel)
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+
+	if r.Method == http.MethodPut {
+		var b struct {
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			apierr.Write(w, apierr.Validation(err.Error()))
+			return
+		}
+		if len(b.Content) > maxProjectFile {
+			apierr.Write(w, apierr.Validation("file too large"))
+			return
+		}
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			apierr.Write(w, apierr.Validation(err.Error()))
+			return
+		}
+		if err := os.WriteFile(abs, []byte(b.Content), 0o644); err != nil {
+			apierr.Write(w, apierr.Validation(err.Error()))
+			return
+		}
+		audit(r, "ansible_project_file_write", rel, map[string]string{"project": p.ID})
+		WriteJSON(w, http.StatusOK, map[string]string{"status": "saved"})
+		return
+	}
+
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		apierr.Write(w, apierr.NotFound("file not found"))
+		return
+	}
+	if len(data) > maxProjectFile {
+		apierr.Write(w, apierr.Validation("file too large to edit"))
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"path": filepath.ToSlash(rel), "content": string(data)})
+}
+
+// Inventory: GET /ansible/projects/{id}/inventory?src=<rel-or-hostlist>
+func (h *AnsibleHandlers) Inventory(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	res, err := h.Engine.Inventory(r.Context(), owner(r), h.mode(), chi.URLParam(r, "id"), r.URL.Query().Get("src"))
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"inventory": res})
+}
+
+// --- jobs -------------------------------------------------------
+
+// ListJobs: GET /ansible/jobs?projectId=
+func (h *AnsibleHandlers) ListJobs(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	jobs, err := h.Store.ListJobs(owner(r), r.URL.Query().Get("projectId"))
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"jobs": jobs})
+}
+
+// PutJob: POST /ansible/jobs  ·  PUT /ansible/jobs/{id}
+func (h *AnsibleHandlers) PutJob(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var job ansible.Job
+	if err := json.NewDecoder(r.Body).Decode(&job); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	if id := chi.URLParam(r, "id"); id != "" {
+		job.ID = id
+	}
+	if strings.TrimSpace(job.Name) == "" || strings.TrimSpace(job.ProjectID) == "" || strings.TrimSpace(job.Playbook) == "" {
+		apierr.Write(w, apierr.Validation("name, projectId and playbook are required"))
+		return
+	}
+	saved, err := h.Store.PutJob(owner(r), job)
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"job": saved})
+}
+
+// DeleteJob: DELETE /ansible/jobs/{id}
+func (h *AnsibleHandlers) DeleteJob(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	if err := h.Store.DeleteJob(owner(r), chi.URLParam(r, "id")); err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// JobRunStream: GET /ansible/jobs/{id}/run/stream
+func (h *AnsibleHandlers) JobRunStream(w http.ResponseWriter, r *http.Request) {
+	if !h.ok() {
+		sse.RejectCoded(w, string(apierr.CodeInternal), "the Ansible module is not available", "")
+		return
+	}
+	job, err := h.Store.GetJob(owner(r), chi.URLParam(r, "id"))
+	if err != nil {
+		sse.RejectCoded(w, string(apierr.CodeNotFound), "job not found", "")
+		return
+	}
+	audit(r, "ansible_job_run", job.Name, map[string]string{"job": job.ID})
+	h.streamRun(w, r, job.Spec(), "job")
+}
+
 // --- run --------------------------------------------------------
 
 // RunStream: GET /ansible/projects/{id}/run/stream?playbook=&inventory=&limit=&tags=&skipTags=&check=&diff=&become=&verbosity=&extraVars=
@@ -291,7 +434,10 @@ func (h *AnsibleHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	audit(r, "ansible_run", spec.Playbook, nil)
+	h.streamRun(w, r, spec, "local")
+}
 
+func (h *AnsibleHandlers) streamRun(w http.ResponseWriter, r *http.Request, spec ansible.RunSpec, triggeredBy string) {
 	sw, err := sse.New(w)
 	if err != nil {
 		return
@@ -300,7 +446,7 @@ func (h *AnsibleHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	go func() {
-		h.Engine.Run(ctx, owner(r), h.mode(), "local", spec, ch)
+		h.Engine.Run(ctx, owner(r), h.mode(), triggeredBy, spec, ch)
 		close(ch)
 	}()
 	sw.Pump(ctx, ch)

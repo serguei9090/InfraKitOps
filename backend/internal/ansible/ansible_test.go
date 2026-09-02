@@ -117,6 +117,36 @@ func TestStoreClaimOrphans(t *testing.T) {
 	}
 }
 
+func TestStoreJobs(t *testing.T) {
+	s := openTestStore(t)
+	j, err := s.PutJob("alice", Job{ProjectID: "p1", Name: "deploy", Playbook: "site.yml", Tags: "web"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j.ID == "" {
+		t.Fatal("PutJob should assign an id")
+	}
+	// round-trips through Spec()
+	spec := j.Spec()
+	if spec.Playbook != "site.yml" || spec.Tags != "web" || spec.JobID != j.ID {
+		t.Errorf("Spec() = %+v", spec)
+	}
+	// cross-user isolation
+	if _, err := s.GetJob("bob", j.ID); err != ErrNotFound {
+		t.Errorf("cross-user GetJob = %v", err)
+	}
+	list, _ := s.ListJobs("alice", "p1")
+	if len(list) != 1 {
+		t.Fatalf("ListJobs = %d", len(list))
+	}
+	if err := s.DeleteJob("bob", j.ID); err != ErrNotFound {
+		t.Errorf("cross-user DeleteJob = %v", err)
+	}
+	if err := s.DeleteJob("alice", j.ID); err != nil {
+		t.Errorf("owner DeleteJob: %v", err)
+	}
+}
+
 func TestStoreRuns(t *testing.T) {
 	s := openTestStore(t)
 	id, err := s.InsertRun(&Run{Owner: "alice", ProjectID: "p1", Playbook: "site.yml", Status: StatusRunning, Argv: "ansible-playbook site.yml", StartedAt: 1})

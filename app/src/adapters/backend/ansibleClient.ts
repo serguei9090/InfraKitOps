@@ -8,6 +8,8 @@ import { backendGet, backendRequest } from './backendClient'
 import { openStream, type StreamHandlers } from './sseClient'
 import type {
   AnsibleSettings,
+  InventoryResult,
+  Job,
   Project,
   ProjectTree,
   Run,
@@ -41,6 +43,45 @@ export const deleteProject = (id: string) =>
 
 export const projectTree = (id: string) =>
   backendGet<{ tree: ProjectTree }>(`/ansible/projects/${id}/tree`).then((r) => r.tree)
+
+// --- project files + inventory -----------------------------------
+
+export const readProjectFile = (id: string, path: string) =>
+  backendGet<{ path: string; content: string }>(
+    `/ansible/projects/${id}/file?path=${encodeURIComponent(path)}`,
+  )
+
+export const writeProjectFile = (id: string, path: string, content: string) =>
+  backendRequest<{ status: string }>(
+    'PUT',
+    `/ansible/projects/${id}/file?path=${encodeURIComponent(path)}`,
+    { content },
+  )
+
+export const readInventory = (id: string, src?: string) =>
+  backendGet<{ inventory: InventoryResult }>(
+    `/ansible/projects/${id}/inventory${src ? `?src=${encodeURIComponent(src)}` : ''}`,
+  ).then((r) => r.inventory)
+
+// --- jobs -------------------------------------------------------
+
+export const listJobs = (projectId?: string) =>
+  backendGet<{ jobs: Job[] | null }>(
+    `/ansible/jobs${projectId ? `?projectId=${projectId}` : ''}`,
+  ).then((r) => arr(r.jobs))
+
+export const putJob = (job: Partial<Job>) =>
+  backendRequest<{ job: Job }>(
+    job.id ? 'PUT' : 'POST',
+    job.id ? `/ansible/jobs/${job.id}` : '/ansible/jobs',
+    job,
+  ).then((r) => r.job)
+
+export const deleteJob = (id: string) => backendRequest<unknown>('DELETE', `/ansible/jobs/${id}`)
+
+export function openJobRunStream(jobId: string, handlers: StreamHandlers): () => void {
+  return openStream(`/ansible/jobs/${jobId}/run/stream`, {}, handlers)
+}
 
 // --- runs -------------------------------------------------------
 

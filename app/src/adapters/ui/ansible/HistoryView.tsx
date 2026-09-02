@@ -16,6 +16,7 @@ export function HistoryView() {
   const runs = useAnsibleStore((s) => s.runs)
   const selectedId = useAnsibleStore((s) => s.selectedId)
   const refreshRuns = useAnsibleStore((s) => s.refreshRuns)
+  const openReplay = useAnsibleStore((s) => s.openReplay)
 
   useEffect(() => {
     void refreshRuns()
@@ -36,16 +37,30 @@ export function HistoryView() {
       ) : (
         <ul className="divide-y divide-border/50 rounded-lg border border-border/60">
           {runs.map((r) => (
-            <li key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-              {ICON[r.status]?.node}
-              <span className="font-mono text-xs">#{r.id}</span>
-              <span className="min-w-0 flex-1 truncate font-medium">{r.playbook}</span>
-              <span className={cn('text-xs', r.status === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>
-                {r.status}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {new Date(r.startedAt).toLocaleString()}
-              </span>
+            <li key={r.id}>
+              <button
+                type="button"
+                onClick={() => void openReplay(r.id)}
+                className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-accent/40"
+              >
+                {ICON[r.status]?.node}
+                <span className="font-mono text-xs">#{r.id}</span>
+                <span className="min-w-0 flex-1 truncate font-medium">{r.playbook}</span>
+                {r.jobId && (
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">job</span>
+                )}
+                <span
+                  className={cn(
+                    'text-xs',
+                    r.status === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
+                  )}
+                >
+                  {r.status}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {new Date(r.startedAt).toLocaleString()}
+                </span>
+              </button>
             </li>
           ))}
         </ul>

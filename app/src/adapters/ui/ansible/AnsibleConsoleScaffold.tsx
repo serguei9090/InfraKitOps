@@ -1,16 +1,20 @@
 import { useEffect } from 'react'
-import { FolderGit2, History, Settings2 } from 'lucide-react'
+import { FolderGit2, History, ListChecks, Network, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useBackendStore } from '@/stores/backendStore'
 import { useAnsibleStore, type Section } from '@/stores/ansibleStore'
 import { BackendUnavailable } from '@/adapters/ui/network/BackendUnavailable'
 import { ProjectsView } from './ProjectsView'
+import { InventoryView } from './InventoryView'
+import { JobsView } from './JobsView'
 import { HistoryView } from './HistoryView'
 import { RuntimePanel } from './RuntimePanel'
 import { RunView } from './RunView'
 
 const NAV: { id: Section; label: string; icon: typeof History }[] = [
   { id: 'projects', label: 'Projects', icon: FolderGit2 },
+  { id: 'inventory', label: 'Inventory', icon: Network },
+  { id: 'jobs', label: 'Jobs', icon: ListChecks },
   { id: 'history', label: 'History', icon: History },
 ]
 
@@ -106,6 +110,10 @@ export function AnsibleConsoleScaffold() {
           <RuntimePanel />
         ) : section === 'projects' ? (
           <ProjectsView />
+        ) : section === 'inventory' ? (
+          <InventoryView />
+        ) : section === 'jobs' ? (
+          <JobsView />
         ) : (
           <HistoryView />
         )}

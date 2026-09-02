@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS ansible_run (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   owner        TEXT NOT NULL DEFAULT '',
   project_id   TEXT NOT NULL,
+  job_id       TEXT NOT NULL DEFAULT '',
   playbook     TEXT NOT NULL,
   status       TEXT NOT NULL,
   argv         TEXT NOT NULL,
@@ -34,6 +36,14 @@ CREATE TABLE IF NOT EXISTS ansible_run (
   finished_at  INTEGER
 );
 CREATE INDEX IF NOT EXISTS ix_ansible_run_time ON ansible_run(started_at DESC);
+CREATE TABLE IF NOT EXISTS ansible_job (
+  id          TEXT PRIMARY KEY,
+  owner       TEXT NOT NULL DEFAULT '',
+  project_id  TEXT NOT NULL,
+  published   INTEGER NOT NULL DEFAULT 0,
+  job_json    TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS ansible_settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -53,6 +63,13 @@ func Open(dsn string) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply ansible schema: %w", err)
+	}
+	// AN1: add ansible_run.job_id to a DB created by AN0. Ignore "duplicate
+	// column" on an already-migrated DB.
+	if _, err := db.Exec(`ALTER TABLE ansible_run ADD COLUMN job_id TEXT NOT NULL DEFAULT ''`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		_ = db.Close()
+		return nil, fmt.Errorf("migrate ansible_run: %w", err)
 	}
 	return &Store{db: db}, nil
 }
@@ -77,7 +94,7 @@ func (s *Store) ClaimOrphans(owner string) error {
 	if owner == "" {
 		return nil
 	}
-	for _, t := range []string{"ansible_project", "ansible_run"} {
+	for _, t := range []string{"ansible_project", "ansible_run", "ansible_job"} {
 		if _, err := s.db.Exec(`UPDATE `+t+` SET owner = ? WHERE owner = ''`, owner); err != nil {
 			return err
 		}
@@ -192,13 +209,99 @@ func (s *Store) DeleteProject(owner, id string) error {
 	return nil
 }
 
+// --- jobs ---------------------------------------------------------
+
+func (s *Store) ListJobs(viewer, projectID string) ([]Job, error) {
+	q := `SELECT job_json, published, owner FROM ansible_job`
+	var args []any
+	if projectID != "" {
+		q += ` WHERE project_id = ?`
+		args = append(args, projectID)
+	}
+	q += ` ORDER BY created_at DESC`
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Job{}
+	for rows.Next() {
+		var j, owner string
+		var pub int
+		if err := rows.Scan(&j, &pub, &owner); err != nil {
+			return nil, err
+		}
+		if viewer != "" && owner != "" && owner != viewer && pub == 0 {
+			continue
+		}
+		var job Job
+		if json.Unmarshal([]byte(j), &job) == nil {
+			out = append(out, job)
+		}
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) GetJob(viewer, id string) (*Job, error) {
+	var j, owner string
+	var pub int
+	err := s.db.QueryRow(`SELECT job_json, published, owner FROM ansible_job WHERE id = ?`, id).Scan(&j, &pub, &owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if viewer != "" && owner != "" && owner != viewer && pub == 0 {
+		return nil, ErrNotFound
+	}
+	var job Job
+	if err := json.Unmarshal([]byte(j), &job); err != nil {
+		return nil, err
+	}
+	return &job, nil
+}
+
+// PutJob inserts or updates. A caller may only overwrite their own row.
+func (s *Store) PutJob(owner string, j Job) (Job, error) {
+	if j.ID == "" {
+		j.ID = newID("ajob")
+		j.CreatedAt = time.Now().UnixMilli()
+	} else if existing, err := s.GetJob(owner, j.ID); err == nil {
+		if j.CreatedAt == 0 {
+			j.CreatedAt = existing.CreatedAt
+		}
+	} else if errors.Is(err, ErrNotFound) {
+		return j, ErrNotFound
+	}
+	blob, _ := json.Marshal(j)
+	_, err := s.db.Exec(
+		`INSERT INTO ansible_job (id, owner, project_id, published, job_json, created_at) VALUES (?,?,?,?,?,?)
+		 ON CONFLICT(id) DO UPDATE SET job_json = excluded.job_json, published = excluded.published, project_id = excluded.project_id`,
+		j.ID, owner, j.ProjectID, b2i(j.Published), string(blob), j.CreatedAt,
+	)
+	return j, err
+}
+
+func (s *Store) DeleteJob(owner, id string) error {
+	w, a := scopeOwner(owner)
+	res, err := s.db.Exec(`DELETE FROM ansible_job WHERE id = ?`+w, append([]any{id}, a...)...)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // --- runs ---------------------------------------------------------
 
 func (s *Store) InsertRun(r *Run) (int64, error) {
 	res, err := s.db.Exec(
-		`INSERT INTO ansible_run (owner, project_id, playbook, status, argv, triggered_by, started_at)
-		 VALUES (?,?,?,?,?,?,?)`,
-		r.Owner, r.ProjectID, r.Playbook, r.Status, r.Argv, nz(r.TriggeredBy, "local"), r.StartedAt,
+		`INSERT INTO ansible_run (owner, project_id, job_id, playbook, status, argv, triggered_by, started_at)
+		 VALUES (?,?,?,?,?,?,?,?)`,
+		r.Owner, r.ProjectID, r.JobID, r.Playbook, r.Status, r.Argv, nz(r.TriggeredBy, "local"), r.StartedAt,
 	)
 	if err != nil {
 		return 0, err
@@ -215,12 +318,12 @@ func (s *Store) FinishRun(id int64, status, events, recap string) error {
 	return err
 }
 
-const runCols = `id, owner, project_id, playbook, status, argv, events, recap, triggered_by, started_at, finished_at`
+const runCols = `id, owner, project_id, job_id, playbook, status, argv, events, recap, triggered_by, started_at, finished_at`
 
 func scanRun(sc interface{ Scan(...any) error }) (Run, error) {
 	var r Run
 	var fin sql.NullInt64
-	if err := sc.Scan(&r.ID, &r.Owner, &r.ProjectID, &r.Playbook, &r.Status, &r.Argv,
+	if err := sc.Scan(&r.ID, &r.Owner, &r.ProjectID, &r.JobID, &r.Playbook, &r.Status, &r.Argv,
 		&r.Events, &r.Recap, &r.TriggeredBy, &r.StartedAt, &fin); err != nil {
 		return r, err
 	}

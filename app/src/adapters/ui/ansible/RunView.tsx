@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { CheckCircle2, ChevronRight, CircleDot, Loader2, MinusCircle, PlugZap, X, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronRight, CircleDot, Loader2, MinusCircle, PlugZap, RotateCw, X, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAnsibleStore } from '@/stores/ansibleStore'
-import type { HostState } from '@/core/ansible/ansibleModel'
+import type { HostState, TaskNode } from '@/core/ansible/ansibleModel'
 
 const STATE_STYLE: Record<HostState, { cls: string; label: string }> = {
   ok: { cls: 'text-emerald-600 dark:text-emerald-400', label: 'OK' },
@@ -25,11 +25,14 @@ function hostBadge(state: HostState, changed: boolean) {
  */
 export function RunView() {
   const live = useAnsibleStore((s) => s.live)
+  const replaying = useAnsibleStore((s) => s.replaying)
   const clear = useAnsibleStore((s) => s.clearLive)
+  const rerun = useAnsibleStore((s) => s.rerun)
+  const lastSpec = useAnsibleStore((s) => s.lastSpec)
   const [showConsole, setShowConsole] = useState(false)
   if (!live) return null
 
-  const running = live.status === 'starting' || live.status === 'running'
+  const running = !replaying && (live.status === 'starting' || live.status === 'running')
 
   return (
     <div className="absolute inset-x-0 bottom-8 top-14 z-20 flex flex-col border-t border-border bg-background shadow-2xl">
@@ -42,7 +45,7 @@ export function RunView() {
           <XCircle className="size-4 text-red-500" />
         )}
         <span className="text-sm font-medium">
-          {running ? 'Running' : live.status === 'ok' ? 'Completed' : live.status}
+          {replaying ? 'Replay' : running ? 'Running' : live.status === 'ok' ? 'Completed' : live.status}
         </span>
         {live.runId != null && <span className="text-xs text-muted-foreground">run #{live.runId}</span>}
         {live.error && <span className="truncate text-xs text-red-500">{live.error}</span>}
@@ -55,9 +58,16 @@ export function RunView() {
             Stop
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" onClick={clear} aria-label="Close">
-            <X className="size-4" />
-          </Button>
+          <>
+            {!replaying && lastSpec && (
+              <Button variant="outline" size="sm" onClick={rerun}>
+                <RotateCw className="size-4" /> Re-run
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={clear} aria-label="Close">
+              <X className="size-4" />
+            </Button>
+          </>
         )}
       </div>
 
@@ -121,7 +131,7 @@ export function RunView() {
   )
 }
 
-function TaskRow({ task }: { task: import('@/core/ansible/ansibleModel').TaskNode }) {
+function TaskRow({ task }: { task: TaskNode }) {
   const [open, setOpen] = useState(true)
   const hosts = Object.entries(task.hosts)
   const anyFail = hosts.some(([, h]) => h.state === 'failed' || h.state === 'unreachable')

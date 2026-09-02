@@ -34,7 +34,8 @@ type ProjectTree struct {
 // ansible.cfg); AN1 adds vault + SSH secret refs.
 type RunSpec struct {
 	ProjectID string `json:"projectId"`
-	Playbook  string `json:"playbook"` // relative to the project
+	JobID     string `json:"jobId,omitempty"` // set when a saved Job launched this run
+	Playbook  string `json:"playbook"`        // relative to the project
 	Inventory string `json:"inventory,omitempty"`
 	Limit     string `json:"limit,omitempty"`
 	Tags      string `json:"tags,omitempty"`
@@ -47,11 +48,44 @@ type RunSpec struct {
 	Forks     int    `json:"forks,omitempty"`
 }
 
+// Job is a saved run configuration (the AWX "Job Template" / Semaphore "Task
+// Template"). Running a Job produces a Run. AN1: local, owner-scoped;
+// surveys + approval land in AN4/AN5.
+type Job struct {
+	ID        string `json:"id"`
+	Owner     string `json:"owner,omitempty"`
+	ProjectID string `json:"projectId"`
+	Name      string `json:"name"`
+	Playbook  string `json:"playbook"`
+	Inventory string `json:"inventory,omitempty"`
+	Limit     string `json:"limit,omitempty"`
+	Tags      string `json:"tags,omitempty"`
+	SkipTags  string `json:"skipTags,omitempty"`
+	ExtraVars string `json:"extraVars,omitempty"`
+	Check     bool   `json:"check,omitempty"`
+	Diff      bool   `json:"diff,omitempty"`
+	Become    bool   `json:"become,omitempty"`
+	Verbosity int    `json:"verbosity,omitempty"`
+	Forks     int    `json:"forks,omitempty"`
+	Published bool   `json:"published"`
+	CreatedAt int64  `json:"createdAt"`
+}
+
+// Spec turns a Job into a RunSpec.
+func (j Job) Spec() RunSpec {
+	return RunSpec{
+		ProjectID: j.ProjectID, JobID: j.ID, Playbook: j.Playbook, Inventory: j.Inventory,
+		Limit: j.Limit, Tags: j.Tags, SkipTags: j.SkipTags, ExtraVars: j.ExtraVars,
+		Check: j.Check, Diff: j.Diff, Become: j.Become, Verbosity: j.Verbosity, Forks: j.Forks,
+	}
+}
+
 // Run is one recorded execution.
 type Run struct {
 	ID          int64  `json:"id"`
 	Owner       string `json:"owner,omitempty"`
 	ProjectID   string `json:"projectId"`
+	JobID       string `json:"jobId,omitempty"`
 	Playbook    string `json:"playbook"`
 	Status      string `json:"status"`           // running | ok | failed | unreachable | cancelled
 	Argv        string `json:"argv"`             // redacted

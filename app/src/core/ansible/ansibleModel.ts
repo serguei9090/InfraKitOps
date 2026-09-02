@@ -63,12 +63,41 @@ export interface RunSpec {
   forks?: number
 }
 
+/** A saved run configuration. Running a Job produces a Run. */
+export interface Job {
+  id: string
+  owner?: string
+  projectId: string
+  name: string
+  playbook: string
+  inventory?: string
+  limit?: string
+  tags?: string
+  skipTags?: string
+  extraVars?: string
+  check?: boolean
+  diff?: boolean
+  become?: boolean
+  verbosity?: number
+  forks?: number
+  published: boolean
+  createdAt: number
+}
+
+export interface InventoryResult {
+  graph: string
+  groups: Record<string, string[]>
+  hosts: Record<string, Record<string, unknown>>
+  source: string
+}
+
 export type RunStatus = 'running' | 'ok' | 'failed' | 'unreachable' | 'cancelled'
 
 export interface Run {
   id: number
   owner?: string
   projectId: string
+  jobId?: string
   playbook: string
   status: RunStatus
   argv: string

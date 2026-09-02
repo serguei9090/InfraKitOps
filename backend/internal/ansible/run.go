@@ -129,19 +129,16 @@ func (e *Engine) Run(ctx context.Context, owner string, mode RuntimeMode, trigge
 
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = proj.Path
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(baseEnv(),
 		"ANSIBLE_CALLBACK_PLUGINS="+e.cbDir,
 		"ANSIBLE_CALLBACKS_ENABLED=infrakit_events",
 		"ANSIBLE_LOAD_CALLBACK_PLUGINS=1",
-		"ANSIBLE_FORCE_COLOR=0",
-		"ANSIBLE_NOCOLOR=1",
 		"INFRAKIT_EVENT_FILE="+evPath,
-		"PYTHONUNBUFFERED=1",
 	)
 
 	redArgv := "ansible-playbook " + strings.Join(args, " ")
 	run := &Run{
-		Owner: owner, ProjectID: proj.ID, Playbook: spec.Playbook, Status: StatusRunning,
+		Owner: owner, ProjectID: proj.ID, JobID: spec.JobID, Playbook: spec.Playbook, Status: StatusRunning,
 		Argv: redArgv, TriggeredBy: nz(triggeredBy, "local"), StartedAt: time.Now().UnixMilli(),
 	}
 	runID, _ := e.store.InsertRun(run)
@@ -262,6 +259,20 @@ func nz(s, def string) string {
 	}
 	return s
 }
+
+// baseEnv is the environment shared by every ansible* spawn — the parent env
+// plus deterministic, colour-free output.
+func baseEnv() []string {
+	return append(os.Environ(),
+		"ANSIBLE_FORCE_COLOR=0",
+		"ANSIBLE_NOCOLOR=1",
+		"PYTHONUNBUFFERED=1",
+	)
+}
+
+// SafeJoin is the exported form of safeJoin for callers outside the package
+// (the API layer's project-file endpoints).
+func SafeJoin(root, rel string) (string, error) { return safeJoin(root, rel) }
 
 // safeJoin joins rel onto root and refuses anything that escapes root.
 func safeJoin(root, rel string) (string, error) {
