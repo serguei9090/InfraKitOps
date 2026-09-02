@@ -423,11 +423,22 @@ Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
   tree + run form), `RunView` (bottom-sheet play→task→host tree, per-host
   OK/CHANGED/FAILED/SKIPPED/UNREACHABLE badges + console toggle + recap),
   `HistoryView`. Single-tool shell module (`hideToolPane`).
-- **AN1–AN5 not started.** AN1 = Inventory + Jobs + full History; AN2 =
-  Ad-hoc + CodeMirror editor (first new FE dep); AN3 = Galaxy (roles/
-  collections install); AN4 = ansible-vault↔InfraKit Vault + FormFlow
-  surveys + schedules + AI; AN5 = git projects + dynamic inventory +
-  multi-user. AN6 deferred = Execution Environments, Workflows.
+- **AN1 done** (`3f0222f`): `inventory.go` (`Engine.Inventory` →
+  `ansible-inventory --list/--graph`, groups→hosts→vars); project-file
+  read/write endpoint (`GET|PUT /ansible/projects/{id}/file?path=`,
+  `SafeJoin`-jailed, 1 MiB cap); **Jobs** (`ansible_job` table, owner-scoped
+  CRUD, `Job.Spec()`, `ansible_run.job_id` + ALTER migration,
+  `/ansible/jobs[/{id}]` + `/jobs/{id}/run/stream`); FE `foldEvent()`
+  reducer shared by the live stream + `replayEvents()` (rebuild a finished
+  run's tree from its stored NDJSON blob); Inventory tab, Jobs tab,
+  History-row → read-only replay, RunView Re-run. **Note: ansible's control
+  node does not run on native Windows** (`check_blocking_io` WinError 87) —
+  a green play/task/host tree needs Linux/WSL.
+- **AN2–AN5 not started.** AN2 = Ad-hoc + CodeMirror editor (first new FE
+  dep); AN3 = Galaxy (roles/collections install); AN4 = ansible-vault↔
+  InfraKit Vault + FormFlow surveys + schedules + AI; AN5 = git projects +
+  dynamic inventory + multi-user. AN6 deferred = Execution Environments,
+  Workflows.
 
 ### Shared error handling (started 2026-08-31, E0–E2 done)
 
