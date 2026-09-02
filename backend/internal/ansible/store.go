@@ -44,6 +44,13 @@ CREATE TABLE IF NOT EXISTS ansible_job (
   job_json    TEXT NOT NULL,
   created_at  INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS ansible_schedule (
+  id          TEXT PRIMARY KEY,
+  owner       TEXT NOT NULL DEFAULT '',
+  sched_json  TEXT NOT NULL,
+  next_run_at INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS ansible_settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -94,7 +101,7 @@ func (s *Store) ClaimOrphans(owner string) error {
 	if owner == "" {
 		return nil
 	}
-	for _, t := range []string{"ansible_project", "ansible_run", "ansible_job"} {
+	for _, t := range []string{"ansible_project", "ansible_run", "ansible_job", "ansible_schedule"} {
 		if _, err := s.db.Exec(`UPDATE `+t+` SET owner = ? WHERE owner = ''`, owner); err != nil {
 			return err
 		}
@@ -293,6 +300,95 @@ func (s *Store) DeleteJob(owner, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// --- schedules ---------------------------------------------------
+
+func (s *Store) ListSchedules(viewer string) ([]Schedule, error) {
+	rows, err := s.db.Query(`SELECT sched_json, owner FROM ansible_schedule ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Schedule{}
+	for rows.Next() {
+		var j, owner string
+		if err := rows.Scan(&j, &owner); err != nil {
+			return nil, err
+		}
+		if viewer != "" && owner != "" && owner != viewer {
+			continue
+		}
+		var sc Schedule
+		if json.Unmarshal([]byte(j), &sc) == nil {
+			out = append(out, sc)
+		}
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) GetSchedule(viewer, id string) (*Schedule, error) {
+	var j, owner string
+	err := s.db.QueryRow(`SELECT sched_json, owner FROM ansible_schedule WHERE id = ?`, id).Scan(&j, &owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if viewer != "" && owner != "" && owner != viewer {
+		return nil, ErrNotFound
+	}
+	var sc Schedule
+	if err := json.Unmarshal([]byte(j), &sc); err != nil {
+		return nil, err
+	}
+	return &sc, nil
+}
+
+// PutSchedule inserts or updates (owner-checked on update).
+func (s *Store) PutSchedule(owner string, sc Schedule) (Schedule, error) {
+	if sc.ID == "" {
+		sc.ID = newID("asch")
+		sc.CreatedAt = time.Now().UnixMilli()
+	} else if _, err := s.GetSchedule(owner, sc.ID); errors.Is(err, ErrNotFound) {
+		return sc, ErrNotFound
+	}
+	return sc, s.saveScheduleRaw(owner, sc)
+}
+
+// saveScheduleRaw persists without an ownership check — for the scheduler's own
+// bookkeeping writes.
+func (s *Store) saveScheduleRaw(owner string, sc Schedule) error {
+	blob, _ := json.Marshal(sc)
+	_, err := s.db.Exec(
+		`INSERT INTO ansible_schedule (id, owner, sched_json, next_run_at, created_at) VALUES (?,?,?,?,?)
+		 ON CONFLICT(id) DO UPDATE SET sched_json = excluded.sched_json, next_run_at = excluded.next_run_at`,
+		sc.ID, owner, string(blob), sc.NextRunAt, sc.CreatedAt,
+	)
+	return err
+}
+
+func (s *Store) DeleteSchedule(owner, id string) error {
+	w, a := scopeOwner(owner)
+	// scopeOwner allows owner='' rows too; a schedule always has an owner in
+	// multi-user, and '' in single-user — both fine here.
+	res, err := s.db.Exec(`DELETE FROM ansible_schedule WHERE id = ?`+w, append([]any{id}, a...)...)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// scheduleOwner returns the stored owner for a schedule id ("" if none / not
+// found) — the scheduler needs it to run the job as the right user.
+func (s *Store) scheduleOwner(id string) string {
+	var owner string
+	_ = s.db.QueryRow(`SELECT owner FROM ansible_schedule WHERE id = ?`, id).Scan(&owner)
+	return owner
 }
 
 // --- runs ---------------------------------------------------------

@@ -1,6 +1,17 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { BookOpen, CheckCircle2, FileCode2, Loader2, Save, ShieldCheck, TriangleAlert, XCircle } from 'lucide-react'
+import {
+  BookOpen,
+  CheckCircle2,
+  FileCode2,
+  KeyRound,
+  Loader2,
+  Save,
+  ShieldCheck,
+  TriangleAlert,
+  XCircle,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -10,8 +21,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { AiPanel } from '@/adapters/ui/ai/AiPanel'
+import { SecretPicker } from '@/adapters/ui/runbook/SecretPicker'
 import * as api from '@/adapters/backend/ansibleClient'
 import { useAnsibleStore } from '@/stores/ansibleStore'
+import { useVaultStore } from '@/stores/vaultStore'
 
 const isYaml = (f: string) => /\.(ya?ml)$/i.test(f) || f === 'ansible.cfg'
 
@@ -40,6 +54,7 @@ export function EditorView() {
   const [err, setErr] = useState<string | null>(null)
   const [check, setCheck] = useState<api.CheckResult | null>(null)
   const [busy, setBusy] = useState<'' | 'save' | 'syntax' | 'lint'>('')
+  const [side, setSide] = useState<'docs' | 'generate' | 'explain'>('docs')
 
   useEffect(() => {
     if (!selectedId) return
@@ -109,7 +124,7 @@ export function EditorView() {
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[1fr_300px]">
+    <div className="grid h-full min-h-0 grid-cols-[1fr_340px]">
       <div className="flex min-h-0 flex-col p-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <FileCode2 className="size-4 text-muted-foreground" />
@@ -136,6 +151,16 @@ export function EditorView() {
             {busy === 'lint' ? <Loader2 className="size-4 animate-spin" /> : <TriangleAlert className="size-4" />}
             Lint
           </Button>
+          <VaultActions
+            projectId={selectedId}
+            path={chosen}
+            onChanged={() =>
+              api.readProjectFile(selectedId, chosen).then((r) => {
+                setContent(r.content)
+                setDirty(false)
+              })
+            }
+          />
         </div>
 
         {err && (
@@ -160,10 +185,139 @@ export function EditorView() {
         {check && <CheckPanel result={check} />}
       </div>
 
-      <div className="min-h-0 overflow-auto border-l border-border/60 p-4">
-        <DocPanel />
+      <div className="flex min-h-0 flex-col border-l border-border/60">
+        <div className="flex gap-1 border-b border-border/60 p-2">
+          {(['docs', 'generate', 'explain'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setSide(s)}
+              className={cn(
+                'rounded px-2 py-0.5 text-xs capitalize',
+                side === s ? 'bg-primary/15 text-primary font-medium' : 'text-muted-foreground hover:bg-accent/40',
+              )}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto p-3">
+          {side === 'docs' && <DocPanel />}
+          {side === 'generate' && (
+            <AiPanel
+              taskId="ansible.gen-playbook"
+              context={{ playbook: content }}
+              onAccept={(t) => {
+                setContent(stripFence(t))
+                setDirty(true)
+              }}
+            />
+          )}
+          {side === 'explain' && (
+            <AiPanel taskId="ansible.explain-task" mode="chat" context={{ playbook: content }} />
+          )}
+        </div>
       </div>
     </div>
+  )
+}
+
+/** strip a leading ```lang / trailing ``` fence the model may wrap YAML in. */
+function stripFence(s: string): string {
+  const m = s.match(/^\s*```[a-z]*\n([\s\S]*?)\n```\s*$/i)
+  return m ? m[1] : s
+}
+
+function VaultActions({
+  projectId,
+  path,
+  onChanged,
+}: {
+  projectId: string
+  path: string
+  onChanged: () => void
+}) {
+  const status = useVaultStore((s) => s.status)
+  const [open, setOpen] = useState(false)
+  const [op, setOp] = useState<'encrypt' | 'decrypt' | 'view'>('encrypt')
+  const [secret, setSecret] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [viewText, setViewText] = useState<string | null>(null)
+
+  async function go() {
+    if (!secret) return
+    setBusy(true)
+    setErr(null)
+    setViewText(null)
+    try {
+      const res = await api.vaultAction(projectId, { path, op, secret })
+      if (!res.ok) {
+        setErr(res.output || 'failed')
+      } else if (op === 'view') {
+        setViewText(res.content ?? '')
+      } else {
+        setOpen(false)
+        onChanged()
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <Button size="sm" variant="outline">
+            <KeyRound className="size-4" /> Vault
+          </Button>
+        }
+      />
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>ansible-vault · {path}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="flex gap-1">
+            {(['encrypt', 'decrypt', 'view'] as const).map((o) => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => setOp(o)}
+                className={cn(
+                  'rounded px-2 py-0.5 text-xs capitalize',
+                  op === o ? 'bg-primary/15 text-primary font-medium' : 'text-muted-foreground hover:bg-accent/40',
+                )}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground">Vault password (an InfraKit Vault secret)</span>
+            {status?.unlocked ? (
+              <SecretPicker value={secret} onChange={setSecret} by="id" placeholder="pick the vault password" />
+            ) : (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Unlock the InfraKit Vault first (Runbooks → Vault).
+              </p>
+            )}
+          </div>
+          {err && <p className="text-xs text-red-500">{err}</p>}
+          {viewText != null && (
+            <pre className="max-h-60 overflow-auto rounded bg-muted/50 p-2 font-mono text-[11px]">{viewText}</pre>
+          )}
+          <div className="flex justify-end">
+            <Button size="sm" onClick={go} disabled={busy || !secret}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null} Run {op}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

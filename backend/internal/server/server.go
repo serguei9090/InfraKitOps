@@ -93,7 +93,7 @@ func NewRouter(opts Options) http.Handler {
 		History: opts.LLMHistory, Usage: opts.LLMUsage,
 	}
 	mh := &api.MCPHandlers{Manager: opts.MCP}
-	anh := &api.AnsibleHandlers{Store: opts.AnsibleStore, Engine: opts.AnsibleEngine, Runtime: opts.AnsibleRuntime}
+	anh := &api.AnsibleHandlers{Store: opts.AnsibleStore, Engine: opts.AnsibleEngine, Runtime: opts.AnsibleRuntime, Vault: opts.Vault}
 	ph := &api.PromptHandlers{Store: opts.Prompts}
 	ah := &api.AuthHandlers{
 		Service: opts.Auth,
@@ -270,6 +270,7 @@ func NewRouter(opts Options) http.Handler {
 				r.Get("/{id}/inventory", anh.Inventory)
 				r.Post("/{id}/syntax-check", anh.SyntaxCheck)
 				r.Post("/{id}/lint", anh.Lint)
+				r.Post("/{id}/vault", anh.VaultAction)
 				r.Get("/{id}/galaxy/install/stream", anh.GalaxyInstallStream)
 				r.Get("/{id}/run/stream", anh.RunStream)
 			})
@@ -282,6 +283,12 @@ func NewRouter(opts Options) http.Handler {
 				r.Put("/{id}", anh.PutJob)
 				r.Delete("/{id}", anh.DeleteJob)
 				r.Get("/{id}/run/stream", anh.JobRunStream)
+			})
+			r.Route("/schedules", func(r chi.Router) {
+				r.Get("/", anh.ListSchedules)
+				r.Post("/", anh.PutSchedule)
+				r.Put("/{id}", anh.PutSchedule)
+				r.Delete("/{id}", anh.DeleteSchedule)
 			})
 			r.Get("/runs", anh.ListRuns)
 			r.Get("/runs/{id}", anh.GetRun)

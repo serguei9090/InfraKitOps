@@ -80,7 +80,23 @@ export interface Job {
   become?: boolean
   verbosity?: number
   forks?: number
+  surveySchema?: string
   published: boolean
+  createdAt: number
+}
+
+export interface Schedule {
+  id: string
+  owner?: string
+  jobId: string
+  name: string
+  cron: string
+  enabled: boolean
+  nextRunAt: number
+  lastRunAt: number
+  lastStatus?: string
+  lastRunId?: number
+  lastError?: string
   createdAt: number
 }
 

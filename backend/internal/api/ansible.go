@@ -15,8 +15,10 @@ import (
 
 	"github.com/infrakit/backend/internal/ansible"
 	"github.com/infrakit/backend/internal/apierr"
+	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/sse"
 	"github.com/infrakit/backend/internal/userctx"
+	"github.com/infrakit/backend/internal/vault"
 )
 
 // nz returns s, or def when s is blank.
@@ -33,6 +35,7 @@ type AnsibleHandlers struct {
 	Store   *ansible.Store
 	Engine  *ansible.Engine
 	Runtime *ansible.Runtime
+	Vault   *vault.Registry // for ansible-vault password resolution (AN4)
 }
 
 func (h *AnsibleHandlers) ok() bool {
@@ -379,6 +382,70 @@ func (h *AnsibleHandlers) PutJob(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{"job": saved})
 }
 
+// --- schedules --------------------------------------------------
+
+// ListSchedules: GET /ansible/schedules
+func (h *AnsibleHandlers) ListSchedules(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	list, err := h.Store.ListSchedules(owner(r))
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"schedules": list})
+}
+
+// PutSchedule: POST /ansible/schedules · PUT /ansible/schedules/{id}
+func (h *AnsibleHandlers) PutSchedule(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var sc ansible.Schedule
+	if err := json.NewDecoder(r.Body).Decode(&sc); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	if id := chi.URLParam(r, "id"); id != "" {
+		sc.ID = id
+	}
+	if strings.TrimSpace(sc.JobID) == "" {
+		apierr.Write(w, apierr.Validation("a jobId is required"))
+		return
+	}
+	expr, err := orchestrator.ParseCron(sc.Cron)
+	if err != nil {
+		apierr.Write(w, apierr.Validation("bad cron expression: "+err.Error()))
+		return
+	}
+	if sc.Enabled {
+		if n := expr.Next(time.Now()); !n.IsZero() {
+			sc.NextRunAt = n.UnixMilli()
+		}
+	} else {
+		sc.NextRunAt = 0
+	}
+	saved, err := h.Store.PutSchedule(owner(r), sc)
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"schedule": saved})
+}
+
+// DeleteSchedule: DELETE /ansible/schedules/{id}
+func (h *AnsibleHandlers) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	if err := h.Store.DeleteSchedule(owner(r), chi.URLParam(r, "id")); err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 // DeleteJob: DELETE /ansible/jobs/{id}
 func (h *AnsibleHandlers) DeleteJob(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
@@ -403,7 +470,13 @@ func (h *AnsibleHandlers) JobRunStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	audit(r, "ansible_job_run", job.Name, map[string]string{"job": job.ID})
-	h.streamRun(w, r, job.Spec(), "job")
+	spec := job.Spec()
+	// A survey-driven run passes the merged extra-vars YAML (job vars +
+	// answers) as ?extraVars=, overriding the job's stored blob.
+	if ev := r.URL.Query().Get("extraVars"); ev != "" {
+		spec.ExtraVars = ev
+	}
+	h.streamRun(w, r, spec, "job")
 }
 
 // --- run --------------------------------------------------------
@@ -508,6 +581,60 @@ func (h *AnsibleHandlers) GalaxyInstallStream(w http.ResponseWriter, r *http.Req
 		close(ch)
 	}()
 	sw.Pump(ctx, ch)
+}
+
+// VaultAction: POST /ansible/projects/{id}/vault
+//
+//	{ path, op: "encrypt"|"decrypt"|"view"|"rekey", secret, newSecret? }
+//
+// `secret` / `newSecret` are InfraKit Vault secret ids (or names).
+func (h *AnsibleHandlers) VaultAction(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	if h.Vault == nil {
+		apierr.Write(w, apierr.Unavailable("the vault"))
+		return
+	}
+	var b struct {
+		Path      string `json:"path"`
+		Op        string `json:"op"`
+		Secret    string `json:"secret"`
+		NewSecret string `json:"newSecret"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	v := h.Vault.For(userctx.From(r.Context()))
+	resolve := func(ref string) (string, error) {
+		if ref == "" {
+			return "", nil
+		}
+		if s, err := v.Resolve(ref); err == nil {
+			return s, nil
+		}
+		return v.ResolveByName(ref)
+	}
+	pw, err := resolve(b.Secret)
+	if err != nil || pw == "" {
+		apierr.Write(w, apierr.Locked("can't read the vault password — is the InfraKit Vault unlocked?"))
+		return
+	}
+	newPw, _ := resolve(b.NewSecret)
+
+	audit(r, "ansible_vault_"+b.Op, b.Path, map[string]string{"project": chi.URLParam(r, "id")})
+	res, err := h.Engine.Vault(r.Context(), owner(r), h.mode(),
+		ansible.VaultOp{ProjectID: chi.URLParam(r, "id"), Path: b.Path, Op: b.Op}, pw, newPw)
+	if err != nil {
+		if res != nil {
+			WriteJSON(w, http.StatusOK, map[string]any{"result": res})
+			return
+		}
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"result": res})
 }
 
 // Doc: GET /ansible/doc?module=

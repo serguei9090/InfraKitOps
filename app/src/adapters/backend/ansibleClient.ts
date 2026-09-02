@@ -14,6 +14,7 @@ import type {
   ProjectTree,
   Run,
   RunSpec,
+  Schedule,
 } from '@/core/ansible/ansibleModel'
 
 const arr = <T,>(v: T[] | null | undefined): T[] => v ?? []
@@ -79,9 +80,46 @@ export const putJob = (job: Partial<Job>) =>
 
 export const deleteJob = (id: string) => backendRequest<unknown>('DELETE', `/ansible/jobs/${id}`)
 
-export function openJobRunStream(jobId: string, handlers: StreamHandlers): () => void {
-  return openStream(`/ansible/jobs/${jobId}/run/stream`, {}, handlers)
+export function openJobRunStream(
+  jobId: string,
+  handlers: StreamHandlers,
+  extraVars?: string,
+): () => void {
+  return openStream(
+    `/ansible/jobs/${jobId}/run/stream`,
+    extraVars ? { extraVars } : {},
+    handlers,
+  )
 }
+
+// --- schedules -------------------------------------------------
+
+export const listSchedules = () =>
+  backendGet<{ schedules: Schedule[] | null }>('/ansible/schedules').then((r) => arr(r.schedules))
+export const putSchedule = (s: Partial<Schedule>) =>
+  backendRequest<{ schedule: Schedule }>(
+    s.id ? 'PUT' : 'POST',
+    s.id ? `/ansible/schedules/${s.id}` : '/ansible/schedules',
+    s,
+  ).then((r) => r.schedule)
+export const deleteSchedule = (id: string) =>
+  backendRequest<unknown>('DELETE', `/ansible/schedules/${id}`)
+
+// --- ansible-vault --------------------------------------------
+
+export interface VaultActionResult {
+  op: string
+  ok: boolean
+  content?: string
+  output?: string
+}
+export const vaultAction = (
+  projectId: string,
+  body: { path: string; op: 'encrypt' | 'decrypt' | 'view' | 'rekey'; secret: string; newSecret?: string },
+) =>
+  backendRequest<{ result: VaultActionResult }>('POST', `/ansible/projects/${projectId}/vault`, body).then(
+    (r) => r.result,
+  )
 
 // --- ad-hoc, doc, checks --------------------------------------------
 

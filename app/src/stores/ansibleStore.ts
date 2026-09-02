@@ -17,13 +17,22 @@ import type {
   RunRecap,
   RunSpec,
   RunStatus,
+  Schedule,
   TaskNode,
 } from '@/core/ansible/ansibleModel'
 import { reportError } from '@/stores/errorStore'
 
 const SRC = 'Ansible'
 
-export type Section = 'projects' | 'inventory' | 'jobs' | 'adhoc' | 'editor' | 'content' | 'history'
+export type Section =
+  | 'projects'
+  | 'inventory'
+  | 'jobs'
+  | 'adhoc'
+  | 'editor'
+  | 'content'
+  | 'schedules'
+  | 'history'
 
 function msg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
@@ -152,6 +161,7 @@ interface AnsibleStore {
   selectedId: string | null
   tree: ProjectTree | null
   jobs: Job[]
+  schedules: Schedule[]
   inventory: InventoryResult | null
   inventoryError: string | null
   runs: Run[]
@@ -176,10 +186,13 @@ interface AnsibleStore {
   refreshJobs: () => Promise<void>
   saveJob: (job: Partial<Job>) => Promise<Job | null>
   removeJob: (id: string) => Promise<void>
+  refreshSchedules: () => Promise<void>
+  saveSchedule: (s: Partial<Schedule>) => Promise<Schedule | null>
+  removeSchedule: (id: string) => Promise<void>
   refreshRuns: () => Promise<void>
   startRun: (spec: RunSpec) => void
   rerun: () => void
-  startJobRun: (jobId: string, projectId: string) => void
+  startJobRun: (jobId: string, projectId: string, extraVars?: string) => void
   startAdhoc: (spec: api.AdhocSpec) => void
   galaxyInstall: (opts: { type?: 'role' | 'collection'; name?: string }) => void
   openReplay: (runId: number) => Promise<void>
@@ -196,6 +209,7 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
   selectedId: null,
   tree: null,
   jobs: [],
+  schedules: [],
   inventory: null,
   inventoryError: null,
   runs: [],
@@ -211,6 +225,10 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
     set({ section })
     if (section === 'jobs') void get().refreshJobs()
     if (section === 'inventory') void get().loadInventory()
+    if (section === 'schedules') {
+      void get().refreshJobs()
+      void get().refreshSchedules()
+    }
     if (section === 'history') void get().refreshRuns()
   },
   setShowRuntime: (showRuntime) => set({ showRuntime }),
@@ -345,6 +363,34 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
     }
   },
 
+  refreshSchedules: async () => {
+    try {
+      set({ schedules: await api.listSchedules() })
+    } catch (e) {
+      set({ settingsError: msg(e) })
+    }
+  },
+
+  saveSchedule: async (s) => {
+    try {
+      const saved = await api.putSchedule(s)
+      await get().refreshSchedules()
+      return saved
+    } catch (e) {
+      reportError(e, SRC)
+      return null
+    }
+  },
+
+  removeSchedule: async (id) => {
+    try {
+      await api.deleteSchedule(id)
+      await get().refreshSchedules()
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
   refreshRuns: async () => {
     try {
       set({ runs: await api.listRuns(get().selectedId ?? undefined) })
@@ -363,10 +409,10 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
     if (s) get().startRun(s)
   },
 
-  startJobRun: (jobId, projectId) => {
+  startJobRun: (jobId, projectId, extraVars) => {
     set({ lastSpec: null })
     streamRun(set, get, { projectId } as RunSpec, () =>
-      api.openJobRunStream(jobId, streamHandlers(set, get, projectId)),
+      api.openJobRunStream(jobId, streamHandlers(set, get, projectId), extraVars),
     )
   },
 

@@ -1,7 +1,18 @@
 import { useEffect } from 'react'
-import { Boxes, FileCode2, FolderGit2, History, ListChecks, Network, Settings2, Zap } from 'lucide-react'
+import {
+  Boxes,
+  CalendarClock,
+  FileCode2,
+  FolderGit2,
+  History,
+  ListChecks,
+  Network,
+  Settings2,
+  Zap,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useBackendStore } from '@/stores/backendStore'
+import { useVaultStore } from '@/stores/vaultStore'
 import { useAnsibleStore, type Section } from '@/stores/ansibleStore'
 import { BackendUnavailable } from '@/adapters/ui/network/BackendUnavailable'
 import { ProjectsView } from './ProjectsView'
@@ -10,6 +21,7 @@ import { JobsView } from './JobsView'
 import { AdhocView } from './AdhocView'
 import { EditorView } from './EditorView'
 import { ContentView } from './ContentView'
+import { SchedulesView } from './SchedulesView'
 import { HistoryView } from './HistoryView'
 import { RuntimePanel } from './RuntimePanel'
 import { RunView } from './RunView'
@@ -21,6 +33,7 @@ const NAV: { id: Section; label: string; icon: typeof History }[] = [
   { id: 'adhoc', label: 'Ad-hoc', icon: Zap },
   { id: 'editor', label: 'Editor', icon: FileCode2 },
   { id: 'content', label: 'Content', icon: Boxes },
+  { id: 'schedules', label: 'Schedules', icon: CalendarClock },
   { id: 'history', label: 'History', icon: History },
 ]
 
@@ -42,6 +55,7 @@ export function AnsibleConsoleScaffold() {
   const live = useAnsibleStore((s) => s.live)
   const showRuntime = useAnsibleStore((s) => s.showRuntime)
   const setShowRuntime = useAnsibleStore((s) => s.setShowRuntime)
+  const refreshVault = useVaultStore((s) => s.refresh)
 
   useEffect(() => {
     if (status === 'unknown') void refreshBackend()
@@ -51,8 +65,9 @@ export function AnsibleConsoleScaffold() {
     if (status === 'available') {
       void refreshSettings()
       void refreshProjects()
+      void refreshVault()
     }
-  }, [status, refreshSettings, refreshProjects])
+  }, [status, refreshSettings, refreshProjects, refreshVault])
 
   const ready = settings?.capabilities.ready ?? false
   const needsSetup = settings != null && (!ready || !settings.workspaceDir)
@@ -126,6 +141,8 @@ export function AnsibleConsoleScaffold() {
           <EditorView />
         ) : section === 'content' ? (
           <ContentView />
+        ) : section === 'schedules' ? (
+          <SchedulesView />
         ) : (
           <HistoryView />
         )}

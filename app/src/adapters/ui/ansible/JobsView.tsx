@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { ListChecks, Pencil, Play, Plus, Trash2 } from 'lucide-react'
+import { ClipboardList, ListChecks, Pencil, Play, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -30,6 +31,12 @@ export function JobsView() {
   const removeJob = useAnsibleStore((s) => s.removeJob)
   const startJobRun = useAnsibleStore((s) => s.startJobRun)
   const [editing, setEditing] = useState<Partial<Job> | null>(null)
+  const [survey, setSurvey] = useState<Job | null>(null)
+
+  function run(j: Job) {
+    if (j.surveySchema && j.surveySchema.trim()) setSurvey(j)
+    else startJobRun(j.id, selectedId!)
+  }
 
   if (!selectedId) {
     return (
@@ -71,8 +78,8 @@ export function JobsView() {
                     {j.check ? ' · check' : ''}
                   </div>
                 </div>
-                <Button size="sm" onClick={() => startJobRun(j.id, selectedId)}>
-                  <Play className="size-4" /> Run
+                <Button size="sm" onClick={() => run(j)}>
+                  {j.surveySchema?.trim() ? <ClipboardList className="size-4" /> : <Play className="size-4" />} Run
                 </Button>
                 <Button size="icon" variant="ghost" onClick={() => setEditing(j)} aria-label="Edit">
                   <Pencil className="size-4" />
@@ -104,7 +111,112 @@ export function JobsView() {
           }}
         />
       )}
+
+      {survey && (
+        <SurveyDialog
+          job={survey}
+          onClose={() => setSurvey(null)}
+          onRun={(yaml) => {
+            startJobRun(survey.id, selectedId, yaml)
+            setSurvey(null)
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+interface SurveyField {
+  name: string
+  label?: string
+  type?: 'string' | 'number' | 'boolean' | 'text'
+  default?: unknown
+  required?: boolean
+}
+
+function SurveyDialog({
+  job,
+  onClose,
+  onRun,
+}: {
+  job: Job
+  onClose: () => void
+  onRun: (extraVarsYaml: string) => void
+}) {
+  let fields: SurveyField[] = []
+  let parseError = ''
+  try {
+    const parsed = JSON.parse(job.surveySchema || '[]')
+    fields = Array.isArray(parsed) ? parsed : (parsed.fields ?? [])
+  } catch (e) {
+    parseError = e instanceof Error ? e.message : String(e)
+  }
+
+  const [vals, setVals] = useState<Record<string, unknown>>(() =>
+    Object.fromEntries(fields.map((f) => [f.name, f.default ?? (f.type === 'boolean' ? false : '')])),
+  )
+
+  function submit() {
+    const lines = fields
+      .map((f) => {
+        const v = vals[f.name]
+        if (f.type === 'boolean') return `${f.name}: ${v ? 'true' : 'false'}`
+        if (f.type === 'number') return `${f.name}: ${Number(v) || 0}`
+        return `${f.name}: ${JSON.stringify(String(v ?? ''))}`
+      })
+      .join('\n')
+    onRun((job.extraVars ? job.extraVars.trimEnd() + '\n' : '') + lines + '\n')
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{job.name} — survey</DialogTitle>
+        </DialogHeader>
+        {parseError ? (
+          <p className="text-xs text-red-500">survey schema is not valid JSON: {parseError}</p>
+        ) : (
+          <div className="space-y-3">
+            {fields.map((f) => (
+              <div key={f.name} className="space-y-1">
+                <Label className="text-xs">
+                  {f.label || f.name}
+                  {f.required && <span className="text-red-500"> *</span>}
+                </Label>
+                {f.type === 'boolean' ? (
+                  <label className="flex items-center gap-1.5 text-xs">
+                    <Checkbox
+                      checked={!!vals[f.name]}
+                      onCheckedChange={(c) => setVals((p) => ({ ...p, [f.name]: c === true }))}
+                    />
+                    {f.name}
+                  </label>
+                ) : (
+                  <Input
+                    type={f.type === 'number' ? 'number' : 'text'}
+                    className="h-8 text-xs"
+                    value={String(vals[f.name] ?? '')}
+                    onChange={(e) => setVals((p) => ({ ...p, [f.name]: e.target.value }))}
+                  />
+                )}
+              </div>
+            ))}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                onClick={submit}
+                disabled={fields.some((f) => f.required && !vals[f.name] && f.type !== 'boolean')}
+              >
+                <Play className="size-4" /> Run
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -227,6 +339,19 @@ function JobForm({
           rows={3}
           value={j.extraVars ?? ''}
           onChange={(e) => patch({ extraVars: e.target.value })}
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs">
+          Survey (JSON array of fields — prompts the operator before each run)
+        </Label>
+        <Textarea
+          className="font-mono text-xs"
+          rows={3}
+          placeholder='[{"name":"env","label":"Environment","type":"string","required":true}]'
+          value={j.surveySchema ?? ''}
+          onChange={(e) => patch({ surveySchema: e.target.value || undefined })}
         />
       </div>
 

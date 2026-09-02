@@ -153,6 +153,9 @@ func main() {
 	ansibleStore, ansibleEngine, ansibleRuntime := openAnsible(*ansibleDBPath)
 	if ansibleStore != nil {
 		defer ansibleStore.Close()
+		ansibleSched := ansible.NewScheduler(ansibleStore, ansibleEngine)
+		ansibleSched.Start()
+		defer ansibleSched.Stop()
 	}
 
 	defer iperf.StopServer() // kill any managed `iperf3 -s` child

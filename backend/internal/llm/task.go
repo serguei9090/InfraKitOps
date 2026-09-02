@@ -144,6 +144,42 @@ copy-pasteable.
 {{context.runbook}}
 --- END ---`,
 		},
+		{
+			ID:          "ansible.gen-playbook",
+			Title:       "Generate an Ansible playbook",
+			Description: "Turn an intent into a runnable playbook YAML.",
+			OutputShape: OutputText,
+			InputLabel:  "What the playbook should do",
+			Temperature: f64(0.2),
+			SystemTemplate: `Write one complete Ansible playbook (YAML, a list of plays) that does what
+is asked. Use fully-qualified module names (ansible.builtin.*). Prefer
+idempotent modules over command/shell. Add ` + "`become: true`" + ` only where
+root is genuinely needed. Return ONLY the YAML, in a fenced ` + "```yaml" + ` block,
+no prose.
+
+--- CURRENT FILE (may be empty) ---
+{{context.playbook}}
+--- END ---
+
+Intent: {{input}}`,
+		},
+		{
+			ID:          "ansible.explain-task",
+			Title:       "Explain this Ansible content",
+			Description: "Explain what a play / task / role does and flag risks.",
+			OutputShape: OutputText,
+			InputLabel:  "Anything specific to focus on (optional)",
+			Temperature: f64(0.3),
+			SystemTemplate: `Explain concisely what the Ansible content below does — play by play, then
+task by task. Call out anything destructive, non-idempotent, or that needs
+privilege escalation. Note undefined variables if you see any.
+
+--- ANSIBLE (YAML) ---
+{{context.playbook}}
+--- END ---
+
+{{input}}`,
+		},
 	}
 }
 

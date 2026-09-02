@@ -16,6 +16,7 @@ export interface TaskGroup {
 const KNOWN: { prefix: string; label: string }[] = [
   { prefix: 'prompt.', label: 'Prompt Library' },
   { prefix: 'runbook.', label: 'Runbooks' },
+  { prefix: 'ansible.', label: 'Ansible' },
   { prefix: 'command.', label: 'Shell & SSH' },
 ]
 

@@ -67,8 +67,11 @@ type Job struct {
 	Become    bool   `json:"become,omitempty"`
 	Verbosity int    `json:"verbosity,omitempty"`
 	Forks     int    `json:"forks,omitempty"`
-	Published bool   `json:"published"`
-	CreatedAt int64  `json:"createdAt"`
+	// SurveySchema is a FormFlow schema (JSON) shown before a run; its answers
+	// are merged into extra-vars. AN4c.
+	SurveySchema string `json:"surveySchema,omitempty"`
+	Published    bool   `json:"published"`
+	CreatedAt    int64  `json:"createdAt"`
 }
 
 // Spec turns a Job into a RunSpec.
@@ -94,6 +97,23 @@ type Run struct {
 	TriggeredBy string `json:"triggeredBy"`
 	StartedAt   int64  `json:"startedAt"`
 	FinishedAt  int64  `json:"finishedAt"`
+}
+
+// Schedule cron-fires a Job. AN4b — self-contained, reuses the orchestrator's
+// cron parser (no new dep).
+type Schedule struct {
+	ID         string `json:"id"`
+	Owner      string `json:"owner,omitempty"`
+	JobID      string `json:"jobId"`
+	Name       string `json:"name"`
+	Cron       string `json:"cron"` // 5-field, or @daily etc
+	Enabled    bool   `json:"enabled"`
+	NextRunAt  int64  `json:"nextRunAt"`
+	LastRunAt  int64  `json:"lastRunAt"`
+	LastStatus string `json:"lastStatus,omitempty"`
+	LastRunID  int64  `json:"lastRunId,omitempty"`
+	LastError  string `json:"lastError,omitempty"`
+	CreatedAt  int64  `json:"createdAt"`
 }
 
 const (
