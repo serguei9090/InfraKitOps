@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Plus, Save, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, HelpCircle, Plus, Save, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch, type Control } from 'react-hook-form'
 import { useSearchParams } from 'react-router-dom'
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { FileDropField } from '@/adapters/ui/FileDropField'
 import { ToolDetailScaffold, ToolScaffoldHeader, ToolScaffoldPanel } from '@/adapters/ui/shell/ToolDetailScaffold'
 import { createSchemaRepository } from '@/adapters/storage/schemaRepository'
@@ -367,6 +368,13 @@ function DesignerFieldRow({
           </SelectContent>
         </Select>
       </div>
+      <textarea
+        value={field.help ?? ''}
+        onChange={(e) => onChange({ ...field, help: e.target.value || undefined })}
+        placeholder="Help for whoever fills the form — explanation + examples. Shows as a ? on the field."
+        rows={field.help ? 2 : 1}
+        className="mt-1 w-full resize-y rounded-md border border-border/60 bg-transparent px-2 py-1 text-xs placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+      />
       {isContainer ? (
         <label className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Checkbox
@@ -415,19 +423,44 @@ interface LiveFormFieldProps {
   register: ReturnType<typeof useForm<Record<string, unknown>>>['register']
 }
 
+/** Field label + a `?` tooltip icon when the author wrote help text. */
+function FieldLabel({ field, className }: { field: SchemaField; className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 ${className ?? ''}`}>
+      {fieldDisplayLabel(field)}
+      {field.help ? (
+        <Tooltip>
+          <TooltipTrigger
+            type="button"
+            aria-label={`Help: ${fieldDisplayLabel(field)}`}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <HelpCircle className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs whitespace-pre-wrap text-left">{field.help}</TooltipContent>
+        </Tooltip>
+      ) : null}
+    </span>
+  )
+}
+
 function LiveFormField({ field, path, control, register }: LiveFormFieldProps) {
   switch (field.type) {
     case 'text':
       return (
         <div className="flex flex-col gap-1">
-          <Label>{fieldDisplayLabel(field)}</Label>
+          <Label>
+            <FieldLabel field={field} />
+          </Label>
           <Input {...register(path)} />
         </div>
       )
     case 'number':
       return (
         <div className="flex flex-col gap-1">
-          <Label>{fieldDisplayLabel(field)}</Label>
+          <Label>
+            <FieldLabel field={field} />
+          </Label>
           <Input type="text" inputMode="decimal" {...register(path)} />
         </div>
       )
@@ -438,7 +471,7 @@ function LiveFormField({ field, path, control, register }: LiveFormFieldProps) {
           control={control}
           render={({ field: rhf }) => (
             <label className="flex items-center justify-between gap-2">
-              <span className="text-sm">{fieldDisplayLabel(field)}</span>
+              <FieldLabel field={field} className="text-sm" />
               <Switch checked={Boolean(rhf.value)} onCheckedChange={rhf.onChange} />
             </label>
           )}
@@ -447,7 +480,9 @@ function LiveFormField({ field, path, control, register }: LiveFormFieldProps) {
     case 'object':
       return (
         <div className="rounded-xl border border-border bg-card p-3">
-          <p className="mb-2 text-sm font-semibold">{fieldDisplayLabel(field)}</p>
+          <p className="mb-2 text-sm font-semibold">
+            <FieldLabel field={field} />
+          </p>
           <div className="flex flex-col gap-3">
             {field.children.map((child) => (
               <LiveFormField key={child.key} field={child} path={`${path}.${child.key}`} control={control} register={register} />
@@ -476,7 +511,9 @@ function LiveArrayField({ field, path, control, register }: LiveFormFieldProps) 
 
   return (
     <div className="rounded-xl border border-border bg-card p-3">
-      <p className="mb-2 text-sm font-semibold">{fieldDisplayLabel(field)} — Dynamic Array Loop</p>
+      <p className="mb-2 text-sm font-semibold">
+        <FieldLabel field={field} /> — Dynamic Array Loop
+      </p>
       <div className="flex flex-col gap-2">
         {items.map((item, index) => (
           <div key={item.id} className="flex items-start gap-2 rounded-lg border border-border/60 bg-background p-2.5">

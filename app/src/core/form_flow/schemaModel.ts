@@ -38,6 +38,12 @@ export interface SchemaField {
   type: FieldType
   /** Display label; falls back to `key` when unset. */
   label?: string
+  /**
+   * Author-written explanation + examples for whoever fills the form. Shown
+   * as a `?` tooltip next to the field on the runner side. Plain text,
+   * newlines allowed.
+   */
+  help?: string
   /** Only meaningful for scalar leaf types (text/number/boolean). */
   defaultValue?: string
   /** Sub-fields for object/array types; empty for scalar leaves. */
