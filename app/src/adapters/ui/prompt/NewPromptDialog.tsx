@@ -1,8 +1,17 @@
 import { FilePlus2 } from 'lucide-react'
-import { useMemo } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { mergeTemplates } from '@/core/prompt/templates/index'
+import { useMemo, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { mergeTemplates, type SeedTemplate } from '@/core/prompt/templates/index'
 import { usePromptLibraryStore } from '@/stores/promptLibraryStore'
+import { downloadBlob } from '@/lib/downloadFile'
 import { TemplateGallery } from './TemplateGallery'
 
 interface NewPromptDialogProps {
@@ -12,14 +21,37 @@ interface NewPromptDialogProps {
   folderId: string | null
 }
 
+const slug = (s: string) => s.replace(/[^\w-]+/g, '_') || 'template'
+
 export function NewPromptDialog({ open, onOpenChange, folderId }: NewPromptDialogProps) {
   const createPrompt = usePromptLibraryStore((s) => s.createPrompt)
   const userTemplates = usePromptLibraryStore((s) => s.userTemplates)
   const deleteUserTemplate = usePromptLibraryStore((s) => s.deleteUserTemplate)
+  const exportUserTemplates = usePromptLibraryStore((s) => s.exportUserTemplates)
+  const importTemplatesFromJson = usePromptLibraryStore((s) => s.importTemplatesFromJson)
 
   const templates = useMemo(() => mergeTemplates(userTemplates), [userTemplates])
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+
+  async function onImportFile(file: File) {
+    try {
+      const { added } = importTemplatesFromJson(await file.text())
+      setMsg({ kind: 'ok', text: `Imported ${added} template${added === 1 ? '' : 's'}.` })
+    } catch (err) {
+      setMsg({ kind: 'err', text: err instanceof Error ? err.message : 'Import failed.' })
+    }
+  }
+
+  function onExportAll() {
+    downloadBlob(exportUserTemplates(), 'prompt-templates.json', 'application/json')
+  }
+
+  function onExportOne(t: SeedTemplate) {
+    downloadBlob(exportUserTemplates([t]), `${slug(t.name)}.template.json`, 'application/json')
+  }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[88vh] w-[calc(100vw-2rem)] max-w-6xl flex-col gap-0 p-0 sm:max-w-6xl">
         <DialogHeader className="shrink-0 border-b border-border/60 px-5 py-3.5">
@@ -55,8 +87,24 @@ export function NewPromptDialog({ open, onOpenChange, folderId }: NewPromptDialo
             onOpenChange(false)
           }}
           onRemove={deleteUserTemplate}
+          onImportFile={onImportFile}
+          onExportAll={onExportAll}
+          onExportOne={onExportOne}
         />
       </DialogContent>
     </Dialog>
+
+    <Dialog open={msg != null} onOpenChange={(o) => !o && setMsg(null)}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{msg?.kind === 'ok' ? 'Import complete' : 'Import failed'}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">{msg?.text}</p>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline">OK</Button>} />
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

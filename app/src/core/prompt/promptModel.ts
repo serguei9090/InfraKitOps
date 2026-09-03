@@ -19,11 +19,97 @@ export interface Message {
   content: string
 }
 
+/** How a `{{VARIABLE}}` renders in the Fill & Copy form. Absent === 'text'
+ *  (a plain single-line input, the original behaviour). */
+export type VariableKind = 'text' | 'textarea' | 'select' | 'boolean' | 'number'
+
+export const VARIABLE_KINDS: readonly VariableKind[] = [
+  'text',
+  'textarea',
+  'select',
+  'boolean',
+  'number',
+]
+
+/** One choice for a `kind: 'select'` variable. `value` is what gets substituted
+ *  into the prompt; `label` is the picker text (falls back to `value`). */
+export interface VariableOption {
+  value: string
+  label?: string
+}
+
 /** Optional, user-supplied metadata for a `{{VARIABLE}}`. Detection of which
  *  variables exist is always by scanning message bodies — this is extra info. */
 export interface VariableMeta {
   description?: string
   defaultValue?: string
+  /** Form control to render at fill time. Absent === 'text'. */
+  kind?: VariableKind
+  /** `kind: 'select'` — the choices, in display order. */
+  options?: VariableOption[]
+  /** `kind: 'select'` — also allow a free-text value outside `options`. */
+  allowCustom?: boolean
+  /** `kind: 'number'` — optional bounds passed straight to the input. */
+  min?: number
+  max?: number
+  step?: number
+  /** Block "Copy all" until this variable has a non-empty value. */
+  required?: boolean
+}
+
+/** True when a `VariableMeta` carries nothing worth persisting — the store
+ *  drops the key entirely in that case (keeps `prompt.variables` tidy). */
+export function isVariableMetaEmpty(meta: VariableMeta): boolean {
+  return (
+    !meta.description &&
+    !meta.defaultValue &&
+    (meta.kind == null || meta.kind === 'text') &&
+    (meta.options == null || meta.options.length === 0) &&
+    !meta.allowCustom &&
+    meta.min == null &&
+    meta.max == null &&
+    meta.step == null &&
+    !meta.required
+  )
+}
+
+/** Coerce untrusted JSON (import path) into a safe `VariableMeta`. Drops
+ *  anything malformed rather than throwing — this metadata is advisory. */
+export function sanitizeVariableMeta(raw: unknown): VariableMeta {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const meta: VariableMeta = {}
+  if (typeof r.description === 'string') meta.description = r.description
+  if (typeof r.defaultValue === 'string') meta.defaultValue = r.defaultValue
+  if (typeof r.kind === 'string' && (VARIABLE_KINDS as readonly string[]).includes(r.kind)) {
+    meta.kind = r.kind as VariableKind
+  }
+  if (Array.isArray(r.options)) {
+    const opts: VariableOption[] = []
+    const seen = new Set<string>()
+    for (const o of r.options) {
+      const oo = (o ?? {}) as Record<string, unknown>
+      if (typeof oo.value !== 'string' || seen.has(oo.value)) continue
+      seen.add(oo.value)
+      opts.push(typeof oo.label === 'string' ? { value: oo.value, label: oo.label } : { value: oo.value })
+    }
+    if (opts.length > 0) meta.options = opts
+  }
+  if (r.allowCustom === true) meta.allowCustom = true
+  if (typeof r.min === 'number' && Number.isFinite(r.min)) meta.min = r.min
+  if (typeof r.max === 'number' && Number.isFinite(r.max)) meta.max = r.max
+  if (typeof r.step === 'number' && Number.isFinite(r.step)) meta.step = r.step
+  if (r.required === true) meta.required = true
+  return meta
+}
+
+/** Sanitise a whole `Record<name, VariableMeta>` map from untrusted JSON. */
+export function sanitizeVariables(raw: unknown): Record<string, VariableMeta> {
+  if (raw == null || typeof raw !== 'object') return {}
+  const out: Record<string, VariableMeta> = {}
+  for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+    out[name] = sanitizeVariableMeta(value)
+  }
+  return out
 }
 
 export interface PromptVersion {

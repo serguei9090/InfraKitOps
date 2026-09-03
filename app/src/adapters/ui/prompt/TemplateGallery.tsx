@@ -1,5 +1,5 @@
-import { Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Download, Trash2, Upload } from 'lucide-react'
+import { type ChangeEvent, useMemo, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,14 +23,36 @@ interface TemplateGalleryProps {
   templates: SeedTemplate[]
   onUse: (template: SeedTemplate) => void
   onRemove?: (templateId: string) => void
+  /** Import a `.json` template export chosen by the user. */
+  onImportFile?: (file: File) => void
+  /** Export every user-defined template. */
+  onExportAll?: () => void
+  /** Export one template. */
+  onExportOne?: (template: SeedTemplate) => void
   className?: string
 }
 
-export function TemplateGallery({ templates, onUse, onRemove, className }: TemplateGalleryProps) {
+export function TemplateGallery({
+  templates,
+  onUse,
+  onRemove,
+  onImportFile,
+  onExportAll,
+  onExportOne,
+  className,
+}: TemplateGalleryProps) {
   const [query, setQuery] = useState('')
   const [tag, setTag] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const tags = useMemo(() => templateTagList(templates), [templates])
+  const userCount = useMemo(() => templates.filter((t) => t.userDefined).length, [templates])
+
+  function onFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file) onImportFile?.(file)
+  }
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -48,12 +70,44 @@ export function TemplateGallery({ templates, onUse, onRemove, className }: Templ
   return (
     <div className={cn('flex min-h-0 flex-col', className)}>
       <div className="shrink-0 space-y-2 pb-3">
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search templates"
-          className="h-9"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search templates"
+            className="h-9 flex-1"
+          />
+          {onImportFile && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload /> Import
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={onFile}
+              />
+            </>
+          )}
+          {onExportAll && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9"
+              disabled={userCount === 0}
+              onClick={onExportAll}
+            >
+              <Download /> Export{userCount > 0 ? ` (${userCount})` : ''}
+            </Button>
+          )}
+        </div>
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {tags.map((tg) => (
@@ -87,16 +141,28 @@ export function TemplateGallery({ templates, onUse, onRemove, className }: Templ
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-semibold leading-snug">{t.name}</p>
-                  {t.userDefined && onRemove && (
-                    <button
-                      type="button"
-                      aria-label={`Remove template ${t.name}`}
-                      onClick={() => onRemove(t.id)}
-                      className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  )}
+                  <div className="flex shrink-0 items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    {onExportOne && (
+                      <button
+                        type="button"
+                        aria-label={`Export template ${t.name}`}
+                        onClick={() => onExportOne(t)}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <Download className="size-3.5" />
+                      </button>
+                    )}
+                    {t.userDefined && onRemove && (
+                      <button
+                        type="button"
+                        aria-label={`Remove template ${t.name}`}
+                        onClick={() => onRemove(t.id)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <p className="text-[11px] font-medium text-muted-foreground">{composition(t)}</p>

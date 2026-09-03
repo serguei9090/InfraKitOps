@@ -1,11 +1,18 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { currentMessages, type Prompt } from '@/core/prompt/promptModel'
 import { extractVariables } from '@/core/prompt/variableExtractor'
 import { usePromptLibraryStore } from '@/stores/promptLibraryStore'
+import { VariableMetaEditor } from './VariableMetaEditor'
 import { VersionCompareDialog } from './VersionCompareDialog'
 import { VersionList } from './VersionList'
+
+const KIND_BADGE: Record<string, string> = {
+  textarea: 'long text',
+  select: 'dropdown',
+  boolean: 'yes/no',
+  number: 'number',
+}
 
 interface PromptInspectorProps {
   prompt: Prompt
@@ -35,48 +42,43 @@ export function PromptInspector({ prompt, onFillAndCopy }: PromptInspectorProps)
           </p>
         ) : (
           <ul className="mt-2 flex flex-col gap-1">
-            {variables.map((name) => (
-              <li key={name} className="rounded-md border border-border/60">
-                <button
-                  type="button"
-                  onClick={() => setExpanded((e) => (e === name ? null : name))}
-                  className="flex w-full items-center justify-between px-2 py-1.5 text-left font-mono text-xs hover:bg-accent/40"
-                >
-                  {`{{${name}}}`}
-                  {prompt.variables[name]?.defaultValue ? (
-                    <span className="truncate pl-2 text-muted-foreground">
-                      = {prompt.variables[name]!.defaultValue}
-                    </span>
-                  ) : null}
-                </button>
-                {expanded === name && (
-                  <div className="flex flex-col gap-2 border-t border-border/60 p-2">
-                    <Input
-                      placeholder="Description"
-                      defaultValue={prompt.variables[name]?.description ?? ''}
-                      onBlur={(e) =>
-                        setVariableMeta(prompt.id, name, {
-                          ...prompt.variables[name],
-                          description: e.target.value || undefined,
-                        })
-                      }
-                      className="h-7 text-xs"
+            {variables.map((name) => {
+              const meta = prompt.variables[name]
+              const badge = meta?.kind ? KIND_BADGE[meta.kind] : undefined
+              return (
+                <li key={name} className="rounded-md border border-border/60">
+                  <button
+                    type="button"
+                    onClick={() => setExpanded((e) => (e === name ? null : name))}
+                    className="flex w-full items-center gap-2 px-2 py-1.5 text-left font-mono text-xs hover:bg-accent/40"
+                  >
+                    <span className="shrink-0">{`{{${name}}}`}</span>
+                    {badge && (
+                      <span className="shrink-0 rounded bg-muted px-1 py-px font-sans text-[10px] text-muted-foreground">
+                        {badge}
+                      </span>
+                    )}
+                    {meta?.required && (
+                      <span className="shrink-0 font-sans text-[10px] text-amber-600 dark:text-amber-500">
+                        required
+                      </span>
+                    )}
+                    {meta?.defaultValue ? (
+                      <span className="ml-auto truncate pl-2 text-muted-foreground">
+                        = {meta.defaultValue}
+                      </span>
+                    ) : null}
+                  </button>
+                  {expanded === name && (
+                    <VariableMetaEditor
+                      variableName={name}
+                      meta={meta ?? {}}
+                      onChange={(m) => setVariableMeta(prompt.id, name, m)}
                     />
-                    <Input
-                      placeholder="Default value"
-                      defaultValue={prompt.variables[name]?.defaultValue ?? ''}
-                      onBlur={(e) =>
-                        setVariableMeta(prompt.id, name, {
-                          ...prompt.variables[name],
-                          defaultValue: e.target.value || undefined,
-                        })
-                      }
-                      className="h-7 text-xs"
-                    />
-                  </div>
-                )}
-              </li>
-            ))}
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
 

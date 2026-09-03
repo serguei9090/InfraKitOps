@@ -13,6 +13,7 @@ import { createPromptRepository } from '@/adapters/storage/promptRepository'
 import {
   cloneMessages,
   currentMessages,
+  isVariableMetaEmpty,
   latestVersion,
   messagesEqual,
   newFolder,
@@ -22,8 +23,14 @@ import {
   type Folder,
   type Message,
   type Prompt,
+  type VariableMeta,
 } from '@/core/prompt/promptModel'
 import { materializeImport, parsePromptExport } from '@/core/prompt/promptIo'
+import {
+  exportTemplates,
+  materializeTemplateImport,
+  parseTemplateExport,
+} from '@/core/prompt/templateIo'
 import type { SeedTemplate } from '@/core/prompt/templates/index'
 
 const repo = createPromptRepository()
@@ -57,7 +64,7 @@ interface PromptLibraryState {
   moveToFolder: (id: string, folderId: string | null) => void
   /** Reassign `order` for the prompts of one folder (`null` = Unfiled). */
   reorderInFolder: (folderId: string | null, orderedIds: string[]) => void
-  setVariableMeta: (id: string, name: string, meta: { description?: string; defaultValue?: string }) => void
+  setVariableMeta: (id: string, name: string, meta: VariableMeta) => void
 
   /** Replace the working message list; autosaves debounced. */
   editMessages: (id: string, messages: Message[]) => void
@@ -79,6 +86,10 @@ interface PromptLibraryState {
   /** Copy a prompt's current messages into a reusable user template. */
   promoteToTemplate: (id: string) => void
   deleteUserTemplate: (templateId: string) => void
+  /** Serialise user templates to a portable JSON blob (`templates` = all). */
+  exportUserTemplates: (templates?: SeedTemplate[]) => string
+  /** Import a template export blob. Returns how many landed; throws on a bad file. */
+  importTemplatesFromJson: (json: string) => { added: number }
 
   /** Import a Prompt Library export blob. Returns how many prompts landed;
    *  throws `Error` with a readable message on a bad file. */
@@ -235,7 +246,7 @@ export const usePromptLibraryStore = create<PromptLibraryState>((set, get) => {
       const p = get().prompts.find((x) => x.id === id)
       if (!p) return
       const next = { ...p.variables }
-      if (!meta.description && !meta.defaultValue) delete next[name]
+      if (isVariableMetaEmpty(meta)) delete next[name]
       else next[name] = meta
       patchPrompt(id, { variables: next })
       persistNow(id)
@@ -339,6 +350,21 @@ export const usePromptLibraryStore = create<PromptLibraryState>((set, get) => {
     deleteUserTemplate(templateId) {
       set((s) => ({ userTemplates: s.userTemplates.filter((t) => t.id !== templateId) }))
       void repo.deleteUserTemplate(templateId)
+    },
+
+    exportUserTemplates(templates) {
+      return exportTemplates(templates ?? get().userTemplates)
+    },
+
+    importTemplatesFromJson(json) {
+      const exp = parseTemplateExport(json)
+      const added = materializeTemplateImport(
+        exp,
+        get().userTemplates.map((t) => t.name),
+      )
+      set((s) => ({ userTemplates: [...s.userTemplates, ...added] }))
+      for (const t of added) void repo.saveUserTemplate(t)
+      return { added: added.length }
     },
 
     importFromJson(json) {

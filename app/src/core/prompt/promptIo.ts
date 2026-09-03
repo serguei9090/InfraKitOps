@@ -10,6 +10,7 @@ import {
   cloneMessages,
   newFolder,
   newId,
+  sanitizeVariables,
   type Folder,
   type Message,
   type Prompt,
@@ -155,7 +156,7 @@ export function materializeImport(
       folderId: p.folderRef ? (refToId.get(p.folderRef) ?? null) : null,
       tags: [...p.tags],
       order: now + i,
-      variables: JSON.parse(JSON.stringify(p.variables ?? {})),
+      variables: sanitizeVariables(p.variables),
       versions: p.versions.map((v) => ({
         version: v.version,
         createdAt: v.createdAt,
