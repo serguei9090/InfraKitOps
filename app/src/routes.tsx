@@ -124,6 +124,7 @@ export const router = createBrowserRouter([
       { path: 'tools/traceroute', lazy: () => import('./adapters/ui/tools/TracerouteScreen').then((m) => ({ Component: m.TracerouteScreen })) },
       { path: 'tools/network-scanner', lazy: () => import('./adapters/ui/tools/NetworkScannerScreen').then((m) => ({ Component: m.NetworkScannerScreen })) },
       { path: 'tools/snmp', lazy: () => import('./adapters/ui/tools/SnmpScreen').then((m) => ({ Component: m.SnmpScreen })) },
+      { path: 'tools/discovery-protocol', lazy: () => import('./adapters/ui/tools/DiscoveryProtocolScreen').then((m) => ({ Component: m.DiscoveryProtocolScreen })) },
       { path: 'tools/neighbor-table', lazy: () => import('./adapters/ui/tools/NeighborTableScreen').then((m) => ({ Component: m.NeighborTableScreen })) },
       { path: 'tools/hosts-editor', lazy: () => import('./adapters/ui/tools/HostsFileEditorScreen').then((m) => ({ Component: m.HostsFileEditorScreen })) },
       { path: 'tools/firewall-viewer', lazy: () => import('./adapters/ui/tools/FirewallViewerScreen').then((m) => ({ Component: m.FirewallViewerScreen })) },

@@ -1,5 +1,29 @@
 # Discovery Protocol (LLDP / CDP) — plan (WS2)
 
+## Status
+
+- **D1 done** (`2982605`) — `internal/tools/lldp/` decoder: LLDP + CDP TLV
+  parsers + a minimal pcapng reader, no new dep, unit-tested with hand-built
+  frames + a pcapng stream.
+- **D2 done** (`2982605`) — capture engine: `engine_windows.go` (pktmon
+  filter/start/stop/etl2pcap, gated on admin), `engine_other.go` (`lldpctl`
+  keyvalue poll).
+- **D0 spike — blocked in this environment** (session not elevated; pktmon
+  needs admin). The pktmon command sequence is coded per MS docs; needs a
+  real admin run + a switch that advertises LLDP/CDP to confirm end-to-end.
+- **D3 done** — `DiscoveryProtocolScreen.tsx` on T4, `route:` added to
+  `moduleTaxonomy.ts` + `routes.tsx`, neighbor cards grouped by interface.
+  Verified: renders, "Capture unavailable — needs administrator" gate shown
+  from the real capability.
+- **D4 done** — `capabilities.discovery-protocol` returns the real per-OS
+  availability + `needsElevation`; `moduleOf` → "network".
+
+**Verification gap**: no real LLDP/CDP frame has been parsed end-to-end (no
+admin + no managed switch here). Parser logic is unit-tested against
+spec-built frames. Same "structurally verified" posture as the AN6d SSH
+runner.
+
+
 `moduleTaxonomy.ts` declares a **Discovery Protocol** tool ("Capture LLDP / CDP
 neighbor advertisements") with **no `route:` and no backend package** — a dead
 menu row. Build it.

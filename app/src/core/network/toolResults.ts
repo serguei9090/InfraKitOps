@@ -282,6 +282,31 @@ export interface TraceHopStat {
   lon?: number
 }
 
+// --- Discovery Protocol (LLDP / CDP) ---
+export interface DiscoveryNeighbor {
+  iface: string
+  protocol: 'lldp' | 'cdp'
+  systemName?: string
+  systemDesc?: string
+  chassisId?: string
+  portId?: string
+  portDesc?: string
+  platform?: string
+  softwareVersion?: string
+  nativeVlan?: number
+  mgmtAddrs?: string[]
+  capabilities?: string[]
+  ttl?: number
+  seenAt?: number
+}
+
+export interface DiscoveryResult {
+  v: number
+  method: string
+  windowSec: number
+  neighbors: DiscoveryNeighbor[]
+}
+
 // --- Ping Monitor ---
 export interface PingSample {
   host: string

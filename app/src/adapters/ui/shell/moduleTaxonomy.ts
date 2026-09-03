@@ -436,7 +436,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
 
       { id: 'iperf3', name: 'iperf3 Throughput', description: 'Bandwidth test with optional MTU / MSS override', icon: Gauge, route: '/tools/iperf3', group: 'Devices & throughput' },
       { id: 'snmp', name: 'SNMP', description: 'v1 / v2c / v3 Walk, Get & Set against an OID', icon: ServerCog, route: '/tools/snmp', group: 'Devices & throughput' },
-      { id: 'discovery-protocol', name: 'Discovery Protocol', description: 'Capture LLDP / CDP neighbor advertisements', icon: RadioTower, group: 'Devices & throughput' },
+      { id: 'discovery-protocol', name: 'Discovery Protocol', description: 'Capture LLDP / CDP neighbor advertisements', icon: RadioTower, route: '/tools/discovery-protocol', group: 'Devices & throughput' },
     ],
   },
   {
