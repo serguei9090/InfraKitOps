@@ -122,7 +122,20 @@ assets.
 
 **Est. 0.5–1 d.**
 
-### D1 — backend: headless vault unlock + proxy gate
+### D1 — backend: headless vault unlock + proxy gate ✅ DONE
+
+Landed: `--vault-passphrase-file` (+ `INFRAKIT_VAULT_PASSPHRASE_FILE`) —
+`unlockVaultFromFile` reads the file, `Init` a fresh shared vault or `Unlock`
+an existing one at boot (fatal on misconfig; no-op + log if keyring already
+unlocked it). `--behind-proxy` (+ `INFRAKIT_BEHIND_PROXY` truthy) downgrades
+the non-loopback+auth+no-TLS **fatal to a warning** and calls
+`server.SetTrustProxy(true)` (X-Forwarded-Host believed for same-origin CORS).
+`flagPassed` / `envTruthy` helpers. 4 tests. Smoke: `0.0.0.0` bind + `--auth
+on` + `--behind-proxy` starts with a warning; passphrase file initialises +
+unlocks the vault.
+
+Original notes below.
+
 
 - **`--vault-passphrase-file <path>`** (+ `INFRAKIT_VAULT_PASSPHRASE_FILE`):
   at boot, read the file (trim trailing newline); for the **single-user**

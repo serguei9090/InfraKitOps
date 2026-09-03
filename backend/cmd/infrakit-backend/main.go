@@ -63,18 +63,24 @@ func main() {
 	tlsKey := flag.String("tls-key", "", "private key file (with --tls <certfile>)")
 	dataDir := flag.String("data-dir", "", "directory for all databases + vault.enc (\"\" = OS config dir); individual --*-db flags still win")
 	staticDir := flag.String("static-dir", "", "serve the built web frontend from this directory (\"\" = API only)")
+	vaultPassphraseFile := flag.String("vault-passphrase-file", "", "unlock (or init) the shared vault at boot from this file's contents (headless deploy)")
+	behindProxy := flag.Bool("behind-proxy", false, "a trusted reverse proxy terminates TLS in front of this process (relaxes the non-loopback TLS gate; trusts X-Forwarded-*)")
 	var corsOrigins multiFlag
 	flag.Var(&corsOrigins, "cors-origin", "extra browser origin allowed under --auth on (repeatable)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 	applyEnv(map[string]*string{
-		"addr":       addr,
-		"auth":       authMode,
-		"data-dir":   dataDir,
-		"static-dir": staticDir,
-		"tls":        tlsMode,
-		"tls-key":    tlsKey,
+		"addr":                  addr,
+		"auth":                  authMode,
+		"data-dir":              dataDir,
+		"static-dir":            staticDir,
+		"tls":                   tlsMode,
+		"tls-key":               tlsKey,
+		"vault-passphrase-file": vaultPassphraseFile,
 	})
+	if !flagPassed("behind-proxy") && envTruthy("INFRAKIT_BEHIND_PROXY") {
+		*behindProxy = true
+	}
 	if len(corsOrigins) == 0 {
 		if v := os.Getenv("INFRAKIT_CORS_ORIGIN"); v != "" {
 			for _, o := range strings.Split(v, ",") {
@@ -111,6 +117,11 @@ func main() {
 	vlt := openVaultRegistry(*vaultPath, *vaultAutoLock)
 	if vlt != nil {
 		defer vlt.CloseAll()
+		if *vaultPassphraseFile != "" {
+			unlockVaultFromFile(vlt, *vaultPassphraseFile)
+		}
+	} else if *vaultPassphraseFile != "" {
+		log.Fatalf("--vault-passphrase-file set but the vault is disabled (--vault off)")
 	}
 	var engine *orchestrator.Engine
 	if orch != nil {
@@ -268,8 +279,17 @@ func main() {
 
 	// Hard gate: multi-user mode over a non-loopback bind MUST use TLS —
 	// passwords and session tokens in clear on a LAN is a non-starter.
+	// --behind-proxy asserts TLS is terminated by a trusted reverse proxy in
+	// front of this process; downgrade the gate to a warning.
 	if *authMode == "on" && !tlsOn && !isLoopback(ln.Addr()) {
-		log.Fatalf("refusing to start: --auth on with a non-loopback bind (%s) needs --tls (auto or a real cert)", ln.Addr())
+		if *behindProxy {
+			log.Printf("WARNING: --auth on, non-loopback bind (%s), no TLS on this process — trusting --behind-proxy for TLS termination. Do NOT expose this port directly.", ln.Addr())
+		} else {
+			log.Fatalf("refusing to start: --auth on with a non-loopback bind (%s) needs --tls (auto or a real cert), or --behind-proxy if a trusted reverse proxy terminates TLS", ln.Addr())
+		}
+	}
+	if *behindProxy {
+		server.SetTrustProxy(true)
 	}
 
 	// The host reads these lines to learn where + how to connect.
@@ -359,20 +379,70 @@ func (m *multiFlag) Set(v string) error {
 	return nil
 }
 
+// flagPassed reports whether the named flag was given explicitly on the
+// command line (as opposed to sitting at its default).
+func flagPassed(name string) bool {
+	seen := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			seen = true
+		}
+	})
+	return seen
+}
+
+// envTruthy reports whether an env var holds an affirmative value.
+func envTruthy(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
 // applyEnv fills each string flag from INFRAKIT_<FLAG> (dashes → underscores,
 // upper-cased) when the flag was NOT passed explicitly on the command line.
 // An explicit flag always wins (DEPLOY_PLAN.md D0).
 func applyEnv(flags map[string]*string) {
-	passed := map[string]bool{}
-	flag.Visit(func(f *flag.Flag) { passed[f.Name] = true })
 	for name, target := range flags {
-		if passed[name] {
+		if flagPassed(name) {
 			continue
 		}
 		env := "INFRAKIT_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
 		if v := os.Getenv(env); v != "" {
 			*target = v
 		}
+	}
+}
+
+// unlockVaultFromFile reads a passphrase file and unlocks — or, on a brand-new
+// vault, initialises — the shared vault, so a headless deploy comes up ready
+// (DEPLOY_PLAN.md D1). Fatal on a misconfiguration: the operator asked for an
+// auto-unlock and it must work.
+func unlockVaultFromFile(reg *vault.Registry, path string) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatalf("vault-passphrase-file: %v", err)
+	}
+	pw := strings.TrimRight(string(raw), "\r\n")
+	if pw == "" {
+		log.Fatalf("vault-passphrase-file %s: empty", path)
+	}
+	v := reg.For("") // the shared / single-user vault
+	st := v.Status()
+	switch {
+	case st.Unlocked:
+		log.Printf("vault: already unlocked (keyring); passphrase file ignored")
+	case !st.Initialised:
+		if err := v.Init(pw); err != nil {
+			log.Fatalf("vault: init from passphrase file: %v", err)
+		}
+		log.Printf("vault: initialised + unlocked from passphrase file")
+	default:
+		if err := v.Unlock(pw); err != nil {
+			log.Fatalf("vault: unlock from passphrase file: %v", err)
+		}
+		log.Printf("vault: unlocked from passphrase file")
 	}
 }
 

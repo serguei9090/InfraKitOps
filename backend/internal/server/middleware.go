@@ -56,8 +56,14 @@ func sameOrigin(origin string, r *http.Request) bool {
 	return strings.EqualFold(u.Host, host)
 }
 
-// trustProxyHeaders is set by main.go when --behind-proxy is given (D1).
+// trustProxyHeaders is set by main.go when --behind-proxy is given (D1):
+// the immediate peer is a trusted reverse proxy, so X-Forwarded-* may be
+// believed for same-origin and secure-cookie decisions.
 var trustProxyHeaders bool
+
+// SetTrustProxy tells the server an authenticated reverse proxy sits in front
+// (DEPLOY_PLAN.md D1). Call once at startup, before serving.
+func SetTrustProxy(v bool) { trustProxyHeaders = v }
 
 // bearerAuth rejects any request whose bearer token (Authorization header, or
 // `?token=` query param for EventSource which cannot set headers) does not match
