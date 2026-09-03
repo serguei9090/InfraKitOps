@@ -1,12 +1,15 @@
 name: release
 
 # Cut a release by pushing a tag:  git tag v0.2.0 && git push origin v0.2.0
-# or run manually from the Actions tab with a version like 0.2.0.
+# or run it manually from the Actions tab with a version like 0.2.0.
 #
-# Produces, attached to a DRAFT GitHub Release:
-#   - Windows:  InfraKit Studio_<v>_x64_en-US.msi  +  _x64-setup.exe (NSIS)
-#   - Linux:    infrakit-studio_<v>_amd64.deb  +  .AppImage
-#   - Web:      infrakit-studio-web-<v>.zip  (static bundle for self-hosting)
+# Attaches to a DRAFT GitHub Release:
+#   Desktop installers
+#     Windows   InfraKit Studio_<v>_x64_en-US.msi   +  _x64-setup.exe (NSIS)
+#     Linux     infrakit-studio_<v>_amd64.deb        +  .AppImage
+#   Self-hosted web bundle  (backend binary + built UI + launcher, one folder)
+#     infrakit-studio-web-<v>-linux-amd64.zip
+#     infrakit-studio-web-<v>-windows-amd64.zip
 #
 # Review the draft, then publish it.
 
@@ -43,14 +46,32 @@ jobs:
           draft: true
           prerelease: false
           body: |
-            Desktop installers (Windows MSI + NSIS, Linux `.deb` + `.AppImage`)
-            and the self-hosting web bundle are attached below.
+            ## Desktop app
 
-            **Single-user (desktop):** install and run — no configuration.
-            **Multi-user (self-hosted):** run the backend with `--auth on`
-            and `--tls auto`, then point the web build at it
-            (Settings → Backend, or `VITE_BACKEND_URL`). See
-            `USER_MANAGEMENT_PLAN.md`.
+            Install and run — a local backend starts automatically, no
+            configuration, single-user.
+
+            | OS | File |
+            |----|------|
+            | Windows | `.msi` (or `_x64-setup.exe` for the NSIS installer) |
+            | Linux | `.deb` (Debian/Ubuntu) or `.AppImage` (portable) |
+
+            ## Self-hosted web (`infrakit-studio-web-<v>-<os>.zip`)
+
+            Run it for a team. The **same backend binary** serves the app UI
+            and the API on one port — the desktop build uses it as a sidecar,
+            here it runs standalone with `--static-dir`.
+
+            ```
+            unzip infrakit-studio-web-<v>-linux-amd64.zip -d infrakit
+            cd infrakit && ./run.sh          # Windows: run.bat
+            ```
+
+            Open `http://127.0.0.1:8080`; the first start prints a
+            `SETUP-TOKEN` for creating the admin account. To expose it on a
+            network add TLS — see `README.md` in the zip and `DEPLOY.md` in
+            the repo. A `Dockerfile` + `deploy/compose.yml` (Caddy HTTPS) are
+            also in the repo.
 
   desktop:
     needs: create-release
@@ -92,6 +113,10 @@ jobs:
         working-directory: app
         run: bun run build:sidecar
 
+      # Provide signing secrets in the repo to enable code signing:
+      #   Windows: WINDOWS_CERT (base64 .pfx) + WINDOWS_CERT_PASSWORD
+      #   (wire them into tauri.conf.json's bundle.windows.certificateThumbprint
+      #    or the signCommand — left unset here, builds are unsigned.)
       - name: tauri build + upload
         uses: tauri-apps/tauri-action@v0
         env:
@@ -100,24 +125,72 @@ jobs:
           projectPath: app
           releaseId: ${{ needs.create-release.outputs.release_id }}
 
-  web:
+  # Build the frontend once; every web-bundle variant reuses it.
+  web-frontend:
     needs: create-release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - name: install + version + build
+      - name: build
         working-directory: app
         run: |
           bun install --frozen-lockfile
           bun run set-version "${{ needs.create-release.outputs.version }}"
           bun run build
-      - name: zip the static bundle
-        working-directory: app/dist
-        run: zip -r "../../infrakit-studio-web-${{ needs.create-release.outputs.version }}.zip" .
-      - name: attach to the release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: app/dist
+          retention-days: 1
+
+  web-bundle:
+    needs: [create-release, web-frontend]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64, ext: '',     label: linux-amd64 }
+          - { goos: windows, goarch: amd64, ext: '.exe',  label: windows-amd64 }
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: bundle/web
+
+      - name: build backend (${{ matrix.label }})
+        working-directory: backend
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          V="${{ needs.create-release.outputs.version }}"
+          go build -trimpath \
+            -ldflags "-s -w -X github.com/infrakit/backend/internal/api.Version=$V" \
+            -o "../bundle/infrakit-backend${{ matrix.ext }}" ./cmd/infrakit-backend
+
+      - name: assemble + zip
+        run: |
+          cp packaging/web-bundle/README.md bundle/
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            cp packaging/web-bundle/run.bat bundle/
+          else
+            cp packaging/web-bundle/run.sh bundle/
+            chmod +x bundle/run.sh bundle/infrakit-backend
+          fi
+          Z="infrakit-studio-web-${{ needs.create-release.outputs.version }}-${{ matrix.label }}.zip"
+          ( cd bundle && zip -r "../$Z" . )
+
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.create-release.outputs.tag }}
           draft: true
-          files: infrakit-studio-web-${{ needs.create-release.outputs.version }}.zip
+          files: infrakit-studio-web-${{ needs.create-release.outputs.version }}-${{ matrix.label }}.zip
