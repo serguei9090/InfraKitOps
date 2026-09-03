@@ -164,6 +164,28 @@ func (h *AuthHandlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]string{"token": sess})
 }
 
+// PickUsers: GET /users/pick — id + username for every enabled user. Any
+// signed-in user may call it (the share dialogs need a name↔id list).
+func (h *AuthHandlers) PickUsers(w http.ResponseWriter, r *http.Request) {
+	if h.me(r) == nil {
+		apierr.Write(w, apierr.Auth("not signed in"))
+		return
+	}
+	users, err := h.Service.Store().ListUsers()
+	if err != nil {
+		apierr.Write(w, apierr.Internal(err.Error()))
+		return
+	}
+	out := make([]map[string]string, 0, len(users))
+	for _, u := range users {
+		if u.Disabled {
+			continue
+		}
+		out = append(out, map[string]string{"id": u.ID, "username": u.Username})
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"users": out})
+}
+
 // --- per-user synced settings (DEPLOY_PLAN.md D5) ------------------
 
 // GetUserSettings: GET /settings/user — the caller's synced-settings blob.
@@ -286,7 +308,7 @@ func (h *AuthHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
-	if err := h.Service.Store().DeleteUser(id); err != nil {
+	if err := h.Service.DeleteUser(id); err != nil {
 		authErr(w, err)
 		return
 	}

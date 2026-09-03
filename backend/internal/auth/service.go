@@ -21,6 +21,21 @@ type Service struct {
 	// OnBootstrap, if set, runs with the new admin's id right after the first
 	// account is created — used to claim pre-auth data (U2). Best-effort.
 	OnBootstrap func(adminID string)
+
+	// OnUserDeleted, if set, runs after a user is removed — used to purge that
+	// user's share grants across the module stores. Best-effort.
+	OnUserDeleted func(userID string)
+}
+
+// DeleteUser removes a user and fires OnUserDeleted.
+func (s *Service) DeleteUser(id string) error {
+	if err := s.store.DeleteUser(id); err != nil {
+		return err
+	}
+	if s.OnUserDeleted != nil {
+		s.OnUserDeleted(id)
+	}
+	return nil
 }
 
 // NewService wires a Service over an open auth.db. If the store has no users

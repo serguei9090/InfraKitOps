@@ -67,12 +67,7 @@ func writeStoreErr(w http.ResponseWriter, err error) {
 // canEditRunbook checks the caller may mutate runbook id. In single-user mode
 // (owner "") every check passes. Writes the 404 and returns false on failure.
 func (h *RunbookHandlers) canEditRunbook(w http.ResponseWriter, r *http.Request, id string) bool {
-	me := owner(r)
-	if me == "" {
-		return true
-	}
-	rbOwner := h.Store.RunbookOwner(id)
-	if rbOwner == "" || rbOwner == me {
+	if h.Store.CanEdit(id, owner(r)) {
 		return true
 	}
 	apierr.Write(w, apierr.NotFound("not found"))
@@ -125,7 +120,7 @@ func (h *RunbookHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		writeStoreErr(w, err)
 		return
 	}
-	if me := owner(r); me != "" && rb.Owner != "" && rb.Owner != me && !rb.Published {
+	if !h.Store.CanView(chi.URLParam(r, "id"), owner(r)) {
 		apierr.Write(w, apierr.NotFound("not found"))
 		return
 	}
@@ -252,6 +247,100 @@ func (h *RunbookHandlers) Publish(w http.ResponseWriter, r *http.Request) {
 	h.Get(w, r)
 }
 
+// isRunbookOwner — share management is owner-only (not edit-grantees, not
+// admin — SHARING_PLAN.md). Single-user / orphan rows pass.
+func (h *RunbookHandlers) isRunbookOwner(r *http.Request, id string) bool {
+	me := owner(r)
+	o := h.Store.RunbookOwner(id)
+	return me == "" || o == "" || o == me
+}
+
+// ListShares: GET /runbooks/{id}/shares
+func (h *RunbookHandlers) ListShares(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	id := chi.URLParam(r, "id")
+	if !h.Store.CanView(id, owner(r)) {
+		apierr.Write(w, apierr.NotFound("not found"))
+		return
+	}
+	shares, err := h.Store.Shares(id)
+	if err != nil {
+		apierr.Write(w, apierr.Internal(err.Error()))
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"shares": shares})
+}
+
+// PutShare: PUT /runbooks/{id}/shares/{userId}   { canEdit }
+func (h *RunbookHandlers) PutShare(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	id, uid := chi.URLParam(r, "id"), chi.URLParam(r, "userId")
+	if !h.isRunbookOwner(r, id) {
+		apierr.Write(w, apierr.Permission("only the owner can share this runbook"))
+		return
+	}
+	if uid == owner(r) {
+		apierr.Write(w, apierr.Validation("you already own this runbook"))
+		return
+	}
+	var body struct {
+		CanEdit bool `json:"canEdit"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := h.Store.Grant(id, uid, owner(r), body.CanEdit); err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	audit(r, "runbook_share", id, map[string]any{"grantee": uid, "canEdit": body.CanEdit})
+	h.ListShares(w, r)
+}
+
+// DeleteShare: DELETE /runbooks/{id}/shares/{userId}
+func (h *RunbookHandlers) DeleteShare(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	id, uid := chi.URLParam(r, "id"), chi.URLParam(r, "userId")
+	if !h.isRunbookOwner(r, id) {
+		apierr.Write(w, apierr.Permission("only the owner can change sharing"))
+		return
+	}
+	if err := h.Store.Revoke(id, uid); err != nil {
+		apierr.Write(w, apierr.Internal(err.Error()))
+		return
+	}
+	audit(r, "runbook_unshare", id, map[string]any{"grantee": uid})
+	h.ListShares(w, r)
+}
+
+// Reassign: PATCH /runbooks/{id}/owner   { ownerId }   (admin only, audited)
+func (h *RunbookHandlers) Reassign(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	if !requireAdmin(w, r) {
+		return
+	}
+	id := chi.URLParam(r, "id")
+	var body struct {
+		OwnerID string `json:"ownerId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.OwnerID == "" {
+		apierr.Write(w, apierr.Validation("ownerId is required"))
+		return
+	}
+	if err := h.Store.SetOwner(id, body.OwnerID); err != nil {
+		writeStoreErr(w, err)
+		return
+	}
+	audit(r, "runbook_reassign", id, map[string]any{"newOwner": body.OwnerID})
+	WriteJSON(w, http.StatusOK, map[string]string{"status": "reassigned"})
+}
+
 // Delete: DELETE /runbooks/{id}
 func (h *RunbookHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
@@ -301,10 +390,12 @@ func (h *RunbookHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 		sse.RejectCoded(w, string(apierr.CodeNotFound), "runbook not found", "")
 		return
 	}
-	if me := owner(r); me != "" && rb.Owner != "" && rb.Owner != me && !rb.Published {
+	me := owner(r)
+	if !h.Store.CanView(chi.URLParam(r, "id"), me) {
 		sse.RejectCoded(w, string(apierr.CodeNotFound), "runbook not found", "")
 		return
 	}
+	sharedView, _ := h.Store.SharedAccess(chi.URLParam(r, "id"), me)
 	q := r.URL.Query()
 	version, _ := strconv.Atoi(q.Get("version"))
 	dryRun := q.Get("dryRun") == "1" || q.Get("dryRun") == "true"
@@ -317,8 +408,9 @@ func (h *RunbookHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Published gate: a non-author (no ?author=1) may only run a published runbook.
-	if !rb.Published && q.Get("author") != "1" && !dryRun {
+	// Published gate: a non-author (no ?author=1) may only run a published
+	// runbook — unless it has been shared with them.
+	if !rb.Published && q.Get("author") != "1" && !dryRun && !sharedView {
 		sse.RejectCoded(w, string(apierr.CodePermission),
 			"this runbook is a draft — publish it before running",
 			"Publish the runbook, or run it as its author from the editor.")

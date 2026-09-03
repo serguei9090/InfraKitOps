@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/infrakit/backend/internal/sharedb"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -98,7 +100,12 @@ func Open(dsn string) (*Store, error) {
 			return nil, fmt.Errorf("migrate (%s): %w", m, err)
 		}
 	}
-	return &Store{db: db}, nil
+	s := &Store{db: db}
+	if err := s.ensureShareSchema(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("share schema: %w", err)
+	}
+	return s, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -240,7 +247,9 @@ func (s *Store) ListRunbooks(viewer string) ([]*Runbook, error) {
 			return nil, err
 		}
 		if !canView(viewer, rb.Owner, rb.Published) {
-			continue
+			if v, _ := s.SharedAccess(id, viewer); !v {
+				continue
+			}
 		}
 		out = append(out, rb)
 	}
@@ -339,6 +348,7 @@ func (s *Store) DeleteRunbook(id string) error {
 	_, _ = s.db.Exec(`DELETE FROM runbook_version WHERE runbook_id = ?`, id)
 	_, _ = s.db.Exec(`DELETE FROM runbook_draft WHERE runbook_id = ?`, id)
 	_, _ = s.db.Exec(`DELETE FROM runbook_schedule WHERE runbook_id = ?`, id)
+	_ = sharedb.DeleteForThing(s.db, shareTable, shareCol, id)
 	_, err := s.db.Exec(`DELETE FROM runbook WHERE id = ?`, id)
 	return err
 }

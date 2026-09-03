@@ -118,6 +118,7 @@ func NewRouter(opts Options) http.Handler {
 			})
 			r.Route("/users", func(r chi.Router) {
 				r.Get("/", ah.ListUsers)
+				r.Get("/pick", ah.PickUsers) // any signed-in user — name↔id for share dialogs
 				r.Post("/", ah.CreateUser)
 				r.Patch("/{id}", ah.PatchUser)
 				r.Delete("/{id}", ah.DeleteUser)
@@ -195,6 +196,10 @@ func NewRouter(opts Options) http.Handler {
 			r.Post("/{id}/publish", rbh.Publish)
 			r.Post("/{id}/preview", rbh.Preview)
 			r.Get("/{id}/run/stream", rbh.RunStream)
+			r.Get("/{id}/shares", rbh.ListShares)
+			r.Put("/{id}/shares/{userId}", rbh.PutShare)
+			r.Delete("/{id}/shares/{userId}", rbh.DeleteShare)
+			r.Patch("/{id}/owner", rbh.Reassign)
 		})
 		r.Get("/runs", rbh.ListRuns)
 		r.Get("/runs/pending-approvals", rbh.PendingApprovals)

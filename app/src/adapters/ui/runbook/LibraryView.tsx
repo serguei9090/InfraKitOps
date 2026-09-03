@@ -1,4 +1,4 @@
-import { Pencil, Play, Trash2, Upload } from 'lucide-react'
+import { Pencil, Play, Share2, Trash2, Upload } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createRunbook } from '@/adapters/backend/runbookClient'
 import { currentSpec, EXECUTOR_LABEL, type Runbook, type RunbookSpec } from '@/core/runbook/runbookModel'
+import { useAuthStore } from '@/stores/authStore'
 import { useRunbookStore } from '@/stores/runbookStore'
+import { ShareDialog } from '@/adapters/ui/share/ShareDialog'
 import { RunSetupDialog } from './RunSetupDialog'
 
 export function LibraryView() {
@@ -17,6 +19,8 @@ export function LibraryView() {
   const refresh = useRunbookStore((s) => s.refresh)
   const [query, setQuery] = useState('')
   const [runTarget, setRunTarget] = useState<Runbook | null>(null)
+  const [shareTarget, setShareTarget] = useState<Runbook | null>(null)
+  const multiUser = useAuthStore((s) => s.mode === 'on')
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -122,6 +126,16 @@ export function LibraryView() {
                   >
                     {rb.published ? 'Unpublish' : 'Publish'}
                   </Button>
+                  {multiUser && (
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Share runbook"
+                      onClick={() => setShareTarget(rb)}
+                    >
+                      <Share2 className="size-4" />
+                    </Button>
+                  )}
                   <Button
                     size="icon-sm"
                     variant="ghost"
@@ -140,6 +154,16 @@ export function LibraryView() {
 
       {runTarget && (
         <RunSetupDialog runbook={runTarget} open onOpenChange={(o) => !o && setRunTarget(null)} />
+      )}
+
+      {shareTarget && (
+        <ShareDialog
+          open
+          onOpenChange={(o) => !o && setShareTarget(null)}
+          base={`/runbooks/${shareTarget.id}`}
+          noun="runbook"
+          title={`Share “${currentSpec(shareTarget)?.name ?? 'runbook'}”`}
+        />
       )}
     </div>
   )

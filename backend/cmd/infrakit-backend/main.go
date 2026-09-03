@@ -256,6 +256,11 @@ func main() {
 				_ = ansibleStore.ClaimOrphans(adminID)
 			}
 		}
+		svc.OnUserDeleted = func(uid string) {
+			if orch != nil {
+				_ = orch.PurgeGranteeShares(uid)
+			}
+		}
 		if tok := svc.SetupToken(); tok != "" {
 			fmt.Printf("SETUP-TOKEN %s\n", tok)
 		}
