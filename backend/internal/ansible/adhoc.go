@@ -66,7 +66,10 @@ func (e *Engine) RunAdhoc(ctx context.Context, owner string, mode RuntimeMode, s
 	_ = evFile.Close()
 	defer os.Remove(evPath)
 
-	req := RunReq{Tool: "ansible", Dir: proj.Path, Argv: args, Env: e.callbackEnv(evPath)}
+	req := RunReq{
+		Tool: "ansible", Dir: proj.Path, Argv: args,
+		Env: append(e.callbackEnv(evPath), factCacheEnv(proj.Path)...),
+	}
 
 	redArgv := "ansible " + strings.Join(args, " ")
 	run := &Run{

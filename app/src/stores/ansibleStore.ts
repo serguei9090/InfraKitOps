@@ -6,6 +6,7 @@ import { create } from 'zustand'
 import * as api from '@/adapters/backend/ansibleClient'
 import type {
   AnsibleSettings,
+  HostFacts,
   HostState,
   InventoryResult,
   Job,
@@ -32,6 +33,7 @@ export type Section =
   | 'editor'
   | 'content'
   | 'schedules'
+  | 'facts'
   | 'approvals'
   | 'history'
 
@@ -171,6 +173,8 @@ interface AnsibleStore {
   jobs: Job[]
   schedules: Schedule[]
   pendingApprovals: Run[]
+  facts: HostFacts[]
+  factsBusy: boolean
   inventory: InventoryResult | null
   inventoryError: string | null
   runs: Run[]
@@ -206,6 +210,8 @@ interface AnsibleStore {
   refreshSchedules: () => Promise<void>
   saveSchedule: (s: Partial<Schedule>) => Promise<Schedule | null>
   removeSchedule: (id: string) => Promise<void>
+  refreshFacts: () => Promise<void>
+  gatherFacts: (pattern: string, inventory?: string) => Promise<void>
   refreshApprovals: () => Promise<void>
   approveRun: (id: number, approved: boolean) => Promise<void>
   publishProject: (id: string, published: boolean) => Promise<void>
@@ -233,6 +239,8 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
   jobs: [],
   schedules: [],
   pendingApprovals: [],
+  facts: [],
+  factsBusy: false,
   inventory: null,
   inventoryError: null,
   runs: [],
@@ -252,6 +260,7 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
       void get().refreshJobs()
       void get().refreshSchedules()
     }
+    if (section === 'facts') void get().refreshFacts()
     if (section === 'approvals') void get().refreshApprovals()
     if (section === 'history') void get().refreshRuns()
   },
@@ -434,6 +443,32 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
       await get().refreshSchedules()
     } catch (e) {
       reportError(e, SRC)
+    }
+  },
+
+  refreshFacts: async () => {
+    const id = get().selectedId
+    if (!id) {
+      set({ facts: [] })
+      return
+    }
+    try {
+      set({ facts: await api.listFacts(id) })
+    } catch (e) {
+      set({ settingsError: msg(e) })
+    }
+  },
+
+  gatherFacts: async (pattern, inventory) => {
+    const id = get().selectedId
+    if (!id || get().factsBusy) return
+    set({ factsBusy: true })
+    try {
+      set({ facts: await api.gatherFacts(id, { pattern, inventory }) })
+    } catch (e) {
+      reportError(e, SRC)
+    } finally {
+      set({ factsBusy: false })
     }
   },
 

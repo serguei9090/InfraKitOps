@@ -205,7 +205,10 @@ func (e *Engine) Run(ctx context.Context, owner string, mode RuntimeMode, trigge
 	_ = evFile.Close()
 	defer os.Remove(evPath)
 
-	req := RunReq{Tool: "ansible-playbook", Dir: proj.Path, Argv: args, Env: e.callbackEnv(evPath)}
+	req := RunReq{
+		Tool: "ansible-playbook", Dir: proj.Path, Argv: args,
+		Env: append(e.callbackEnv(evPath), factCacheEnv(proj.Path)...),
+	}
 	return e.execRun(ctx, runner, req, evPath, run, runID, nil, out)
 }
 
@@ -217,6 +220,20 @@ func (e *Engine) callbackEnv(eventFile string) []string {
 		"ANSIBLE_CALLBACKS_ENABLED=infrakit_events",
 		"ANSIBLE_LOAD_CALLBACK_PLUGINS=1",
 		"INFRAKIT_EVENT_FILE=" + eventFile,
+	}
+}
+
+// factCacheEnv makes every run cache gathered facts as JSON under
+// <project>/.facts so the Facts browser (AN6f) can read them. A project's own
+// ansible.cfg still wins if it sets fact_caching.
+func factCacheEnv(projectDir string) []string {
+	if projectDir == "" {
+		return nil
+	}
+	return []string{
+		"ANSIBLE_CACHE_PLUGIN=jsonfile",
+		"ANSIBLE_CACHE_PLUGIN_CONNECTION=" + filepath.Join(projectDir, ".facts"),
+		"ANSIBLE_CACHE_PLUGIN_TIMEOUT=0",
 	}
 }
 

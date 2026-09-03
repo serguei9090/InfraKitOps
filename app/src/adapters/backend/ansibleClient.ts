@@ -8,6 +8,7 @@ import { backendGet, backendRequest } from './backendClient'
 import { openStream, type StreamHandlers } from './sseClient'
 import type {
   AnsibleSettings,
+  HostFacts,
   InventoryResult,
   Job,
   Project,
@@ -87,6 +88,18 @@ export const approveRun = (id: number, approved: boolean) =>
 
 export const projectTree = (id: string) =>
   backendGet<{ tree: ProjectTree }>(`/ansible/projects/${id}/tree`).then((r) => r.tree)
+
+// --- facts (AN6f) ---------------------------------------------
+
+export const listFacts = (id: string) =>
+  backendGet<{ hosts: HostFacts[] | null }>(`/ansible/projects/${id}/facts`).then((r) => arr(r.hosts))
+
+export const gatherFacts = (id: string, body: { pattern?: string; inventory?: string }) =>
+  backendRequest<{ hosts: HostFacts[] | null }>(
+    'POST',
+    `/ansible/projects/${id}/facts/gather`,
+    body,
+  ).then((r) => arr(r.hosts))
 
 // --- project files + inventory -----------------------------------
 

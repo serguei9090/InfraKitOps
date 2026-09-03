@@ -3,6 +3,7 @@ import {
   Boxes,
   CalendarClock,
   FileCode2,
+  Fingerprint,
   FolderGit2,
   History,
   ListChecks,
@@ -24,6 +25,7 @@ import { AdhocView } from './AdhocView'
 import { EditorView } from './EditorView'
 import { ContentView } from './ContentView'
 import { SchedulesView } from './SchedulesView'
+import { FactsView } from './FactsView'
 import { ApprovalsView } from './ApprovalsView'
 import { HistoryView } from './HistoryView'
 import { RuntimePanel } from './RuntimePanel'
@@ -37,6 +39,7 @@ const NAV: { id: Section; label: string; icon: typeof History }[] = [
   { id: 'editor', label: 'Editor', icon: FileCode2 },
   { id: 'content', label: 'Content', icon: Boxes },
   { id: 'schedules', label: 'Schedules', icon: CalendarClock },
+  { id: 'facts', label: 'Facts', icon: Fingerprint },
   { id: 'history', label: 'History', icon: History },
 ]
 
@@ -183,6 +186,8 @@ export function AnsibleConsoleScaffold() {
           <ContentView />
         ) : section === 'schedules' ? (
           <SchedulesView />
+        ) : section === 'facts' ? (
+          <FactsView />
         ) : section === 'approvals' ? (
           <ApprovalsView />
         ) : (

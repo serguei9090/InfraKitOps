@@ -496,6 +496,38 @@ func (h *AnsibleHandlers) DeleteProject(w http.ResponseWriter, r *http.Request) 
 	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+// Facts: GET /ansible/projects/{id}/facts
+func (h *AnsibleHandlers) Facts(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	hosts, err := h.Engine.Facts(owner(r), chi.URLParam(r, "id"))
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
+}
+
+// GatherFacts: POST /ansible/projects/{id}/facts/gather { pattern?, inventory? }
+func (h *AnsibleHandlers) GatherFacts(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var b struct {
+		Pattern   string `json:"pattern"`
+		Inventory string `json:"inventory"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	audit(r, "ansible_facts_gather", nz(b.Pattern, "all"), map[string]string{"project": chi.URLParam(r, "id")})
+	hosts, err := h.Engine.GatherFacts(r.Context(), owner(r), chi.URLParam(r, "id"), b.Pattern, b.Inventory)
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
+}
+
 // ProjectTree: GET /ansible/projects/{id}/tree
 func (h *AnsibleHandlers) ProjectTree(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {

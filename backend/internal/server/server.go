@@ -267,6 +267,8 @@ func NewRouter(opts Options) http.Handler {
 				r.Post("/", anh.CreateProject)
 				r.Delete("/{id}", anh.DeleteProject)
 				r.Get("/{id}/tree", anh.ProjectTree)
+				r.Get("/{id}/facts", anh.Facts)
+				r.Post("/{id}/facts/gather", anh.GatherFacts)
 				r.Get("/{id}/file", anh.ProjectFile)
 				r.Put("/{id}/file", anh.ProjectFile)
 				r.Get("/{id}/inventory", anh.Inventory)

@@ -90,6 +90,12 @@ export interface ProjectTree {
   hasReqs: boolean
 }
 
+export interface HostFacts {
+  host: string
+  gatheredAt: number
+  facts: Record<string, unknown>
+}
+
 export interface RunSpec {
   projectId: string
   playbook: string
