@@ -1,7 +1,11 @@
 # DEPLOY_PLAN.md — hosted web deployment (Docker + CI)
 
 Plan for running InfraKit Studio as a **hosted web service** instead of (or
-alongside) the desktop app. Nothing here is built yet. Approve before code.
+alongside) the desktop app.
+
+> **Status: D0–D5 all shipped (2026-09-03).** `docker compose up -d --build`
+> in `deploy/` gives a working hosted instance. See [`DEPLOY.md`](DEPLOY.md)
+> for operating it. Each phase below carries a ✅ with what landed.
 
 ### Decisions locked (2026-09-03)
 
@@ -297,13 +301,15 @@ Original notes below.
 
 ---
 
-## 5. Total
+## 5. Total — DONE
 
-D0–D5 ≈ **3–3.5 days**. No new Go dependencies (buildx/Caddy are infra, not
-`go.mod`). No frontend deps.
-
-Commit order: D0 → D1 → D2 → D3 → D4 → D5, each green on its own. D0 and D1
-ship value even without the container (better headless/self-host story).
+All of D0–D5 shipped in 8 commits (`010cd16` plan, then `35c126a` D0,
+`1260c2d` D1, `810ae51` D2, `27fe422` D3, `29d7cac` D4, `43abec0`+`77b6fc8`
+D5). **No new Go or frontend dependencies.** Frontend 1336 tests green,
+backend all packages green, hex boundary intact. Verified end-to-end against
+both the built binary and the built container image (health, SPA routing,
+immutable assets, `--behind-proxy` gate, headless vault unlock, settings-sync
+round-trip).
 
 ## 6. Non-goals
 

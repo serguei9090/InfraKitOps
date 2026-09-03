@@ -568,8 +568,27 @@ multi-user runbook approvals, admin audit log, self-signed TLS
 (`--tls auto`) + fingerprint pinning + a hard non-loopback gate.
 **Remaining = parked only**: Packaging P7e–P7h (owner-paused), A4f
 `Task.resources` always-inject, the Tauri desktop custom-cert verifier
-(U6 deferred), S3e sync (now buildable on the account layer, unpark on
-request). **Killed**: A3d embeddings.
+(U6 deferred). **Killed**: A3d embeddings.
+
+### Hosted web deployment (done 2026-09-03, D0–D5)
+
+[`DEPLOY_PLAN.md`](DEPLOY_PLAN.md) / [`DEPLOY.md`](DEPLOY.md) — run the app as
+a **container** for a team, not just the desktop build. `docker compose up -d
+--build` in [`deploy/`](deploy/) (Caddy TLS → one backend container serving
+`/api/v1` + the built frontend). New backend flags/env:
+`--static-dir`/`INFRAKIT_STATIC_DIR` (`server.StaticHandler` — SPA fallback,
+`/api` passthrough, not behind auth), `--data-dir` (all DBs + vault under one
+dir), `INFRAKIT_*` env fallback for every deploy flag,
+`--vault-passphrase-file` (headless boot unlock of the shared vault),
+`--behind-proxy` (relax the non-loopback TLS gate when a trusted proxy
+terminates TLS). `Dockerfile` (bun → go `CGO_ENABLED=0` → `debian:stable-slim`
+w/ git+ssh, ~222 MB), `.github/workflows/image.yml` (build-only gate, **no
+registry** — flip `push:true` to publish). **S3e settings sync** shipped here:
+`auth_user_settings` blob + `/api/v1/settings/user`, `syncedSettings.ts`
+(`syncedStorage()` + `pullSettings()` on login) — theme / module order /
+shortcuts / network blob follow a login across browsers under `--auth on`.
+Single replica only (sqlite single-writer); HA/Postgres out of scope. Desktop
+sidecar path unchanged.
 
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 

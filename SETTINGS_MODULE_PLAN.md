@@ -263,10 +263,18 @@ Small, mostly-frontend. Order below is by value; each is one commit.
   combo, Esc cancels), amber conflict warning, per-row + reset-all.
 - Verified: rebind Save → Ctrl+Shift+S, persists, resets.
 
-#### S3e — Cross-device sync — **stays deferred**
-Needs the account / auth layer that doesn't exist. When it does: the S3b
-envelope is the payload; sync = push/pull it to a user endpoint with
-last-write-wins + a manual conflict view.
+#### S3e — Cross-device sync — **DONE 2026-09-03** (`43abec0` + `77b6fc8`, as `DEPLOY_PLAN.md` D5)
+Built on the U-series auth layer. `auth_user_settings` blob in `auth.db` +
+`GET|PUT /api/v1/settings/user` (session-gated, merge-patch, JSON `null`
+deletes a key). Frontend `adapters/storage/syncedSettings.ts`:
+`syncedStorage()` wraps the `IStoragePort` zustand adapter (local write +
+800 ms debounced push), `pullSettings()` on login/boot fetches the blob,
+writes newer keys, `.persist.rehydrate()`s the affected stores; `stopSync()`
+on logout. Synced: `theme`, `module-prefs`, `shortcuts`, `network-settings`.
+The endpoint override is **not** synced (it names the backend). Active only
+under `--auth on`; solo/desktop byte-identical. Server-wins on login,
+last-write-wins per key otherwise — no manual conflict view (a personal
+single-user-multi-device case, not multi-writer).
 
 #### S3f — Web-build backend endpoint override — **DONE 2026-09-01** (`2396bbf`)
 `adapters/backend/endpointOverride.ts` — `readEndpointOverride` /
