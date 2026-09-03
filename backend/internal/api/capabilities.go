@@ -3,9 +3,11 @@ package api
 import (
 	"net/http"
 	"runtime"
+	"strings"
 
 	"github.com/infrakit/backend/internal/privilege"
 	"github.com/infrakit/backend/internal/tools/iperf"
+	"github.com/infrakit/backend/internal/tools/lldp"
 )
 
 // Capability describes whether one tool can run in the current environment.
@@ -29,16 +31,6 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 	if !iperf.Available() {
 		iperfCap = Capability{Available: false, Reason: "iperf3 binary not found on PATH"}
 	}
-	// Tools that additionally need raw sockets — surfaced now so the UI copy
-	// is correct from the start.
-	rawSocket := func() Capability {
-		c := Capability{Available: false, Reason: "not implemented yet"}
-		if !elevated {
-			c.NeedsElevation = true
-		}
-		return c
-	}
-
 	caps := map[string]Capability{
 		"subnet-calculator":  {Available: true}, // pure client, always available
 		"dns-lookup":         {Available: true},
@@ -57,7 +49,7 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"firewall-edit":      firewallEditCap(),
 		"iperf3":             iperfCap,
 		"snmp":               {Available: true},
-		"discovery-protocol": rawSocket(),
+		"discovery-protocol": discoveryCap(),
 
 		// Utility-tool power-mode endpoints — pure Go stdlib, always available
 		// when the backend itself is.
@@ -92,6 +84,17 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"runbookExecutors": RunbookExecutors(),
 		"llmProviders":     LLMProviders(),
 	})
+}
+
+// discoveryCap: LLDP/CDP capture needs pktmon + admin (Windows) or lldpd
+// (Linux). CaptureAvailable() owns the per-OS check.
+func discoveryCap() Capability {
+	ok, reason := lldp.CaptureAvailable()
+	c := Capability{Available: ok, Reason: reason}
+	if !ok && strings.Contains(reason, "administrator") {
+		c.NeedsElevation = true
+	}
+	return c
 }
 
 // firewallEditCap: write CRUD is Windows-only in this release, and each apply

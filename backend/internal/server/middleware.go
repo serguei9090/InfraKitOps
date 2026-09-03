@@ -139,7 +139,7 @@ func moduleOf(path string) string {
 		strings.HasPrefix(p, "/network-scanner"), strings.HasPrefix(p, "/snmp"),
 		strings.HasPrefix(p, "/neighbor-table"), strings.HasPrefix(p, "/hosts"),
 		strings.HasPrefix(p, "/firewall"), strings.HasPrefix(p, "/iperf3"),
-		strings.HasPrefix(p, "/interfaces"):
+		strings.HasPrefix(p, "/discovery"), strings.HasPrefix(p, "/interfaces"):
 		return "network"
 	}
 	return ""
