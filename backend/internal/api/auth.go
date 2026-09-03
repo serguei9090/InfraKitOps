@@ -195,7 +195,7 @@ func (h *AuthHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	var b struct {
 		Username, Email, Password string
-		Role                     auth.Role
+		Role                      auth.Role
 	}
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 		apierr.Write(w, apierr.Validation(err.Error()))

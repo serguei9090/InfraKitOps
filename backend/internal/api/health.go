@@ -54,11 +54,11 @@ func WriteJSON(w http.ResponseWriter, status int, body any) {
 }
 
 type healthResponse struct {
-	Status    string `json:"status"`
-	Version   string `json:"version"`
-	PID       int    `json:"pid"`
-	UptimeSec int64  `json:"uptimeSec"`
-	Elevated  bool   `json:"elevated"`
+	Status      string `json:"status"`
+	Version     string `json:"version"`
+	PID         int    `json:"pid"`
+	UptimeSec   int64  `json:"uptimeSec"`
+	Elevated    bool   `json:"elevated"`
 	OS          string `json:"os"`
 	AuthMode    string `json:"authMode"`
 	TLS         bool   `json:"tls"`
@@ -69,10 +69,10 @@ type healthResponse struct {
 // tools to enable (privilege level, platform).
 func Health(w http.ResponseWriter, _ *http.Request) {
 	WriteJSON(w, http.StatusOK, healthResponse{
-		Status:    "ok",
-		Version:   Version,
-		PID:       os.Getpid(),
-		UptimeSec: int64(time.Since(startedAt).Seconds()),
+		Status:      "ok",
+		Version:     Version,
+		PID:         os.Getpid(),
+		UptimeSec:   int64(time.Since(startedAt).Seconds()),
 		Elevated:    privilege.IsElevated(),
 		OS:          runtime.GOOS,
 		AuthMode:    AuthMode,
