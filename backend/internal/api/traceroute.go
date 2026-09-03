@@ -84,6 +84,8 @@ func TracerouteStream(w http.ResponseWriter, r *http.Request) {
 
 		result, rerr := traceroute.Run(r.Context(), opts, func(event string, payload any) {
 			switch event {
+			case "round":
+				send(sse.Message{Event: "round", Data: payload})
 			case "hop":
 				hop, _ := payload.(traceroute.Hop)
 				if wantGeo && hop.Addr != "" && !isPrivate(hop.Addr) {

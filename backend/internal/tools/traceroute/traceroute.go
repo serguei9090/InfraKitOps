@@ -248,6 +248,7 @@ func Run(ctx context.Context, opts Options, emit Emit) (Result, error) {
 				break
 			}
 		}
+		emit("round", round+1)
 
 		for ttl := 1; ttl <= lastTTL; ttl++ {
 			if ctx.Err() != nil {

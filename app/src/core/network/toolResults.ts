@@ -252,6 +252,31 @@ export interface TraceResult {
   hops: TraceHop[]
   reached: boolean
   hopCount: number
+  rounds?: number
+}
+
+/** One hop's rolling stats across rounds — the mtr-style row (`hop-update`). */
+export interface TraceHopStat {
+  ttl: number
+  addrs: string[]
+  addr: string
+  hostname?: string
+  sent: number
+  recv: number
+  lossPct: number
+  lastMs: number
+  bestMs: number
+  worstMs: number
+  avgMs: number
+  stdevMs: number
+  jitterMs: number
+  recent: number[]
+  reached: boolean
+  country?: string
+  city?: string
+  isp?: string
+  lat?: number
+  lon?: number
 }
 
 // --- Ping Monitor ---
