@@ -81,10 +81,19 @@ server-side Prompt Library.
 
 Commit per phase (each builds + tests green on its own).
 
-### D0 — backend: static serving + data-dir + env config
+### D0 — backend: static serving + data-dir + env config ✅ DONE
 
 *Backend only. No Docker yet. Independently shippable — improves any
 non-desktop run.*
+
+Landed: `internal/server/static.go` (`StaticHandler` — `/api/*` passthrough,
+asset immutable-cache, SPA fallback, dotfile block), `--static-dir` +
+`--data-dir` flags, `applyEnv` (`INFRAKIT_*` fallback for
+`addr/auth/data-dir/static-dir/tls/tls-key` + `INFRAKIT_CORS_ORIGIN`
+comma-split), `dataDirOverride` threaded through `appDataDir()` (+ `openHistory`
+refactored onto it), same-origin allowance in `cors()`. 8 tests. Smoke: built
+binary with `--auth on` serves `/api/v1/health`, SPA routes, and immutable
+assets.
 
 - **`server.StaticHandler(dir string, api http.Handler) http.Handler`**
   (new, `internal/server/static.go`):

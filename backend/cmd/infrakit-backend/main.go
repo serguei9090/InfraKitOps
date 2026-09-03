@@ -61,10 +61,32 @@ func main() {
 	authDBPath := flag.String("auth-db", "", `auth database path ("" = OS config dir)`)
 	tlsMode := flag.String("tls", "off", `"off", "auto" (self-signed, pin the printed FINGERPRINT), or a cert file path`)
 	tlsKey := flag.String("tls-key", "", "private key file (with --tls <certfile>)")
+	dataDir := flag.String("data-dir", "", "directory for all databases + vault.enc (\"\" = OS config dir); individual --*-db flags still win")
+	staticDir := flag.String("static-dir", "", "serve the built web frontend from this directory (\"\" = API only)")
 	var corsOrigins multiFlag
 	flag.Var(&corsOrigins, "cors-origin", "extra browser origin allowed under --auth on (repeatable)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+	applyEnv(map[string]*string{
+		"addr":       addr,
+		"auth":       authMode,
+		"data-dir":   dataDir,
+		"static-dir": staticDir,
+		"tls":        tlsMode,
+		"tls-key":    tlsKey,
+	})
+	if len(corsOrigins) == 0 {
+		if v := os.Getenv("INFRAKIT_CORS_ORIGIN"); v != "" {
+			for _, o := range strings.Split(v, ",") {
+				if o = strings.TrimSpace(o); o != "" {
+					corsOrigins = append(corsOrigins, o)
+				}
+			}
+		}
+	}
+	if *dataDir != "" {
+		dataDirOverride = *dataDir
+	}
 
 	if *showVersion {
 		fmt.Println(api.Version)
@@ -287,6 +309,11 @@ func main() {
 		},
 	})
 
+	if *staticDir != "" {
+		handler = server.StaticHandler(*staticDir, handler)
+		log.Printf("web: serving frontend from %s", *staticDir)
+	}
+
 	httpServer := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
@@ -332,6 +359,27 @@ func (m *multiFlag) Set(v string) error {
 	return nil
 }
 
+// applyEnv fills each string flag from INFRAKIT_<FLAG> (dashes → underscores,
+// upper-cased) when the flag was NOT passed explicitly on the command line.
+// An explicit flag always wins (DEPLOY_PLAN.md D0).
+func applyEnv(flags map[string]*string) {
+	passed := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { passed[f.Name] = true })
+	for name, target := range flags {
+		if passed[name] {
+			continue
+		}
+		env := "INFRAKIT_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+		if v := os.Getenv(env); v != "" {
+			*target = v
+		}
+	}
+}
+
+// dataDirOverride, when non-empty, replaces the OS config dir for every
+// database + the vault (set from --data-dir / INFRAKIT_DATA_DIR).
+var dataDirOverride string
+
 func isLoopback(a net.Addr) bool {
 	host, _, err := net.SplitHostPort(a.String())
 	if err != nil {
@@ -348,14 +396,9 @@ func openHistory(path string) *history.Store {
 		return nil
 	}
 	if path == "" {
-		dir, err := os.UserConfigDir()
+		appDir, err := appDataDir()
 		if err != nil {
 			log.Printf("history: cannot resolve config dir: %v (history disabled)", err)
-			return nil
-		}
-		appDir := filepath.Join(dir, "InfraKitStudio")
-		if err := os.MkdirAll(appDir, 0o755); err != nil {
-			log.Printf("history: mkdir %s: %v (history disabled)", appDir, err)
 			return nil
 		}
 		path = filepath.Join(appDir, "history.db")
@@ -369,8 +412,12 @@ func openHistory(path string) *history.Store {
 	return store
 }
 
-// appDataDir returns %AppData%/InfraKitStudio (or the OS equivalent), created.
+// appDataDir returns the data directory (--data-dir when set, else
+// %AppData%/InfraKitStudio or the OS equivalent), created.
 func appDataDir() (string, error) {
+	if dataDirOverride != "" {
+		return dataDirOverride, os.MkdirAll(dataDirOverride, 0o755)
+	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err

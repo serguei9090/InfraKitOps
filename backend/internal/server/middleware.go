@@ -41,6 +41,24 @@ func originAllowed(origin string, extra []string) bool {
 	return host == "localhost" || host == "127.0.0.1" || host == "[::1]" || host == "::1"
 }
 
+// sameOrigin reports whether the Origin header names the same host the request
+// arrived on — the frontend served from the same container as the API (D0).
+// Honours X-Forwarded-* only when a trusted proxy set them (behind-proxy, D1).
+func sameOrigin(origin string, r *http.Request) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := r.Host
+	if fh := r.Header.Get("X-Forwarded-Host"); fh != "" && trustProxyHeaders {
+		host = fh
+	}
+	return strings.EqualFold(u.Host, host)
+}
+
+// trustProxyHeaders is set by main.go when --behind-proxy is given (D1).
+var trustProxyHeaders bool
+
 // bearerAuth rejects any request whose bearer token (Authorization header, or
 // `?token=` query param for EventSource which cannot set headers) does not match
 // the per-launch token. Uses a constant-time compare.
@@ -183,7 +201,7 @@ func cors(extra []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
-			if origin != "" && originAllowed(origin, extra) {
+			if origin != "" && (sameOrigin(origin, r) || originAllowed(origin, extra)) {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Vary", "Origin")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
