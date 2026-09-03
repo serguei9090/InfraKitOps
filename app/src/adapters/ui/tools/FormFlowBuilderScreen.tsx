@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, HelpCircle, Plus, Save, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, HelpCircle, Plus, Save, Share2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch, type Control } from 'react-hook-form'
 import { useSearchParams } from 'react-router-dom'
@@ -12,7 +12,9 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { FileDropField } from '@/adapters/ui/FileDropField'
 import { ToolDetailScaffold, ToolScaffoldHeader, ToolScaffoldPanel } from '@/adapters/ui/shell/ToolDetailScaffold'
+import { ShareDialog } from '@/adapters/ui/share/ShareDialog'
 import { createSchemaRepository } from '@/adapters/storage/schemaRepository'
+import { useAuthStore } from '@/stores/authStore'
 import { FormFlowParser } from '@/core/form_flow/formFlowParser'
 import {
   FIELD_TYPE_LABELS,
@@ -71,6 +73,9 @@ export function FormFlowBuilderScreen() {
   const [templateName, setTemplateName] = useState<string | null>(null)
   const [saveDialogName, setSaveDialogName] = useState('')
   const [sourceExpanded, setSourceExpanded] = useState(true)
+  const [shareOpen, setShareOpen] = useState(false)
+  const multiUser = useAuthStore((s) => s.mode === 'on')
+  const shareId = multiUser && templateName ? repository.ownedFormId?.(templateName) : undefined
 
   const { control, register, reset } = useForm<Record<string, unknown>>({
     defaultValues: {},
@@ -187,6 +192,7 @@ export function FormFlowBuilderScreen() {
   }
 
   return (
+    <>
     <ToolDetailScaffold
       title="FormFlow Builder"
       inputPanel={
@@ -273,6 +279,16 @@ export function FormFlowBuilderScreen() {
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
+                  {shareId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      aria-label="Share form"
+                      onClick={() => setShareOpen(true)}
+                    >
+                      <Share2 className="size-4" /> Share
+                    </Button>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Detected root "{schema.rootName}" ({schema.format.toUpperCase()})
@@ -312,6 +328,16 @@ export function FormFlowBuilderScreen() {
         )
       }
     />
+    {shareId && (
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        base={`/forms/${shareId}`}
+        noun="form"
+        title={`Share “${templateName ?? 'form'}”`}
+      />
+    )}
+    </>
   )
 }
 

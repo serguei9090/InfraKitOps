@@ -13,6 +13,7 @@ import (
 	"github.com/infrakit/backend/internal/ansible"
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/auth"
+	"github.com/infrakit/backend/internal/formstore"
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/mcp"
@@ -61,6 +62,9 @@ type Options struct {
 	// Prompts is the server-side Prompt Library store (U4). Only set in
 	// multi-user mode; nil → /prompts* 503 and the client keeps its local repo.
 	Prompts *promptstore.Store
+	// Forms is the server-side FormFlow store (SHARING_PLAN.md SH3). Multi-user
+	// only; nil → /forms* 503 and the client keeps its local name-keyed repo.
+	Forms *formstore.Store
 	// AnsibleStore / AnsibleEngine / AnsibleRuntime back the Ansible Manager
 	// module (ANSIBLE_MODULE_PLAN.md). Nil → /ansible* endpoints 503.
 	AnsibleStore   *ansible.Store
@@ -95,6 +99,7 @@ func NewRouter(opts Options) http.Handler {
 	mh := &api.MCPHandlers{Manager: opts.MCP}
 	anh := &api.AnsibleHandlers{Store: opts.AnsibleStore, Engine: opts.AnsibleEngine, Runtime: opts.AnsibleRuntime, Vault: opts.Vault}
 	ph := &api.PromptHandlers{Store: opts.Prompts}
+	fh := &api.FormHandlers{Store: opts.Forms}
 	ah := &api.AuthHandlers{
 		Service: opts.Auth,
 		UserOf:  func(r *http.Request) *auth.User { return UserFrom(r.Context()) },
@@ -126,6 +131,20 @@ func NewRouter(opts Options) http.Handler {
 			r.Get("/audit", ah.ListAudit)
 			r.Get("/settings/user", ah.GetUserSettings)
 			r.Put("/settings/user", ah.PutUserSettings)
+
+			if opts.Forms != nil {
+				r.Route("/forms", func(r chi.Router) {
+					r.Get("/", fh.List)
+					r.Get("/{id}", fh.Get)
+					r.Put("/{id}", fh.Save)
+					r.Delete("/{id}", fh.Delete)
+					r.Post("/{id}/publish", fh.Publish)
+					r.Get("/{id}/shares", fh.ListShares)
+					r.Put("/{id}/shares/{userId}", fh.PutShare)
+					r.Delete("/{id}/shares/{userId}", fh.DeleteShare)
+					r.Patch("/{id}/owner", fh.Reassign)
+				})
+			}
 
 			if opts.Prompts != nil {
 				r.Route("/prompts", func(r chi.Router) {

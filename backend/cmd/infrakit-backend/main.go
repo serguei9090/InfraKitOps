@@ -31,6 +31,7 @@ import (
 	"github.com/infrakit/backend/internal/ansible"
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/auth"
+	"github.com/infrakit/backend/internal/formstore"
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/mcp"
@@ -143,6 +144,7 @@ func main() {
 	var llmHistory *llm.History
 	var llmUsage *llm.UsageStore
 	var promptStore *promptstore.Store
+	var formStore *formstore.Store
 	if llmStore != nil {
 		defer llmStore.Close()
 
@@ -151,6 +153,11 @@ func main() {
 				log.Printf("prompts: %v (server-side prompt library disabled)", err)
 			} else {
 				promptStore = ps
+			}
+			if fs, err := formstore.New(llmStore.DB()); err != nil {
+				log.Printf("forms: %v (server-side form sharing disabled)", err)
+			} else {
+				formStore = fs
 			}
 		}
 		var secrets llm.SecretResolver
@@ -252,6 +259,9 @@ func main() {
 			if promptStore != nil {
 				_ = promptStore.ClaimOrphans(adminID)
 			}
+			if formStore != nil {
+				_ = formStore.ClaimOrphans(adminID)
+			}
 			if ansibleStore != nil {
 				_ = ansibleStore.ClaimOrphans(adminID)
 			}
@@ -262,6 +272,9 @@ func main() {
 			}
 			if promptStore != nil {
 				_ = promptStore.PurgeGranteeShares(uid)
+			}
+			if formStore != nil {
+				_ = formStore.PurgeGranteeShares(uid)
 			}
 		}
 		if tok := svc.SetupToken(); tok != "" {
@@ -327,6 +340,7 @@ func main() {
 		LLMHistory:     llmHistory,
 		LLMUsage:       llmUsage,
 		Prompts:        promptStore,
+		Forms:          formStore,
 		AnsibleStore:   ansibleStore,
 		AnsibleEngine:  ansibleEngine,
 		AnsibleRuntime: ansibleRuntime,
