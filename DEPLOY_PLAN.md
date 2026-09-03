@@ -158,7 +158,23 @@ Original notes below.
 
 **Est. 0.5 d.**
 
-### D2 — Dockerfile + compose
+### D2 — Dockerfile + compose ✅ DONE
+
+Landed: root `Dockerfile` (3-stage: `oven/bun` build frontend → `golang:1.25`
+`CGO_ENABLED=0` build backend → `debian:stable-slim` w/ ca-certs+git+ssh+curl,
+non-root uid 10001, `/data` volume, `HEALTHCHECK`, hosted `INFRAKIT_*` env
+defaults, `ENTRYPOINT infrakit-backend`). `.dockerignore`. `deploy/compose.yml`
+(infrakit `build:` local + `init:true` + healthcheck + Docker secret for the
+vault passphrase; `caddy` for TLS), `deploy/Caddyfile` (Let's Encrypt / internal
+CA, `X-Forwarded-*`, `flush_interval -1` for SSE), `deploy/.env.example`,
+`deploy/k8s/infrakit.yaml` sketch. **Verified: `docker build` → 222 MB image;
+`docker run` serves `/api/v1/health` (`os:linux`, `authMode:on`,
+`version:deploy-test`), SPA routes 200, DBs under `/data`, `--behind-proxy`
+warning not fatal, `SETUP-TOKEN` printed.** `docker compose config` valid.
+Known: buildkit warns `SecretsUsedInArgOrEnv` on `ENV INFRAKIT_AUTH` (name
+matches "AUTH"; not actually a secret — false positive).
+
+### D2 — original notes
 
 - **`Dockerfile`** (repo root), multi-stage:
   1. `oven/bun` → `bun install --frozen-lockfile && bun run build` in `app/`
@@ -189,7 +205,14 @@ Original notes below.
 
 **Est. 0.5–1 d.**
 
-### D3 — image build gate (`.github/workflows/image.yml`)
+### D3 — image build gate (`.github/workflows/image.yml`) ✅ DONE
+
+Landed: `.github/workflows/image.yml` — buildx `push:false load:true`
+`linux/amd64`, GHA cache, then `docker run` + poll `/api/v1/health` for
+`"authMode":"on"`, dump logs, clean up. Triggers on `Dockerfile` / `deploy/**`
+/ `app/**` / `backend/**` changes + manual. Publishing = a commented note in
+the file (flip `push:true` + add login + tags). The docker steps mirror the
+D2 manual smoke that passed locally.
 
 *No registry — build-only, to catch a broken Dockerfile before it reaches
 someone's `docker compose up`.*
@@ -209,7 +232,13 @@ someone's `docker compose up`.*
 
 **Est. 0.5 d.**
 
-### D4 — `DEPLOY.md`
+### D4 — `DEPLOY.md` ✅ DONE
+
+Landed: `DEPLOY.md` at repo root — quick start (compose + Caddy + first-admin),
+architecture diagram, full `INFRAKIT_*` env table, 3 TLS options, vault ops
+(shared passphrase file vs per-user unlock + the scheduled-run caveat),
+backup/restore (stop-copy-start; hot-copy tear warning), k8s pointer,
+works/degraded matrix. Linked from `DEPLOY_PLAN.md`.
 
 - **Quick start** — `docker compose up -d` with a domain, 5 steps to first
   admin (`SETUP-TOKEN` from `docker compose logs`).
