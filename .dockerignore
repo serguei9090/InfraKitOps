@@ -1,0 +1,16 @@
+# Keep the build context small + deterministic (DEPLOY_PLAN.md D2).
+.git
+**/node_modules
+app/dist
+app/src-tauri/target
+app/src-tauri/binaries
+backend/dist
+**/*.db
+**/*.db-wal
+**/*.db-shm
+vault.enc
+archive/
+deploy/*.txt
+deploy/.env
+**/.DS_Store
+*.log

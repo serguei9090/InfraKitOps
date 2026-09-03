@@ -1,0 +1,15 @@
+# TLS + reverse proxy for InfraKit Studio (DEPLOY_PLAN.md D2).
+# {$DOMAIN} comes from deploy/.env. A real domain → automatic Let's Encrypt;
+# "localhost" → Caddy's internal CA (browser warning, fine for a trial).
+
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy infrakit:8080 {
+		# The backend runs with --behind-proxy and reads these for
+		# same-origin + secure-cookie decisions.
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		# Stream SSE responses straight through (no buffering).
+		flush_interval -1
+	}
+}

@@ -1,0 +1,65 @@
+# InfraKit Studio — hosted deployment (DEPLOY_PLAN.md D2).
+#
+#   cd deploy
+#   cp .env.example .env            # set DOMAIN
+#   printf 'a-long-random-passphrase' > vault_passphrase.txt && chmod 600 vault_passphrase.txt
+#   docker compose up -d --build
+#   docker compose logs infrakit | grep SETUP-TOKEN     # first-admin bootstrap
+#
+# Caddy terminates TLS (Let's Encrypt for a real DOMAIN, internal CA for
+# "localhost") and proxies to the backend, which serves API + frontend on
+# one port. Single replica — sqlite is single-writer.
+
+services:
+  infrakit:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+    environment:
+      INFRAKIT_AUTH: "on"
+      INFRAKIT_BEHIND_PROXY: "1"
+      INFRAKIT_ADDR: "0.0.0.0:8080"
+      INFRAKIT_DATA_DIR: "/data"
+      INFRAKIT_STATIC_DIR: "/app/web"
+      INFRAKIT_VAULT_PASSPHRASE_FILE: "/run/secrets/vault_passphrase"
+      INFRAKIT_CORS_ORIGIN: "${CORS_ORIGIN:-}"
+    volumes:
+      - data:/data
+    secrets:
+      - vault_passphrase
+    expose:
+      - "8080"
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  caddy:
+    image: caddy:2
+    depends_on:
+      - infrakit
+    environment:
+      DOMAIN: "${DOMAIN:?set DOMAIN in deploy/.env}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+secrets:
+  vault_passphrase:
+    file: ./vault_passphrase.txt
+
+volumes:
+  data:
+  caddy_data:
+  caddy_config:

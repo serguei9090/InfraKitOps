@@ -1,0 +1,91 @@
+# InfraKit Studio on Kubernetes — SKETCH, not a supported chart
+# (DEPLOY_PLAN.md D2). Single replica: sqlite is single-writer. TLS is
+# handled by the Ingress; the backend runs with --behind-proxy.
+#
+#   kubectl create secret generic infrakit-vault --from-literal=passphrase='...'
+#   # build + push the image to a registry your cluster can pull, set it below
+#   kubectl apply -f infrakit.yaml
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: infrakit-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: infrakit
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate            # one writer at a time (sqlite)
+  selector:
+    matchLabels: { app: infrakit }
+  template:
+    metadata:
+      labels: { app: infrakit }
+    spec:
+      securityContext:
+        fsGroup: 10001         # so the mounted PVC is writable by uid 10001
+      containers:
+        - name: infrakit
+          image: infrakit-studio:local   # <-- your registry/tag
+          ports: [{ containerPort: 8080 }]
+          env:
+            - { name: INFRAKIT_AUTH,          value: "on" }
+            - { name: INFRAKIT_BEHIND_PROXY,  value: "1" }
+            - { name: INFRAKIT_ADDR,          value: "0.0.0.0:8080" }
+            - { name: INFRAKIT_DATA_DIR,      value: "/data" }
+            - { name: INFRAKIT_STATIC_DIR,    value: "/app/web" }
+            - { name: INFRAKIT_VAULT_PASSPHRASE_FILE, value: "/run/secrets/vault/passphrase" }
+          volumeMounts:
+            - { name: data,  mountPath: /data }
+            - { name: vault, mountPath: /run/secrets/vault, readOnly: true }
+          readinessProbe:
+            httpGet: { path: /api/v1/health, port: 8080 }
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet: { path: /api/v1/health, port: 8080 }
+            initialDelaySeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: infrakit-data }
+        - name: vault
+          secret:
+            secretName: infrakit-vault
+            items: [{ key: passphrase, path: passphrase }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: infrakit
+spec:
+  selector: { app: infrakit }
+  ports: [{ port: 80, targetPort: 8080 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: infrakit
+  annotations:
+    # cert-manager / your ingress controller handles TLS here.
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  tls:
+    - hosts: ["studio.example.com"]
+      secretName: infrakit-tls
+  rules:
+    - host: studio.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: infrakit
+                port: { number: 80 }
