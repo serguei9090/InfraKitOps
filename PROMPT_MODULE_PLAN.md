@@ -600,6 +600,42 @@ same caveat class as `tauri dev`) and a real file-input import.
 **Deferred:** responsive `Tabs` collapse `< lg` — the app is desktop-first
 (design.md), other tools don't do it either; a fast-follow, not blocking P5.
 
+### P4.5 — Typed variables + template import/export *(done 2026-09-03, `033e9dd` + polish)*
+
+`VariableMeta` gained `kind` (`text | textarea | select | boolean | number`),
+`options: VariableOption[]`, `allowCustom`, number `min/max/step`, and
+`required` — every field optional, so existing prompts / seed templates /
+export blobs stay valid without a version bump.
+
+- **Fill & Copy** renders the control per `kind`: a `<Select>` of the option
+  list (label shown, `value` substituted; optional `Custom…` free-text
+  escape hatch when `allowCustom`), a Yes/No select, a bounded number input,
+  or a textarea. `required` + empty blocks "Copy all" and per-message copy
+  (hard error, not the soft amber "unfilled" count).
+- **Inspector row** (`VariableMetaEditor`): a Type picker + per-kind
+  controls + `required` toggle; collapsed row shows a kind badge.
+- **Options authoring** (`VariableOptionsSheet`, new `ui/sheet.tsx` — Base UI
+  `Dialog` anchored to the right edge): per-row value/label, `@dnd-kit`
+  drag reorder (grip handle, keyboard sensor), bulk paste (`value | Label`
+  per line, replace/append), 6 infra preset sets (`PRESET_OPTION_SETS` in
+  `variableOptions.ts` — environments / log levels / OS families / severity
+  / protocols / cloud), default-selection picker, allow-custom checkbox.
+- **`sanitizeVariables` / `sanitizeVariableMeta`** coerce untrusted JSON on
+  every import path; `promptIo` now runs variables through it.
+- **User templates** get JSON export/import — `core/prompt/templateIo.ts`
+  mirrors `promptIo.ts` (`exportTemplates` / `parseTemplateExport` /
+  `materializeTemplateImport`, fresh ids, name de-collision, blob
+  validation). Wired into `NewPromptDialog` / `TemplateGallery`: Import,
+  Export all, per-card export. `kind` / `options` ride the blob.
+- Base-UI `SelectValue` needs the function-child form to render a label
+  instead of the raw value — used in all the new selects.
+
+Tests: `variableOptions` (parser + presets), `promptModel` (sanitiser +
+empty-check), `templateIo` (round-trip). 1332 green, hex boundary intact.
+Verified in-browser: select/boolean kinds persist across reload, preset
+seed, drag reorder, bulk paste, dropdown substitutes `value` / shows
+`label`, `required` gate, template IO round-trip.
+
 ### P5 — LLM Playground *(deferred — separate effort, §8)*
 
 ---

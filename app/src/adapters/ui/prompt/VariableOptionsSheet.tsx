@@ -1,5 +1,21 @@
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { GripVertical, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -21,8 +37,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { VariableOption } from '@/core/prompt/promptModel'
-import { optionLabel, optionsToLines, parseOptionLines } from '@/core/prompt/variableOptions'
+import { newId, type VariableOption } from '@/core/prompt/promptModel'
+import {
+  optionLabel,
+  optionsToLines,
+  parseOptionLines,
+  PRESET_OPTION_SETS,
+} from '@/core/prompt/variableOptions'
+
+interface Row extends VariableOption {
+  _id: string
+}
 
 interface VariableOptionsSheetProps {
   open: boolean
@@ -37,6 +62,9 @@ interface VariableOptionsSheetProps {
 
 const NONE = '__none__'
 
+const toRows = (opts: VariableOption[]): Row[] =>
+  opts.map((o) => ({ ...o, _id: newId('opt') }))
+
 /** Side sheet for authoring a `kind: 'select'` variable's option list. */
 export function VariableOptionsSheet({
   open,
@@ -47,22 +75,23 @@ export function VariableOptionsSheet({
   defaultValue,
   onSubmit,
 }: VariableOptionsSheetProps) {
-  const [rows, setRows] = useState<VariableOption[]>(options)
+  const [rows, setRows] = useState<Row[]>(() => toRows(options))
   const [custom, setCustom] = useState(allowCustom)
   const [def, setDef] = useState(defaultValue ?? '')
   const [bulk, setBulk] = useState('')
   const [showBulk, setShowBulk] = useState(false)
 
-  // Re-seed every time the sheet opens for a (possibly different) variable.
+  // Latest seed props, read (not depended on) when the sheet (re)opens.
+  const seed = useRef({ options, allowCustom, defaultValue })
+  seed.current = { options, allowCustom, defaultValue }
+
   useEffect(() => {
-    if (open) {
-      setRows(options)
-      setCustom(allowCustom)
-      setDef(defaultValue ?? '')
-      setBulk('')
-      setShowBulk(false)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!open) return
+    setRows(toRows(seed.current.options))
+    setCustom(seed.current.allowCustom)
+    setDef(seed.current.defaultValue ?? '')
+    setBulk('')
+    setShowBulk(false)
   }, [open, variableName])
 
   const values = useMemo(() => rows.map((r) => r.value), [rows])
@@ -78,45 +107,56 @@ export function VariableOptionsSheet({
   const cleanRows = rows.filter((r) => r.value.trim())
   const defaultStale = def !== '' && !values.includes(def)
 
-  function patchRow(i: number, patch: Partial<VariableOption>) {
-    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  function patchRow(id: string, patch: Partial<VariableOption>) {
+    setRows((rs) => rs.map((r) => (r._id === id ? { ...r, ...patch } : r)))
   }
-  function removeRow(i: number) {
-    setRows((rs) => rs.filter((_, idx) => idx !== i))
+  function removeRow(id: string) {
+    setRows((rs) => rs.filter((r) => r._id !== id))
   }
-  function moveRow(i: number, dir: -1 | 1) {
-    const j = i + dir
-    if (j < 0 || j >= rows.length) return
+  function addRow() {
+    setRows((rs) => [...rs, { _id: newId('opt'), value: '' }])
+  }
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
     setRows((rs) => {
+      const from = rs.findIndex((r) => r._id === active.id)
+      const to = rs.findIndex((r) => r._id === over.id)
+      if (from === -1 || to === -1) return rs
       const next = [...rs]
-      ;[next[i], next[j]] = [next[j], next[i]]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
       return next
     })
   }
-  function addRow() {
-    setRows((rs) => [...rs, { value: '' }])
+  function applyOptions(next: VariableOption[], mode: 'replace' | 'append') {
+    setRows((rs) => {
+      if (mode === 'replace') return toRows(next)
+      const seen = new Set(rs.map((r) => r.value))
+      return [...rs, ...toRows(next.filter((p) => !seen.has(p.value)))]
+    })
   }
   function applyBulk(mode: 'replace' | 'append') {
     const parsed = parseOptionLines(bulk)
     if (parsed.length === 0) return
-    setRows((rs) => {
-      if (mode === 'replace') return parsed
-      const seen = new Set(rs.map((r) => r.value))
-      return [...rs, ...parsed.filter((p) => !seen.has(p.value))]
-    })
+    applyOptions(parsed, mode)
     setBulk('')
     setShowBulk(false)
   }
 
   function save() {
-    const finalOptions = cleanRows.map((r) => ({
+    const finalOptions: VariableOption[] = cleanRows.map((r) => ({
       value: r.value.trim(),
       ...(r.label && r.label.trim() && r.label.trim() !== r.value.trim()
         ? { label: r.label.trim() }
         : {}),
     }))
-    const finalDefault =
-      def && finalOptions.some((o) => o.value === def) ? def : undefined
+    const finalDefault = def && finalOptions.some((o) => o.value === def) ? def : undefined
     onSubmit({ options: finalOptions, allowCustom: custom, defaultValue: finalDefault })
     onOpenChange(false)
   }
@@ -135,66 +175,50 @@ export function VariableOptionsSheet({
         </SheetHeader>
 
         <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1">
+          {/* Preset seed sets */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-medium tracking-wide text-muted-foreground">PRESETS</span>
+            {PRESET_OPTION_SETS.map((preset) => (
+              <Button
+                key={preset.id}
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => applyOptions([...preset.options], rows.length === 0 ? 'replace' : 'append')}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </div>
+
           {/* Option rows */}
           <div className="flex flex-col gap-1.5">
-            <div className="grid grid-cols-[1fr_1fr_auto] gap-2 px-0.5 text-[11px] font-medium tracking-wide text-muted-foreground">
+            <div className="grid grid-cols-[auto_1fr_1fr_auto] gap-2 px-0.5 text-[11px] font-medium tracking-wide text-muted-foreground">
+              <span className="w-5" />
               <span>VALUE</span>
               <span>LABEL (optional)</span>
-              <span className="w-[4.5rem]" />
+              <span className="w-7" />
             </div>
             {rows.length === 0 && (
               <p className="rounded-md border border-dashed border-border/60 px-2 py-3 text-center text-xs text-muted-foreground">
-                No options yet — add rows or paste a list below.
+                No options yet — pick a preset, add rows, or paste a list below.
               </p>
             )}
-            {rows.map((row, i) => (
-              <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
-                <Input
-                  value={row.value}
-                  onChange={(e) => patchRow(i, { value: e.target.value })}
-                  placeholder="prod"
-                  aria-invalid={dupes.has(row.value) || undefined}
-                  className="h-8 font-mono text-xs"
-                />
-                <Input
-                  value={row.label ?? ''}
-                  onChange={(e) => patchRow(i, { label: e.target.value })}
-                  placeholder="Production"
-                  className="h-8 text-xs"
-                />
-                <div className="flex items-center">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Move up"
-                    disabled={i === 0}
-                    onClick={() => moveRow(i, -1)}
-                  >
-                    <ArrowUp />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Move down"
-                    disabled={i === rows.length - 1}
-                    onClick={() => moveRow(i, 1)}
-                  >
-                    <ArrowDown />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Remove option"
-                    onClick={() => removeRow(i)}
-                  >
-                    <Trash2 />
-                  </Button>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={rows.map((r) => r._id)} strategy={verticalListSortingStrategy}>
+                <div className="flex flex-col gap-1.5">
+                  {rows.map((row) => (
+                    <OptionRow
+                      key={row._id}
+                      row={row}
+                      invalid={dupes.has(row.value)}
+                      onChange={(patch) => patchRow(row._id, patch)}
+                      onRemove={() => removeRow(row._id)}
+                    />
+                  ))}
                 </div>
-              </div>
-            ))}
+              </SortableContext>
+            </DndContext>
             {dupes.size > 0 && (
               <p className="text-xs text-destructive">Duplicate values are ignored on save.</p>
             )}
@@ -202,12 +226,7 @@ export function VariableOptionsSheet({
               <Button type="button" variant="outline" size="xs" onClick={addRow}>
                 <Plus /> Add option
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => setShowBulk((s) => !s)}
-              >
+              <Button type="button" variant="ghost" size="xs" onClick={() => setShowBulk((s) => !s)}>
                 {showBulk ? 'Hide bulk paste' : 'Bulk paste'}
               </Button>
             </div>
@@ -268,8 +287,8 @@ export function VariableOptionsSheet({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NONE}>— none —</SelectItem>
-                {cleanRows.map((r, i) => (
-                  <SelectItem key={i} value={r.value.trim()}>
+                {cleanRows.map((r) => (
+                  <SelectItem key={r._id} value={r.value.trim()}>
                     {optionLabel(r)}
                   </SelectItem>
                 ))}
@@ -294,5 +313,54 @@ export function VariableOptionsSheet({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  )
+}
+
+function OptionRow({
+  row,
+  invalid,
+  onChange,
+  onRemove,
+}: {
+  row: Row
+  invalid: boolean
+  onChange: (patch: Partial<VariableOption>) => void
+  onRemove: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: row._id,
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`grid grid-cols-[auto_1fr_1fr_auto] items-center gap-2 ${isDragging ? 'opacity-60' : ''}`}
+    >
+      <button
+        type="button"
+        aria-label="Drag to reorder"
+        className="flex size-5 cursor-grab items-center justify-center text-muted-foreground hover:text-foreground"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="size-3.5" />
+      </button>
+      <Input
+        value={row.value}
+        onChange={(e) => onChange({ value: e.target.value })}
+        placeholder="prod"
+        aria-invalid={invalid || undefined}
+        className="h-8 font-mono text-xs"
+      />
+      <Input
+        value={row.label ?? ''}
+        onChange={(e) => onChange({ label: e.target.value })}
+        placeholder="Production"
+        className="h-8 text-xs"
+      />
+      <Button type="button" variant="ghost" size="icon-xs" aria-label="Remove option" onClick={onRemove}>
+        <Trash2 />
+      </Button>
+    </div>
   )
 }

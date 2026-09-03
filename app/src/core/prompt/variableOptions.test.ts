@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { optionLabel, optionsToLines, parseOptionLines } from './variableOptions'
+import {
+  optionLabel,
+  optionsToLines,
+  parseOptionLines,
+  PRESET_OPTION_SETS,
+} from './variableOptions'
 
 describe('parseOptionLines', () => {
   it('parses bare values and value|label / value=label pairs', () => {
@@ -23,6 +28,18 @@ describe('parseOptionLines', () => {
   it('round-trips through optionsToLines', () => {
     const opts = [{ value: 'prod', label: 'Production' }, { value: 'dev' }]
     expect(parseOptionLines(optionsToLines(opts))).toEqual(opts)
+  })
+})
+
+describe('PRESET_OPTION_SETS', () => {
+  it('every preset has a unique id and non-empty, unique-valued options', () => {
+    const ids = PRESET_OPTION_SETS.map((p) => p.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    for (const preset of PRESET_OPTION_SETS) {
+      expect(preset.options.length).toBeGreaterThan(1)
+      const values = preset.options.map((o) => o.value)
+      expect(new Set(values).size).toBe(values.length)
+    }
   })
 })
 

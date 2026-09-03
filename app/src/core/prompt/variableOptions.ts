@@ -43,3 +43,70 @@ export function optionsToLines(options: VariableOption[]): string {
     .map((o) => (o.label && o.label !== o.value ? `${o.value} | ${o.label}` : o.value))
     .join('\n')
 }
+
+/** A named, ready-made option list for the "Dropdown" authoring sheet. */
+export interface PresetOptionSet {
+  id: string
+  label: string
+  options: VariableOption[]
+}
+
+/** Common infra enums, one click to seed. Order matters (rendered as-is). */
+export const PRESET_OPTION_SETS: readonly PresetOptionSet[] = [
+  {
+    id: 'environment',
+    label: 'Environments',
+    options: [
+      { value: 'prod', label: 'Production' },
+      { value: 'staging', label: 'Staging' },
+      { value: 'dev', label: 'Development' },
+      { value: 'local', label: 'Local' },
+    ],
+  },
+  {
+    id: 'log-level',
+    label: 'Log levels',
+    options: [
+      { value: 'trace' },
+      { value: 'debug' },
+      { value: 'info' },
+      { value: 'warn' },
+      { value: 'error' },
+      { value: 'fatal' },
+    ],
+  },
+  {
+    id: 'os-family',
+    label: 'OS families',
+    options: [
+      { value: 'linux', label: 'Linux' },
+      { value: 'windows', label: 'Windows' },
+      { value: 'darwin', label: 'macOS' },
+    ],
+  },
+  {
+    id: 'severity',
+    label: 'Severity',
+    options: [
+      { value: 'low', label: 'Low' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'high', label: 'High' },
+      { value: 'critical', label: 'Critical' },
+    ],
+  },
+  {
+    id: 'protocol',
+    label: 'Protocols',
+    options: [{ value: 'tcp', label: 'TCP' }, { value: 'udp', label: 'UDP' }, { value: 'icmp', label: 'ICMP' }],
+  },
+  {
+    id: 'cloud',
+    label: 'Cloud providers',
+    options: [
+      { value: 'aws', label: 'AWS' },
+      { value: 'gcp', label: 'GCP' },
+      { value: 'azure', label: 'Azure' },
+      { value: 'onprem', label: 'On-prem' },
+    ],
+  },
+]
