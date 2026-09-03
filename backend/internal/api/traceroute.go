@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -35,6 +37,7 @@ func TracerouteStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wantGeo := q.Get("geo") == "true"
+	wantASN := q.Get("asn") == "true"
 	rounds := atoiOr(q.Get("rounds"), 1)
 	if q.Get("continuous") == "true" {
 		rounds = -1
@@ -47,6 +50,8 @@ func TracerouteStream(w http.ResponseWriter, r *http.Request) {
 		ResolveNames: q.Get("resolve") != "false",
 		Rounds:       rounds,
 		Interval:     time.Duration(atoiOr(q.Get("intervalMs"), 1000)) * time.Millisecond,
+		Protocol:     q.Get("protocol"),
+		Port:         atoiOr(q.Get("port"), 0),
 	}
 
 	started := time.Now()
@@ -82,6 +87,21 @@ func TracerouteStream(w http.ResponseWriter, r *http.Request) {
 			return g
 		}
 
+		// one Team Cymru ASN lookup per distinct responder
+		type asnVals struct{ asn, name string }
+		asnCache := map[string]asnVals{}
+		asnFor := func(addr string) asnVals {
+			if a, ok := asnCache[addr]; ok {
+				return a
+			}
+			ac, acancel := context.WithTimeout(r.Context(), 2*time.Second)
+			a := asnVals{}
+			a.asn, a.name = cymruASN(ac, addr)
+			acancel()
+			asnCache[addr] = a
+			return a
+		}
+
 		result, rerr := traceroute.Run(r.Context(), opts, func(event string, payload any) {
 			switch event {
 			case "round":
@@ -95,9 +115,15 @@ func TracerouteStream(w http.ResponseWriter, r *http.Request) {
 				send(sse.Message{Event: "hop", Data: hop})
 			case "hop-update":
 				st, _ := payload.(traceroute.HopStat)
-				if wantGeo && st.Addr != "" && !isPrivate(st.Addr) {
-					g := geoFor(st.Addr)
-					st.Country, st.City, st.ISP, st.Lat, st.Lon = g.country, g.city, g.isp, g.lat, g.lon
+				if st.Addr != "" && !isPrivate(st.Addr) {
+					if wantGeo {
+						g := geoFor(st.Addr)
+						st.Country, st.City, st.ISP, st.Lat, st.Lon = g.country, g.city, g.isp, g.lat, g.lon
+					}
+					if wantASN {
+						a := asnFor(st.Addr)
+						st.ASN, st.ASName = a.asn, a.name
+					}
 				}
 				send(sse.Message{Event: "hop-update", Data: st})
 			}
@@ -130,4 +156,35 @@ func TracerouteStream(w http.ResponseWriter, r *http.Request) {
 func isPrivate(ipStr string) bool {
 	ip := net.ParseIP(ipStr)
 	return ip == nil || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()
+}
+
+// cymruASN resolves an IPv4 address to its origin AS number + name via Team
+// Cymru's DNS service (origin.asn.cymru.com / asn.cymru.com TXT records).
+func cymruASN(ctx context.Context, ipStr string) (asn, name string) {
+	v := net.ParseIP(ipStr).To4()
+	if v == nil {
+		return "", ""
+	}
+	rev := fmt.Sprintf("%d.%d.%d.%d.origin.asn.cymru.com", v[3], v[2], v[1], v[0])
+	txts, err := net.DefaultResolver.LookupTXT(ctx, rev)
+	if err != nil || len(txts) == 0 {
+		return "", ""
+	}
+	// "15169 | 8.8.8.0/24 | US | arin | 1992-12-01"
+	if parts := strings.Split(txts[0], "|"); len(parts) > 0 {
+		asn = strings.TrimSpace(parts[0])
+		if i := strings.IndexByte(asn, ' '); i > 0 {
+			asn = asn[:i] // first AS when several are listed
+		}
+	}
+	if asn == "" {
+		return "", ""
+	}
+	// "15169 | US | arin | 2000-03-30 | GOOGLE, US"
+	if nt, nerr := net.DefaultResolver.LookupTXT(ctx, "AS"+asn+".asn.cymru.com"); nerr == nil && len(nt) > 0 {
+		if np := strings.Split(nt[0], "|"); len(np) > 0 {
+			name = strings.TrimSpace(np[len(np)-1])
+		}
+	}
+	return asn, name
 }

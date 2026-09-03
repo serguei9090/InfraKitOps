@@ -45,9 +45,14 @@ const (
 	ipTTLExpiredReassem = 11014
 )
 
+// supportedProtos: Windows has no unprivileged raw sockets and IcmpSendEcho is
+// ICMP-only, so UDP/TCP path tracing isn't offered here yet.
+func supportedProtos() []string { return []string{ProtoICMP} }
+
 // probeHopImpl uses IcmpSendEcho with an explicit TTL — unprivileged on Windows.
 // A TTL-expired reply still returns the responding router's address.
-func probeHopImpl(_ context.Context, dest net.IP, ttl, count int, timeout time.Duration) []HopProbe {
+func probeHopImpl(_ context.Context, cfg probeCfg) []HopProbe {
+	dest, ttl, count, timeout := cfg.dest, cfg.ttl, cfg.count, cfg.timeout
 	out := make([]HopProbe, 0, count)
 
 	h, _, _ := procIcmpCreate.Call()

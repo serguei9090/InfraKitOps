@@ -6,9 +6,17 @@ package traceroute
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"net"
 	"time"
+)
+
+// Probe protocols.
+const (
+	ProtoICMP = "icmp"
+	ProtoUDP  = "udp"
+	ProtoTCP  = "tcp"
 )
 
 // HopProbe is one probe's outcome at a given TTL.
@@ -19,10 +27,21 @@ type HopProbe struct {
 	TimedOut bool
 }
 
-// probeHop sends `count` probes at the given ttl toward dest and returns each result.
-// Implemented per-OS.
-func probeHop(ctx context.Context, dest net.IP, ttl, count int, timeout time.Duration) []HopProbe {
-	return probeHopImpl(ctx, dest, ttl, count, timeout)
+// probeCfg is one TTL's probe request, passed to the per-OS implementation.
+type probeCfg struct {
+	dest    net.IP
+	ttl     int
+	count   int
+	timeout time.Duration
+	proto   string // ProtoICMP | ProtoUDP | ProtoTCP
+	port    int    // dest port for UDP / TCP
+	size    int    // payload size (ICMP / UDP)
+}
+
+// probeHop sends `cfg.count` probes at `cfg.ttl` and returns each result.
+// Implemented per-OS in probe_windows.go / probe_other.go.
+func probeHop(ctx context.Context, cfg probeCfg) []HopProbe {
+	return probeHopImpl(ctx, cfg)
 }
 
 // Hop is the collated result for one TTL (legacy single-sweep shape, kept for
@@ -60,6 +79,10 @@ type HopStat struct {
 	JitterMs float64   `json:"jitterMs"` // EWMA of |Δrtt|
 	Recent   []float64 `json:"recent"`   // last ~30 RTTs, for the sparkline
 	Reached  bool      `json:"reached"`
+	Changed  bool      `json:"changed,omitempty"` // primary responder changed since the last round
+	// ASN, filled by the API layer when enabled.
+	ASN    string `json:"asn,omitempty"`
+	ASName string `json:"asName,omitempty"`
 	// Geo, filled by the API layer when enabled.
 	Country string  `json:"country,omitempty"`
 	City    string  `json:"city,omitempty"`
@@ -88,6 +111,7 @@ type hopAgg struct {
 	jitterMs float64
 	recent   []float64
 	reached  bool
+	changed  bool
 }
 
 func (a *hopAgg) add(p HopProbe) {
@@ -99,6 +123,9 @@ func (a *hopAgg) add(p HopProbe) {
 	ms := float64(p.RTT) / float64(time.Millisecond)
 	a.lastMs = ms
 	if p.Addr != "" {
+		if a.last != "" && a.last != p.Addr {
+			a.changed = true
+		}
 		a.last = p.Addr
 		if !contains(a.addrs, p.Addr) {
 			a.addrs = append(a.addrs, p.Addr)
@@ -130,7 +157,9 @@ func (a *hopAgg) stat() HopStat {
 	s := HopStat{
 		TTL: a.ttl, Addrs: a.addrs, Addr: a.last, Hostname: a.hostname,
 		Sent: a.sent, Recv: a.recv, Reached: a.reached, Recent: a.recent,
+		Changed: a.changed,
 	}
+	a.changed = false
 	if s.Addrs == nil {
 		s.Addrs = []string{}
 	}
@@ -181,7 +210,16 @@ type Options struct {
 	// context is cancelled. Interval is the pause between sweeps (default 1s).
 	Rounds   int
 	Interval time.Duration
+	// Protocol: "" / "icmp" (default), "udp", or "tcp". UDP/TCP path tracing
+	// needs a raw ICMP socket to see time-exceeded replies and is currently
+	// POSIX-only (see probe_windows.go). Port is the destination port for
+	// UDP/TCP.
+	Protocol string
+	Port     int
 }
+
+// SupportedProtocols reports which probe protocols this OS build can run.
+func SupportedProtocols() []string { return supportedProtos() }
 
 // Emit receives ("hop", Hop) on the first round and ("hop-update", HopStat)
 // after every hop of every round.
@@ -221,6 +259,21 @@ func Run(ctx context.Context, opts Options, emit Emit) (Result, error) {
 	if interval <= 0 {
 		interval = time.Second
 	}
+	proto := opts.Protocol
+	if proto == "" {
+		proto = ProtoICMP
+	}
+	if !contains(supportedProtos(), proto) {
+		return Result{}, fmt.Errorf("%s path tracing is not available on this host — use ICMP mode", proto)
+	}
+	port := opts.Port
+	if port <= 0 || port > 65535 {
+		if proto == ProtoTCP {
+			port = 80
+		} else {
+			port = 33434
+		}
+	}
 
 	ipaddr, err := net.ResolveIPAddr("ip4", opts.Host)
 	if err != nil {
@@ -255,14 +308,19 @@ func Run(ctx context.Context, opts Options, emit Emit) (Result, error) {
 				break
 			}
 			a := aggs[ttl-1]
-			results := probeHop(ctx, dest, ttl, probes, timeout)
+			results := probeHop(ctx, probeCfg{
+				dest: dest, ttl: ttl, count: probes, timeout: timeout,
+				proto: proto, port: port,
+			})
 			for _, p := range results {
 				a.add(p)
 			}
 			if a.hostname == "" && a.last != "" && opts.ResolveNames {
-				if names, lerr := net.LookupAddr(a.last); lerr == nil && len(names) > 0 {
+				rctx, rcancel := context.WithTimeout(ctx, 800*time.Millisecond)
+				if names, lerr := net.DefaultResolver.LookupAddr(rctx, a.last); lerr == nil && len(names) > 0 {
 					a.hostname = trimDot(names[0])
 				}
+				rcancel()
 			}
 
 			emit("hop-update", a.stat())

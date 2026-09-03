@@ -1,4 +1,6 @@
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
+import { saveRun } from '@/adapters/backend/historyClient'
+import type { RunEnvelope } from '@/core/network/history/envelope'
 import {
   NetworkResultTable,
   NetworkToolScaffold,
@@ -72,12 +74,16 @@ export function TracerouteScreen() {
   const [host, setHost] = useState('')
   const [maxHops, setMaxHops] = useState(30)
   const [geo, setGeo] = useState(false)
+  const [asn, setAsn] = useState(false)
   const [mode, setMode] = useState<Mode>('once')
   const [intervalMs, setIntervalMs] = useState(1000)
 
   const [stats, setStats] = useState<TraceHopStat[]>([])
   const [rounds, setRounds] = useState(0)
   const [reached, setReached] = useState<boolean | null>(null)
+  const [flash, setFlash] = useState<Set<number>>(() => new Set())
+  const [savedKey, setSavedKey] = useState(0)
+  const startRef = useRef(0)
 
   const geoPoints = useMemo<GeoPoint[]>(() => {
     const withCoords = stats.filter((h) => h.lat != null && h.lon != null && (h.lat !== 0 || h.lon !== 0))
@@ -101,6 +107,14 @@ export function TracerouteScreen() {
         return next
       })
       if (st.reached) setReached(true)
+      if (st.changed) {
+        setFlash((cur) => new Set(cur).add(st.ttl))
+        setTimeout(() => setFlash((cur) => {
+          const n = new Set(cur)
+          n.delete(st.ttl)
+          return n
+        }), 2500)
+      }
     } else if (name === 'round') {
       setRounds(Number(data) || 0)
     }
@@ -112,6 +126,8 @@ export function TracerouteScreen() {
       setStats([])
       setRounds(0)
       setReached(null)
+      setFlash(new Set())
+      startRef.current = Date.now()
     },
     onEvent,
   })
@@ -126,6 +142,7 @@ export function TracerouteScreen() {
       geo: String(geo),
       resolve: 'true',
     }
+    if (asn) params.asn = 'true'
     if (mode === 'live') {
       params.continuous = 'true'
       params.intervalMs = String(intervalMs)
@@ -133,6 +150,45 @@ export function TracerouteScreen() {
       params.rounds = '1'
     }
     start(params)
+  }
+
+  async function saveSnapshot() {
+    if (stats.length === 0) return
+    const hops = stats.map((s) => ({
+      ttl: s.ttl,
+      addr: s.addr || undefined,
+      hostname: s.hostname,
+      rttsMs: s.recent,
+      timeouts: s.sent - s.recv,
+      reached: s.reached,
+      country: s.country,
+      city: s.city,
+      isp: s.isp,
+      lat: s.lat,
+      lon: s.lon,
+    }))
+    const reachedAny = stats.some((s) => s.reached)
+    const env: RunEnvelope = {
+      tool: 'traceroute',
+      target: host.trim(),
+      startedAt: startRef.current || Date.now(),
+      finishedAt: Date.now(),
+      status: reachedAny ? 'ok' : 'partial',
+      params: { host: host.trim(), maxHops, rounds: liveRounds },
+      resultShape: 'set',
+      result: {
+        v: 1,
+        host: host.trim(),
+        destIp: stats.find((s) => s.reached)?.addr ?? '',
+        hops,
+        reached: reachedAny,
+        hopCount: hops.length,
+        rounds: liveRounds,
+      },
+      summary: { hopCount: hops.length, reached: reachedAny, rounds: liveRounds },
+    }
+    await saveRun(env)
+    setSavedKey((n) => n + 1)
   }
 
   function exportCSV() {
@@ -146,7 +202,17 @@ export function TracerouteScreen() {
   }
 
   const columns: ResultColumn<TraceHopStat>[] = [
-    { key: 'ttl', header: '#', align: 'right', cell: (h) => h.ttl },
+    {
+      key: 'ttl',
+      header: '#',
+      align: 'right',
+      cell: (h) => (
+        <span className="inline-flex items-center gap-1">
+          {flash.has(h.ttl) ? <span className="size-1.5 rounded-full bg-amber-500" title="path changed" /> : null}
+          {h.ttl}
+        </span>
+      ),
+    },
     {
       key: 'host',
       header: 'Host',
@@ -175,6 +241,23 @@ export function TracerouteScreen() {
       header: '',
       cell: (h) => (h.recent.length > 1 ? <Sparkline values={h.recent} width={90} height={22} /> : <span className="text-muted-foreground">·</span>),
     },
+    ...(asn
+      ? ([
+          {
+            key: 'asn',
+            header: 'ASN',
+            cell: (h: TraceHopStat) =>
+              h.asn ? (
+                <span className="text-xs">
+                  <span className="font-mono">AS{h.asn}</span>
+                  {h.asName ? <span className="text-muted-foreground"> {h.asName}</span> : null}
+                </span>
+              ) : (
+                '—'
+              ),
+          },
+        ] as ResultColumn<TraceHopStat>[])
+      : []),
     ...(geo
       ? ([
           {
@@ -199,7 +282,7 @@ export function TracerouteScreen() {
       title="Traceroute"
       toolId="traceroute"
       historyTarget={host.trim()}
-      historyRefreshKey={completions}
+      historyRefreshKey={completions + savedKey}
       onRestoreRun={(stored) => {
         if (typeof stored.params.host === 'string') setHost(stored.params.host)
         const r = stored.result as { hops?: TraceHop[]; reached?: boolean; rounds?: number }
@@ -276,11 +359,19 @@ export function TracerouteScreen() {
                 />
               </QueryField>
               <Button type="button" variant={geo ? 'secondary' : 'outline'} size="sm" onClick={() => setGeo((v) => !v)}>
-                Per-hop geolocation {geo ? 'on' : 'off'}
+                Geolocation {geo ? 'on' : 'off'}
+              </Button>
+              <Button type="button" variant={asn ? 'secondary' : 'outline'} size="sm" onClick={() => setAsn((v) => !v)}>
+                ASN {asn ? 'on' : 'off'}
               </Button>
               {stats.length > 0 ? (
                 <Button type="button" variant="outline" size="sm" onClick={exportCSV}>
                   Export CSV
+                </Button>
+              ) : null}
+              {mode === 'live' && stats.length > 0 && !streaming ? (
+                <Button type="button" variant="outline" size="sm" onClick={saveSnapshot}>
+                  Save to history
                 </Button>
               ) : null}
             </>

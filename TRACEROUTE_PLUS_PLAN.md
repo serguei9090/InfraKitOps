@@ -24,6 +24,28 @@ until T3 lands the new UI.
 - `capabilities.go:51` — `"traceroute": {Available: true}`.
 - FE `TracerouteScreen.tsx` — consumes `"hop"`, renders a table + `GeoMap`.
 
+## Status
+
+- **T1a — done** (`72f4ca7`). rounds + `hopAgg` + `hop-update` + tests.
+- **T3 — done** (`af9b651`). mtr table UI, One-shot↔Live, CSV export.
+  Verified in-browser.
+- **T2 — done** (this commit). ECMP (`Addrs`), bounded async rDNS
+  (`net.DefaultResolver` + 800 ms ctx), path-change (`HopStat.Changed` +
+  amber flash), optional ASN via Team Cymru DNS (`?asn=true`, cached per
+  responder, `AS<n> <name>` column). Verified: 8.8.8.8 trace shows
+  `AS13335 CLOUDFLARENET` → `AS15169 GOOGLE`.
+- **T4 — partial** (this commit). "Save to history" button for Live runs
+  (a stopped SSE stream never delivers its `done`, so live traces weren't
+  persisted). Capability `modes` list **deferred with T1b** — nothing to
+  advertise until UDP/TCP land.
+- **T1b — deferred.** `probeCfg` refactor + `SupportedProtocols()` gate are
+  in (engine dispatches on `cfg.proto`, `Run` rejects unsupported), but
+  `supportedProtos()` returns `["icmp"]` on every platform. UDP/TCP need a
+  raw ICMP listen socket (`CAP_NET_RAW` on Linux; admin + `SIO_RCVALL` on
+  Windows) — worth doing only for a privileged Linux backend deploy, and
+  ICMP already covers the default path on every OS. Unpark when a
+  Linux-hosted backend needs it.
+
 ## Phases
 
 ### T1 — probe engine: protocol modes + rounds

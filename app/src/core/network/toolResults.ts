@@ -272,6 +272,9 @@ export interface TraceHopStat {
   jitterMs: number
   recent: number[]
   reached: boolean
+  changed?: boolean
+  asn?: string
+  asName?: string
   country?: string
   city?: string
   isp?: string
