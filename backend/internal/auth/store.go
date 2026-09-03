@@ -46,6 +46,11 @@ CREATE TABLE IF NOT EXISTS auth_audit (
   meta    TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS auth_audit_at ON auth_audit(at DESC);
+CREATE TABLE IF NOT EXISTS auth_user_settings (
+  user_id    TEXT PRIMARY KEY,
+  data       TEXT NOT NULL DEFAULT '{}',
+  updated_at INTEGER NOT NULL
+);
 `
 
 // Store is the auth.db handle.
@@ -260,8 +265,54 @@ func (s *Store) DeleteUser(id string) error {
 		}
 	}
 	_ = s.DeleteUserSessions(id)
+	_, _ = s.db.Exec(`DELETE FROM auth_user_settings WHERE user_id = ?`, id)
 	_, err = s.db.Exec(`DELETE FROM auth_user WHERE id = ?`, id)
 	return err
+}
+
+// --- per-user settings blob (DEPLOY_PLAN.md D5) ----------------------
+
+// GetUserSettings returns the user's synced-settings JSON object, or "{}".
+func (s *Store) GetUserSettings(userID string) (json.RawMessage, error) {
+	var data string
+	err := s.db.QueryRow(`SELECT data FROM auth_user_settings WHERE user_id = ?`, userID).Scan(&data)
+	if err == sql.ErrNoRows {
+		return json.RawMessage(`{}`), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(data), nil
+}
+
+// PutUserSettings merges patch (a flat JSON object) into the user's blob. A
+// key whose value is JSON null is removed.
+func (s *Store) PutUserSettings(userID string, patch map[string]json.RawMessage) (json.RawMessage, error) {
+	cur, err := s.GetUserSettings(userID)
+	if err != nil {
+		return nil, err
+	}
+	m := map[string]json.RawMessage{}
+	if err := json.Unmarshal(cur, &m); err != nil {
+		m = map[string]json.RawMessage{}
+	}
+	for k, v := range patch {
+		if string(v) == "null" {
+			delete(m, k)
+		} else {
+			m[k] = v
+		}
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.db.Exec(
+		`INSERT INTO auth_user_settings (user_id, data, updated_at) VALUES (?,?,?)
+		 ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+		userID, string(out), time.Now().UnixMilli(),
+	)
+	return out, err
 }
 
 // --- sessions --------------------------------------------------------

@@ -179,7 +179,9 @@ func accessGuard(next http.Handler) http.Handler {
 			return
 		}
 		writing := r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions
-		if writing && !u.Role.CanWrite() && !strings.HasPrefix(r.URL.Path, "/api/v1/auth/") {
+		if writing && !u.Role.CanWrite() &&
+			!strings.HasPrefix(r.URL.Path, "/api/v1/auth/") &&
+			r.URL.Path != "/api/v1/settings/user" {
 			apierr.Write(w, apierr.Permission("your role is read-only"))
 			return
 		}

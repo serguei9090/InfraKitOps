@@ -123,6 +123,8 @@ func NewRouter(opts Options) http.Handler {
 				r.Delete("/{id}", ah.DeleteUser)
 			})
 			r.Get("/audit", ah.ListAudit)
+			r.Get("/settings/user", ah.GetUserSettings)
+			r.Put("/settings/user", ah.PutUserSettings)
 
 			if opts.Prompts != nil {
 				r.Route("/prompts", func(r chi.Router) {

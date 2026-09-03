@@ -164,6 +164,44 @@ func (h *AuthHandlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]string{"token": sess})
 }
 
+// --- per-user synced settings (DEPLOY_PLAN.md D5) ------------------
+
+// GetUserSettings: GET /settings/user — the caller's synced-settings blob.
+func (h *AuthHandlers) GetUserSettings(w http.ResponseWriter, r *http.Request) {
+	u := h.me(r)
+	if u == nil {
+		apierr.Write(w, apierr.Auth("not signed in"))
+		return
+	}
+	data, err := h.Service.Store().GetUserSettings(u.ID)
+	if err != nil {
+		apierr.Write(w, apierr.Internal(err.Error()))
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"data": json.RawMessage(data)})
+}
+
+// PutUserSettings: PUT /settings/user — merge a flat {key: value} patch into
+// the blob (value JSON null deletes the key). Returns the merged blob.
+func (h *AuthHandlers) PutUserSettings(w http.ResponseWriter, r *http.Request) {
+	u := h.me(r)
+	if u == nil {
+		apierr.Write(w, apierr.Auth("not signed in"))
+		return
+	}
+	var patch map[string]json.RawMessage
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256*1024)).Decode(&patch); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	out, err := h.Service.Store().PutUserSettings(u.ID, patch)
+	if err != nil {
+		apierr.Write(w, apierr.Internal(err.Error()))
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"data": json.RawMessage(out)})
+}
+
 // --- admin: /users, /audit ------------------------------------------
 
 func (h *AuthHandlers) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
