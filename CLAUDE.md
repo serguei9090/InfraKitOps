@@ -502,8 +502,19 @@ Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
   galaxy skipping apt. SSE `GET /ansible/runtime/deps/apply/stream?mode=`.
   FE: shared `DepsEditor` (managed/container/wsl) with Save + "Install deps now".
   **Verified: `jmespath` applied to the WSL distro with no reprovision.** —
-  **AN6d** (SshRunner — remote Linux control node) → **AN6f** (fact-cache
-  browser) still to come. Workflows **killed**. No new deps.
+  **AN6d done** (`ae20044`): `Runner` iface broadened `Command()→Stream()/Capture()`
+  (SSH can't be an `*exec.Cmd`); `runner_ssh.go` — reuses the R2 SSH executor
+  (`executor.SSHRun`/`SSHRunStdin`, new thin exports, no new dep),
+  `Engine.SetNodeResolver` from the `ssh_node` registry + vault (main.go);
+  `Stream` tars the project (+ callback plugin) → `~/.infrakit-ansible/<proj>`
+  (or `remoteProjectPath`), ships `-e @tmp`/vault-pw 0600, runs
+  `ansible-playbook` remotely with `tail -F` of the event file marked
+  (`\x01EVT\x01`) back through the stream → split into the local file execRun
+  tails, so the tree still streams; `Setup` installs ansible over SSH.
+  `remoteNodeId`/`remoteWorkdir`/`remoteProjectPath` settings; RuntimePanel
+  `remote` card + `RemoteSetup` (SSH-node picker). Structurally verified
+  (Probe reaches the SSH handshake; helpers unit-tested; transport is R2's).
+  — **AN6f** (fact-cache browser) is the last phase. Workflows **killed**. No new deps.
 
 ### Shared error handling (started 2026-08-31, E0–E2 done)
 

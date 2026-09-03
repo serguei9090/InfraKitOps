@@ -1,8 +1,14 @@
 # Ansible Manager — AN6: pluggable execution backends
 
-Status: **AN6a–AN6c + AN6e done** (`e889f5e`, `d1dbafd`, `a08d1dd`) — the module
-runs from Windows via a container **or** a WSL2 distro, with one shared
-control-node dependency list. AN6d (SSH-remote) + AN6f (fact cache) pending. Supersedes the one-line "AN6 (deferred)" in
+Status: **AN6a–AN6e done** (`e889f5e`, `d1dbafd`, `a08d1dd`, `ae20044`) — the
+module runs from Windows via a container or a WSL2 distro, or on a remote Linux
+host over SSH, with one shared control-node dependency list. **AN6f** (fact
+cache) is the last phase.
+
+**Runner interface** (final): `Stream(ctx, RunReq, onOut, onErr)` +
+`Capture(ctx, RunReq) []byte` — not `*exec.Cmd`, so the ssh runner can own
+execution. local/container/wsl share `streamVia`/`captureVia` over a private
+`buildCmd`. Supersedes the one-line "AN6 (deferred)" in
 [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md) §4. Prereq: AN0–AN5 done
 (`1919de0`…`a65bd61`).
 
@@ -280,7 +286,7 @@ env; `EventFile` is already a host path. `Setup` for `managed` = the existing
 | **AN6a** ✅ `e889f5e` | `Runner` iface (in `package ansible`, not a sub-package) + `localRunner` (all 7 exec sites route through `e.activeRunner(ctx).Command`, zero behaviour change) · per-runner `Probe` · `/ansible/settings` → `runners` + `os` + `install` · `RuntimePanel` 4-mode chooser · install-link row | Nothing regressed; the seam exists. |
 | **AN6b** ✅ `e889f5e` | `containerRunner` (docker + podman, `containerEngineName` fast-path for exec + `containerEngine` w/ daemon check for Probe/Setup, `Setup` builds `infrakit-ansible:local` from a generated Dockerfile or pulls an override, `Command` with `/infra-project` `/infra-tmp` `/infra-cb` binds + `~/.ssh` mount + Windows-backslash path rewrite + `ANSIBLE_CONFIG` past the world-writable guard) · Settings container block · pip/collections editors · `/runtime/teardown` | **Verified: run a playbook from Windows in a container, full play/task/host tree.** |
 | **AN6c** ✅ `d1dbafd` | `wslRunner` — `wslText` UTF-16LE decode, `wsl -l -q` / `-l -o`, `winToWSL` path translation, `--cd` + `ANSIBLE_CONFIG`, `Setup` provisions the dedicated `InfraKit-Ansible` distro (`official:<name>` OR `wsl --import` a local `.tar` / a downloaded Canonical Ubuntu WSL rootfs — `download.go`, pinned in `vendor-tools/TOOLS.md`) then streamed `apt`+`pip3`, `Teardown` `wsl --unregister` (dedicated-only guard). `WslSetup` panel. | **Verified: run a playbook from Windows in a WSL distro, full tree.** |
-| **AN6d** | **`SshRunner`** — `ssh_node`-backed remote control node, project sync (`tar`/`rsync`) or remote-path mode, dual-channel stdout + event tail, remote setup + test | Thin client, remote Linux control node. |
+| **AN6d** ✅ `ae20044` | `sshRunner` — reuses `executor.SSHRun`/`SSHRunStdin` (new thin exports, no new dep) + `Engine.SetNodeResolver` (ssh-node registry + vault). `Stream` tars the project (in-memory archive/tar) → remote workdir (or `remoteProjectPath`), ships `-e @tmp` files, runs ansible remotely with a marked (`\x01EVT\x01`) `tail -F` of the event file split back into the local file execRun tails. `Setup` installs ansible over SSH. `RemoteSetup` panel (SSH-node picker). | Structurally verified — Probe reaches the SSH handshake, helpers unit-tested. |
 | **AN6e** ✅ `a08d1dd` | `Runner.ApplyDeps` + `depLists(settings)` — one `controlNodePipPackages`/`Collections` pair feeds every runner. `EnsureManaged(pip, collections)` + `ApplyManagedDeps` (venv-only); container `ApplyDeps` = rebuild (layer cache); wsl = `pip3` + `ansible-galaxy` skipping apt. SSE `GET /ansible/runtime/deps/apply/stream?mode=`; shared `DepsEditor` panel (managed / container / wsl). | **Verified: `jmespath` applied to a WSL distro, no reprovision.** |
 | **AN6f** | **Fact-cache browser** — enable `fact_caching = jsonfile` (cache dir under the project or config), a Facts tab: per-host tree of gathered facts from the last run, search, "gather facts now" (ad-hoc `setup`) | Inspect what ansible knows about each host. |
 
