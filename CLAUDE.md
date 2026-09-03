@@ -514,7 +514,14 @@ Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
   `remoteNodeId`/`remoteWorkdir`/`remoteProjectPath` settings; RuntimePanel
   `remote` card + `RemoteSetup` (SSH-node picker). Structurally verified
   (Probe reaches the SSH handshake; helpers unit-tested; transport is R2's).
-  — **AN6f** (fact-cache browser) is the last phase. Workflows **killed**. No new deps.
+  — **AN6f done** (`5b9cfa2`): `factCacheEnv` (`ANSIBLE_CACHE_PLUGIN=jsonfile`,
+  `<project>/.facts`) on every run; `facts.go` `Engine.Facts`/`GatherFacts`
+  (`ansible -m setup`); `GET /ansible/projects/{id}/facts` + `POST .../facts/gather`;
+  FE **Facts tab** (`FactsView` — host list + filterable collapsible JSON tree
+  + Gather). Verified: gather localhost → 105 keys, tree + key filter.
+  **AN6 complete — the Ansible module (AN0–AN6) runs from Windows (container /
+  WSL) or a remote SSH control node, with fact browsing.** Workflows /
+  first-class Execution Environments stay out of scope. No new deps.
 
 ### Shared error handling (started 2026-08-31, E0–E2 done)
 

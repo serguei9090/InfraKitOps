@@ -1,9 +1,9 @@
 # Ansible Manager — AN6: pluggable execution backends
 
-Status: **AN6a–AN6e done** (`e889f5e`, `d1dbafd`, `a08d1dd`, `ae20044`) — the
-module runs from Windows via a container or a WSL2 distro, or on a remote Linux
-host over SSH, with one shared control-node dependency list. **AN6f** (fact
-cache) is the last phase.
+Status: **AN6 COMPLETE** (`e889f5e`, `d1dbafd`, `a08d1dd`, `ae20044`,
+`5b9cfa2`) — the module runs from Windows via a container or a WSL2 distro, or
+on a remote Linux host over SSH, with one shared control-node dependency list
+and a fact-cache browser.
 
 **Runner interface** (final): `Stream(ctx, RunReq, onOut, onErr)` +
 `Capture(ctx, RunReq) []byte` — not `*exec.Cmd`, so the ssh runner can own
@@ -288,7 +288,7 @@ env; `EventFile` is already a host path. `Setup` for `managed` = the existing
 | **AN6c** ✅ `d1dbafd` | `wslRunner` — `wslText` UTF-16LE decode, `wsl -l -q` / `-l -o`, `winToWSL` path translation, `--cd` + `ANSIBLE_CONFIG`, `Setup` provisions the dedicated `InfraKit-Ansible` distro (`official:<name>` OR `wsl --import` a local `.tar` / a downloaded Canonical Ubuntu WSL rootfs — `download.go`, pinned in `vendor-tools/TOOLS.md`) then streamed `apt`+`pip3`, `Teardown` `wsl --unregister` (dedicated-only guard). `WslSetup` panel. | **Verified: run a playbook from Windows in a WSL distro, full tree.** |
 | **AN6d** ✅ `ae20044` | `sshRunner` — reuses `executor.SSHRun`/`SSHRunStdin` (new thin exports, no new dep) + `Engine.SetNodeResolver` (ssh-node registry + vault). `Stream` tars the project (in-memory archive/tar) → remote workdir (or `remoteProjectPath`), ships `-e @tmp` files, runs ansible remotely with a marked (`\x01EVT\x01`) `tail -F` of the event file split back into the local file execRun tails. `Setup` installs ansible over SSH. `RemoteSetup` panel (SSH-node picker). | Structurally verified — Probe reaches the SSH handshake, helpers unit-tested. |
 | **AN6e** ✅ `a08d1dd` | `Runner.ApplyDeps` + `depLists(settings)` — one `controlNodePipPackages`/`Collections` pair feeds every runner. `EnsureManaged(pip, collections)` + `ApplyManagedDeps` (venv-only); container `ApplyDeps` = rebuild (layer cache); wsl = `pip3` + `ansible-galaxy` skipping apt. SSE `GET /ansible/runtime/deps/apply/stream?mode=`; shared `DepsEditor` panel (managed / container / wsl). | **Verified: `jmespath` applied to a WSL distro, no reprovision.** |
-| **AN6f** | **Fact-cache browser** — enable `fact_caching = jsonfile` (cache dir under the project or config), a Facts tab: per-host tree of gathered facts from the last run, search, "gather facts now" (ad-hoc `setup`) | Inspect what ansible knows about each host. |
+| **AN6f** ✅ `5b9cfa2` | `factCacheEnv` (`ANSIBLE_CACHE_PLUGIN=jsonfile`, `<project>/.facts`) on every playbook + ad-hoc run; `facts.go` `Engine.Facts` (reads the cache) + `GatherFacts` (`ansible -m setup`). `GET /ansible/projects/{id}/facts` + `POST .../facts/gather`. FE `FactsView` — host list + filterable collapsible JSON tree + "Gather". | **Verified: gather localhost → 105 keys, tree + live key filter.** |
 
 **AN6a+AN6b = Windows-usable.** AN6c for the no-Docker Windows case. AN6d for
 "my laptop isn't the control node". AN6e/f are polish.
