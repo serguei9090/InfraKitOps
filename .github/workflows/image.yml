@@ -1,0 +1,68 @@
+name: image
+
+# Build-only gate for the hosted-deployment container (DEPLOY_PLAN.md D3).
+# Nothing is pushed to a registry — this just proves the Dockerfile builds
+# and the resulting image serves /api/v1/health before it reaches anyone's
+# `docker compose up`.
+#
+# To start publishing later: set `push: true` on the build step, add a
+# registry-login step, and give it tags. That is a small, self-contained diff.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'deploy/**'
+      - 'app/**'
+      - 'backend/**'
+      - '.github/workflows/image.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'deploy/**'
+      - 'app/**'
+      - 'backend/**'
+      - '.github/workflows/image.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image (amd64, load into the local daemon)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: infrakit-studio:ci
+          build-args: |
+            VERSION=ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test — the image serves the API
+        run: |
+          docker run -d --name ik \
+            -e INFRAKIT_AUTH=on \
+            -e INFRAKIT_VAULT_PASSPHRASE_FILE=/tmp/vp \
+            -p 8080:8080 \
+            infrakit-studio:ci \
+            sh -c 'echo ci-passphrase-123456 > /tmp/vp && exec infrakit-backend'
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/api/v1/health | grep -q '"authMode":"on"'; then
+              echo "health OK"; ok=1; break
+            fi
+            sleep 1
+          done
+          docker logs ik
+          docker rm -f ik
+          [ "${ok:-}" = 1 ] || { echo "health check never passed"; exit 1; }
