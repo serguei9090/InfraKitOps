@@ -1,115 +1,152 @@
 # InfraKit Studio
 
-Local-first SRE / SysAdmin / developer workbench — one React codebase, delivered as a
-native Windows desktop app (via Tauri v2) **and** a static web app. See
-[`InfraKit Studio Specification.md`](InfraKit%20Studio%20Specification.md) for the full
-product spec, [`design.md`](design.md) for the UI/architecture rationale carried over
-from the original build, and [`CLAUDE.md`](CLAUDE.md) /
-[`MIGRATION_PLAN.md`](MIGRATION_PLAN.md) for the React/Tauri stack decision and the
-Flutter→React migration history.
+**A local-first workbench for the generalist SRE / sysadmin / developer** — the person
+who touches Ansible, runbooks, network diagnostics, config files, LLM prompts, and a
+pile of encode/convert/hash utilities in the same week, and doesn't want to host and
+maintain a separate server for each.
 
-## Status
+One React codebase, shipped two ways:
 
-**Full 44-tool parity reached (2026-08-25).** Every tool from the original Flutter
-build now has a live React screen at `/tools/*`, backed by fully-ported core logic
-(41 files, 954 Vitest tests) and persistent storage (web `localStorage`, desktop a
-real file via the Tauri `fs` plugin). See `MIGRATION_PLAN.md` for the phase-by-phase
-history — Phases 0–6 done, Phase 9 (this README rewrite, archiving the old Flutter
-source) in progress, Phases 7 (packaging) and 8 (Go backend) intentionally not
-started yet.
+- a **static web app** (`bun run build` → any static host), and
+- a **native desktop app** (Tauri v2, WebView2 on Windows) with an installer.
 
-The original Flutter implementation (44 tools, feature-complete) has been archived
-to [`archive/flutter-app/`](archive/flutter-app/) — kept for reference during the
-migration, not deleted, in case a regression surfaces post-cutover. It is no longer
-built, run, or maintained.
+Solo desktop use runs with **no account, no telemetry, no network** — the 88
+client-side tools work entirely offline; the backend modules light up when the Go
+sidecar is present.
+
+MIT licensed. See [`CLAUDE.md`](CLAUDE.md) for the stack rationale and conventions,
+[`InfraKit Studio Specification.md`](InfraKit%20Studio%20Specification.md) for the
+product spec, [`design.md`](design.md) for the UI/architecture rationale, and the
+`*_PLAN.md` files for per-module design history.
+
+## Why one app instead of ten
+
+The pitch is not "beats AWX / Open WebUI / it-tools at their own game" — it doesn't
+try to. It's:
+
+- **One binary, zero infrastructure.** AWX wants k8s or docker-compose + Postgres +
+  Redis. Open WebUI wants a container. InfraKit Studio is one `.exe` (or one static
+  bundle + one Go binary).
+- **A shared spine.** One encrypted Vault backs the Ansible module, runbook SSH
+  steps, git tokens, and LLM API keys. One `<AiPanel>` drops into any module. One
+  settings registry, one auth layer, one error system. The "modules" are not bolted
+  together — they share state.
+- **Local-first and honest about it.** Data lives in `%APPDATA%` / `localStorage`.
+  Multi-tenant auth is strictly opt-in (`--auth on`); with it off the solo build is
+  byte-identical to a single-user tool.
+
+If you live in Ansible every day, use AWX. If you live in prompts, use Open WebUI.
+This is for everyone else.
+
+## Status (2026-09-02)
+
+Migrated off the original Flutter build (archived to
+[`archive/flutter-app/`](archive/flutter-app/)). `app/` (React 19 + Vite + Tauri v2)
+and `backend/` (Go) are the only active codebases.
+
+| Module | Route | Backend | Maturity |
+|---|---|:---:|---|
+| **Tuning & Sizing** — ~25 calculators (DB RAM, Ceph PG, k8s capacity, SLO error budget, retry budget, Kafka/etcd/cache sizing, cloud right-size…) | `/tools/*` | no | stable |
+| **Utilities** — encoders, formatters, hash/bcrypt/htpasswd, JWT, regex, diff, JSONPath, UUID/ULID, SSH keygen, X.509 inspector | `/tools/*` | optional | stable |
+| **Config Builders** — nginx, database, Zabbix, Fail2ban, SSH, sysctl, firewall rule, crontab, chmod, RDP, `docker run`→compose | `/tools/*` | optional (`nginx -t` / `sshd -t` validation) | stable |
+| **Office & Media** — PDF split/merge/inspect, image convert, EXIF, QR generate/decode, color tools | `/tools/*` | optional | stable |
+| **FormFlow** — XML/YAML form designer with schema + dynamic-array-loop auto-detect | `/tools/formflow-builder` | no | stable |
+| **Knowledge Hub** — curated, link-health-checked external resource lists + cheat sheets (Git, regex, sysctl, crontab, chmod) | `/tools/*` | no | stable |
+| **Prompt Library** — folders, tags, ordered messages, `{{VAR}}` fill-and-copy, full version history, templates gallery, JSON export/import | `/tools/prompt-library` | optional (AI Hub for playground) | stable |
+| **Network Toolkit** — ping monitor, traceroute + route map, DNS, whois, SNMP v1/v2c/v3, SNTP, port/network scan, iperf3, neighbor table, connections, firewall viewer + write CRUD (Windows) | `/tools/*` | **required** | beta |
+| **Runbooks** — reusable multi-step command runbooks; encrypted Vault; PowerShell / cmd / bash / SSH / HTTP / Python-via-`uv` executors; `{{VAR}}` / `{{secret:}}` / `{{steps.N.stdout}}` render with server-side redaction; cron schedules; multi-user approvals | `/tools/runbook` | **required** | beta |
+| **Ansible Manager** — local-folder or git projects; live play → task → host tree; inventory, jobs, surveys, schedules, ad-hoc; CodeMirror editor + `ansible-doc` / syntax-check / lint; Galaxy search + install; `ansible-vault` ↔ Vault; runs from Windows via Docker/Podman, WSL, or a remote SSH control node | `/tools/ansible` | **required** | beta |
+| **AI Hub** — central LLM layer: Ollama / OpenAI-compatible / Anthropic / Gemini; connections registry; grounding "tasks" reused by other modules; MCP tool-calling with read-only auto-run + write-tool approval gate; MCP resources & prompts; opt-in conversation history; token-usage view | `/tools/ai` | **required** | beta |
+
+**Not done:** Windows code signing (installer triggers a SmartScreen warning — see
+below), brand icons, clean-VM install gate, macOS/Linux packaging. Tracked in
+[`PACKAGING_PLAN.md`](PACKAGING_PLAN.md) / [`ROADMAP.md`](ROADMAP.md).
 
 ## Stack
 
-- React 19 + TypeScript + Vite, Tailwind v4, shadcn/ui (Base UI primitives).
-- Desktop shell: Tauri v2 (WebView2 on Windows).
-- State: Zustand. Routing: `react-router`. Forms: `react-hook-form` + `zod`.
-- No backend yet — every tool runs entirely client-side (browser or native webview),
-  matching the original spec's "client-first" constraint (§5). A Go backend for
-  ansible/ssh execution and local model serving is planned but not started — see
-  `CLAUDE.md`.
+- **Frontend** — React 19 + TypeScript + Vite (rolldown), Tailwind v4, shadcn/ui on
+  Base UI primitives, Zustand, `react-router`, `react-hook-form` + `zod`,
+  CodeMirror 6 (Ansible editor, lazy-loaded).
+- **Desktop shell** — Tauri v2, WebView2 (Windows) / WebKitGTK (Linux). MSI + NSIS
+  installers via the built-in bundler. The Go backend ships as a **Tauri sidecar**.
+- **Backend** — Go 1.25, `chi` router under `/api/v1`, per-launch bearer-token auth,
+  SSE for streaming tools, `modernc.org/sqlite` (pure Go, no cgo). Runs as the
+  desktop sidecar or a standalone HTTP service for the web build.
+- **Package manager** — `bun` (`bun.lock`).
 
-See `CLAUDE.md` for the full stack rationale and why each library was chosen.
+Third-party binary policy: a binary is bundled in the installer **only** if its
+license is MIT / BSD / ISC / Apache-2.0 / MPL-2.0. GPL tools (e.g. `mtr`) are
+PATH-detected and user-installed, never shipped. Every bundled binary is recorded in
+[`vendor-tools/TOOLS.md`](vendor-tools/TOOLS.md) with version + SHA-256.
 
 ## Architecture
 
-Strict hexagonal (ports & adapters) — see `design.md` and `CLAUDE.md` for the full
-write-up:
+Strict hexagonal (ports & adapters):
 
-- `app/src/core/**` — pure TypeScript domain logic. Zero React imports, enforced by a
-  grep check before any PR (see `CLAUDE.md`'s "Adding a new tool" section).
-- `app/src/core/ports/**` — the inbound/outbound interfaces (`IToolUseCase`,
-  `IFormFlowUseCase`, `ISchemaRepository`, `IStoragePort`) that adapters implement.
-- `app/src/adapters/ui/**` — React components: the persistent shell (`shell/`) and one
-  screen per tool (`tools/`).
-- `app/src/adapters/storage/**` — persistence adapters (web `localStorage`, desktop
-  Tauri `fs` plugin) implementing the storage ports.
-
-## Development
-
-Run from `app/`:
-
-```bash
-bun install              # install deps
-bun run dev               # Vite dev server (web) — http://localhost:1420
-bun run tauri dev         # Tauri desktop dev (wraps the same Vite dev server)
-bun run test               # Vitest, core logic unit tests
-bun run build               # static web build (tsc -b && vite build)
-bun run tauri build         # desktop installer (MSI/NSIS via Tauri bundler)
-```
-
-Check the hex-architecture boundary hasn't been violated (no React imports crept into
-the core):
+- `app/src/core/**` — pure TypeScript domain logic, **zero React imports** (enforced
+  by a grep check before every commit).
+- `app/src/core/ports/**` — inbound/outbound interfaces (`IToolUseCase`,
+  `IStoragePort`, `ISchemaRepository`, …).
+- `app/src/adapters/ui/**` — the persistent shell (`shell/`) and one screen per tool
+  (`tools/`, plus per-module scaffolds).
+- `app/src/adapters/storage/**` — web `localStorage` / IndexedDB, desktop Tauri `fs`.
+- `backend/internal/**` — one package per concern (`ansible`, `orchestrator`,
+  `executor`, `llm`, `mcp`, `vault`, `apierr`, `tools/<tool>`).
 
 ```bash
 grep -rl "from 'react" app/src/core   # must print nothing
 ```
 
-## Adding a new tool
+## Development
 
-1. Core logic: `app/src/core/<domain>/<tool>.ts`, implementing
-   `IToolUseCase<TInput, TOutput>`. Unit test alongside it.
-2. Screen: `app/src/adapters/ui/tools/<Tool>Screen.tsx`, built on the shared
-   `ToolDetailScaffold` layout component.
-3. Register: one entry in `app/src/adapters/ui/shell/moduleTaxonomy.ts` + one route in
-   `app/src/routes.tsx`.
+Frontend (from `app/`):
 
-See `CLAUDE.md` for the full walkthrough and conventions.
+```bash
+bun install
+bun run dev                # Vite dev server — http://localhost:1420
+bun run tauri dev          # desktop dev (wraps the same Vite server)
+bun run test               # Vitest — core logic unit tests
+bun run build              # static web build (tsc -b && vite build)
+bun run build:sidecar      # cross-compile the Go backend into src-tauri/binaries/
+bun run tauri build        # desktop installer (MSI/NSIS)
+bun run check:bundle       # first-load gzip budget guard (after build)
+```
 
-## Roadmap / deferred
+Backend (from `backend/`):
 
-Tracked in more detail in `MIGRATION_PLAN.md`, `NETWORK_MODULE_PLAN.md`, and
-`CLAUDE.md`; the shortlist:
+```bash
+go test ./...
+go run ./cmd/infrakit-backend      # prints LISTENING <addr> + TOKEN
+```
 
-- **Tauri packaging (Phase 7)** — MSI/NSIS installer via the Tauri bundler.
-  `bun run tauri dev` opening a real native window still needs a manual pass.
-- **Go backend (Phase 8)** — beyond the network-diagnostics scope already
-  started: ansible / ssh command execution, local model serving.
-- **Route-based code-splitting** — the production bundle is ~2.8 MB
-  (~900 KB gzipped); `React.lazy` per route, worth doing before Phase 7.
-- **RDP File Builder — "make it read-only" automation.** The tool emits
-  *instructions* for `attrib +R` (read-only on disk) and `rdpsign.exe
-  /sha256` (tamper-proof signature); both are run by the user after saving.
-  To reduce that to one step:
-  - a "Download lock script" button emitting `lock-connection.ps1`
-    (`attrib +R`, plus the `rdpsign` line when a thumbprint is supplied);
-  - an optional cert-thumbprint field that fills the real value into the
-    header and the script;
-  - a "header-off" output toggle so the signed copy has no `#` comment lines.
+CI: `.github/workflows/` — `frontend.yml` (lint + test + build + bundle budget +
+version drift), `backend.yml` (vet + coded-error grep guard + test matrix +
+cross-compile sidecar), `desktop.yml` (`cargo check` + `cargo test`, Windows +
+Ubuntu), `links.yml` (Knowledge Hub link health), `release.yml` (`v*` tag → draft
+GitHub Release with MSI/NSIS/deb/AppImage + web zip).
 
-  `attrib +R` can only be applied automatically in the Tauri desktop build
-  (Rust `set_permissions`), not the web build — a browser download always
-  lands writable. Signing stays the user's job (their cert, their private
-  key, Windows-only `rdpsign.exe`).
-- **Config-builder "import existing config".** The config builders (SSH,
-  sysctl, Zabbix, RDP, Web Server, Fail2ban) only *generate* files today.
-  Loading an existing config to pre-fill the form would need a reverse
-  parser per tool — tracking every argument/combination that maps back to a
-  form control. Deferred until there's demand; not a small change.
-- **Tuning calculators wave 3** — backup window & RTO, VPC CIDR carve-up,
-  on-call staffing, replication lag / RPO, MTU/MSS overhead, rate-limit /
-  token-bucket (see `TUNING_CALCULATORS_PLAN.md`).
+## Self-hosting the web build
+
+`bun run build` produces `dist/`, deployable to any static host. It runs client-only
+by default (the 88 offline tools). To enable the backend modules, run
+`infrakit-backend` somewhere reachable and set `VITE_BACKEND_URL` /
+`VITE_BACKEND_TOKEN` at build time, or use Settings → Backend → "Endpoint override"
+at runtime.
+
+Multi-tenant auth (`--auth on`) adds per-user data isolation, admin audit log, and a
+self-signed TLS option (`--tls auto`) with fingerprint pinning; it is **off by
+default**.
+
+## Adding a tool
+
+1. Core logic: `app/src/core/<domain>/<tool>.ts` implementing
+   `IToolUseCase<TIn, TOut>`, unit-tested alongside.
+2. Screen: `app/src/adapters/ui/tools/<Tool>Screen.tsx` on a shared scaffold
+   (`ToolDetailScaffold`, `GeneratorScaffold`, `BalancedFlowScaffold`, …).
+3. Register: one entry in `moduleTaxonomy.ts` + one `lazy:` route in `routes.tsx`.
+
+See [`CLAUDE.md`](CLAUDE.md) for the full walkthrough and the layout-archetype guide.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
