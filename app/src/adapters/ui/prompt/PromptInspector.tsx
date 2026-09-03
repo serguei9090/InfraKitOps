@@ -1,8 +1,11 @@
+import { Share2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { currentMessages, type Prompt } from '@/core/prompt/promptModel'
 import { extractVariables } from '@/core/prompt/variableExtractor'
+import { useAuthStore } from '@/stores/authStore'
 import { usePromptLibraryStore } from '@/stores/promptLibraryStore'
+import { ShareDialog } from '@/adapters/ui/share/ShareDialog'
 import { VariableMetaEditor } from './VariableMetaEditor'
 import { VersionCompareDialog } from './VersionCompareDialog'
 import { VersionList } from './VersionList'
@@ -25,6 +28,8 @@ export function PromptInspector({ prompt, onFillAndCopy }: PromptInspectorProps)
   const variables = useMemo(() => extractVariables(messages), [messages])
   const [expanded, setExpanded] = useState<string | null>(null)
   const [compareOpen, setCompareOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const multiUser = useAuthStore((s) => s.mode === 'on')
 
   const orphaned = Object.keys(prompt.variables).filter((n) => !variables.includes(n))
 
@@ -106,13 +111,27 @@ export function PromptInspector({ prompt, onFillAndCopy }: PromptInspectorProps)
         )}
       </div>
 
-      <div className="shrink-0 border-t border-border/60 p-3">
-        <Button className="w-full" onClick={onFillAndCopy}>
+      <div className="flex shrink-0 gap-2 border-t border-border/60 p-3">
+        <Button className="flex-1" onClick={onFillAndCopy}>
           Fill &amp; Copy
         </Button>
+        {multiUser && (
+          <Button variant="outline" aria-label="Share prompt" onClick={() => setShareOpen(true)}>
+            <Share2 className="size-4" />
+          </Button>
+        )}
       </div>
 
       <VersionCompareDialog prompt={prompt} open={compareOpen} onOpenChange={setCompareOpen} />
+      {multiUser && (
+        <ShareDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          base={`/prompts/${prompt.id}`}
+          noun="prompt"
+          title={`Share “${prompt.name}”`}
+        />
+      )}
     </div>
   )
 }

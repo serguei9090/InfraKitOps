@@ -138,6 +138,10 @@ func NewRouter(opts Options) http.Handler {
 					r.Put("/{id}", ph.SavePrompt)
 					r.Delete("/{id}", ph.DeletePrompt)
 					r.Post("/{id}/publish", ph.Publish)
+					r.Get("/{id}/shares", ph.ListShares)
+					r.Put("/{id}/shares/{userId}", ph.PutShare)
+					r.Delete("/{id}/shares/{userId}", ph.DeleteShare)
+					r.Patch("/{id}/owner", ph.Reassign)
 				})
 			}
 		}

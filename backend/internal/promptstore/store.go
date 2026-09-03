@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/infrakit/backend/internal/sharedb"
 )
 
 const schema = `
@@ -41,7 +43,11 @@ func New(db *sql.DB) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		return nil, fmt.Errorf("apply prompt schema: %w", err)
 	}
-	return &Store{db: db}, nil
+	s := &Store{db: db}
+	if err := s.ensureShareSchema(); err != nil {
+		return nil, fmt.Errorf("apply prompt share schema: %w", err)
+	}
+	return s, nil
 }
 
 func scope(owner string) (string, []any) {
@@ -82,7 +88,9 @@ func (s *Store) Library(owner string) (folders []json.RawMessage, prompts []json
 
 	pw, pa := scope(owner)
 	if owner != "" {
-		pw = ` AND (owner = ? OR owner = '' OR published = 1)`
+		pw = ` AND (owner = ? OR owner = '' OR published = 1
+		         OR id IN (SELECT prompt_id FROM prompt_share WHERE grantee_id = ?))`
+		pa = []any{owner, owner}
 	}
 	prows, err := s.db.Query(`SELECT prompt_json FROM prompt WHERE 1=1`+pw, pa...)
 	if err != nil {
@@ -109,7 +117,7 @@ func (s *Store) promptOwner(id string) string {
 // SavePrompt upserts a prompt. `id` is taken from the blob's "id" field. A
 // caller may only overwrite their own (or an unowned) row.
 func (s *Store) SavePrompt(owner, id string, blob json.RawMessage) error {
-	if o := s.promptOwner(id); o != "" && owner != "" && o != owner {
+	if !s.CanEditPrompt(id, owner) {
 		return errForbidden
 	}
 	_, err := s.db.Exec(
@@ -122,7 +130,12 @@ func (s *Store) SavePrompt(owner, id string, blob json.RawMessage) error {
 
 func (s *Store) DeletePrompt(owner, id string) error {
 	w, a := scope(owner)
-	_, err := s.db.Exec(`DELETE FROM prompt WHERE id = ?`+w, append([]any{id}, a...)...)
+	res, err := s.db.Exec(`DELETE FROM prompt WHERE id = ?`+w, append([]any{id}, a...)...)
+	if err == nil {
+		if n, _ := res.RowsAffected(); n > 0 {
+			_ = sharedb.DeleteForThing(s.db, shareTable, shareCol, id)
+		}
+	}
 	return err
 }
 

@@ -260,6 +260,9 @@ func main() {
 			if orch != nil {
 				_ = orch.PurgeGranteeShares(uid)
 			}
+			if promptStore != nil {
+				_ = promptStore.PurgeGranteeShares(uid)
+			}
 		}
 		if tok := svc.SetupToken(); tok != "" {
 			fmt.Printf("SETUP-TOKEN %s\n", tok)
