@@ -8,6 +8,7 @@ import {
   FolderCog,
   Hammer,
   Loader2,
+  Network,
   PackagePlus,
   SquareTerminal,
   Terminal,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { listNodes } from '@/adapters/backend/runbookClient'
 import {
   Select,
   SelectContent,
@@ -36,6 +38,7 @@ const MODE_HINT: Record<string, string> = {
   managed: 'An InfraKit-managed uv virtualenv (Linux/macOS)',
   container: 'Run ansible inside a Docker / Podman container — works on Windows',
   wsl: 'Run ansible inside a WSL2 distro — Windows, no Docker',
+  remote: 'Run ansible on a remote Linux host over SSH (an SSH node)',
 }
 
 const MODE_ICON: Record<string, typeof Cpu> = {
@@ -44,6 +47,7 @@ const MODE_ICON: Record<string, typeof Cpu> = {
   managed: PackagePlus,
   container: Container,
   wsl: SquareTerminal,
+  remote: Network,
 }
 
 /**
@@ -64,10 +68,11 @@ export function RuntimePanel() {
   if (!settings) return null
 
   const runners = settings.runners ?? {}
-  const modes: string[] =
+  const modes: string[] = (
     settings.os === 'windows'
       ? ['auto', 'container', 'wsl', 'system', 'managed']
       : ['auto', 'system', 'managed', 'container', 'wsl']
+  ).concat(runners.remote ? ['remote'] : [])
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">
@@ -181,9 +186,19 @@ export function RuntimePanel() {
             onSave={(patch) => void save(patch)}
           />
         )}
+        {settings.runtime === 'remote' && (
+          <RemoteSetup
+            settings={settings}
+            status={runners.remote}
+            busy={busySetup}
+            admin={isAdmin}
+            onSetup={() => setupRuntime('remote')}
+            onSave={(patch) => void save(patch)}
+          />
+        )}
 
-        {/* shared control-node deps — apply to any managed / container / wsl runtime */}
-        {isAdmin && ['managed', 'container', 'wsl'].includes(settings.runtime) && (
+        {/* shared control-node deps */}
+        {isAdmin && ['managed', 'container', 'wsl', 'remote'].includes(settings.runtime) && (
           <DepsEditor
             settings={settings}
             busy={busySetup}
@@ -530,6 +545,108 @@ function DepsEditor({
           Install deps now
         </Button>
       </div>
+    </div>
+  )
+}
+
+function RemoteSetup({
+  settings,
+  status,
+  busy,
+  admin,
+  onSetup,
+  onSave,
+}: {
+  settings: AnsibleSettings
+  status?: RunnerStatus
+  busy: boolean
+  admin: boolean
+  onSetup: () => void
+  onSave: (patch: Parameters<typeof api.putSettings>[0]) => void
+}) {
+  const [nodes, setNodes] = useState<{ id: string; name: string; host: string; user: string }[]>([])
+  const [node, setNode] = useState(settings.remoteNodeId)
+  const [workdir, setWorkdir] = useState(settings.remoteWorkdir)
+  const [projPath, setProjPath] = useState(settings.remoteProjectPath)
+  useEffect(() => {
+    listNodes()
+      .then((ns) => setNodes(ns.map((n) => ({ id: n.id, name: n.name, host: n.host, user: n.user }))))
+      .catch(() => setNodes([]))
+  }, [])
+  useEffect(() => {
+    setNode(settings.remoteNodeId)
+    setWorkdir(settings.remoteWorkdir)
+    setProjPath(settings.remoteProjectPath)
+  }, [settings])
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border/60 p-3 text-sm">
+      <div className="flex items-center gap-2">
+        {status?.ready ? (
+          <CheckCircle2 className="size-4 text-emerald-500" />
+        ) : (
+          <XCircle className="size-4 text-muted-foreground" />
+        )}
+        <span className="font-medium">
+          {status?.ready ? `${status.remote} · ${status.ansibleVersion}` : (status?.reason ?? 'no control node')}
+        </span>
+      </div>
+
+      {admin && (
+        <>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">
+              Control node (an SSH node from Runbooks → Nodes)
+            </label>
+            {nodes.length === 0 ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                No SSH nodes. Add one in Runbooks → Nodes first.
+              </p>
+            ) : (
+              <Select value={node || ''} onValueChange={(v) => v && onSave({ remoteNodeId: v })}>
+                <SelectTrigger size="sm">
+                  <SelectValue placeholder="pick a node" />
+                </SelectTrigger>
+                <SelectContent>
+                  {nodes.map((n) => (
+                    <SelectItem key={n.id} value={n.id}>
+                      {n.name} — {n.user}@{n.host}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Remote work dir</label>
+              <Input
+                className="h-8 font-mono text-[11px]"
+                placeholder="~/.infrakit-ansible"
+                value={workdir}
+                onChange={(e) => setWorkdir(e.target.value)}
+                onBlur={() => workdir !== settings.remoteWorkdir && onSave({ remoteWorkdir: workdir })}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">
+                Project already on the remote? (path — skips the sync)
+              </label>
+              <Input
+                className="h-8 font-mono text-[11px]"
+                placeholder="(sync each run)"
+                value={projPath}
+                onChange={(e) => setProjPath(e.target.value)}
+                onBlur={() => projPath !== settings.remoteProjectPath && onSave({ remoteProjectPath: projPath })}
+              />
+            </div>
+          </div>
+          <Button size="sm" variant="outline" disabled={busy || !node} onClick={onSetup}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Hammer className="size-4" />}
+            Set up control node
+          </Button>
+        </>
+      )}
     </div>
   )
 }

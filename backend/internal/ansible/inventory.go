@@ -56,11 +56,7 @@ func (e *Engine) Inventory(ctx context.Context, owner string, mode RuntimeMode, 
 		}
 		c, cancel := context.WithTimeout(ctx, 40*time.Second)
 		defer cancel()
-		cmd, cerr := e.activeRunner(c).Command(c, "ansible-inventory", proj.Path, args, nil)
-		if cerr != nil {
-			return nil, cerr
-		}
-		return cmd.Output()
+		return e.activeRunner(c).Capture(c, RunReq{Tool: "ansible-inventory", Dir: proj.Path, Argv: args})
 	}
 
 	listOut, err := run("--list")

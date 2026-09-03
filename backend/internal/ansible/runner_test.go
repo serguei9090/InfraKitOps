@@ -97,12 +97,58 @@ func TestWslTeardownGuard(t *testing.T) {
 	}
 }
 
-func TestPickRunnerExplicit(t *testing.T) {
-	rt := NewRuntime(t.TempDir())
-	if r := pickRunner(context.Background(), rt, "/cfg", map[string]string{"ansibleRuntime": "container"}); r.Name() != RuntimeMode("container") {
+func TestRewriteRemote(t *testing.T) {
+	got := rewriteRemote(`@C:\Users\me\.cache\infrakit-extravars-x.yml`, ``, ``, `C:\Users\me\.cache`, "/wd/.tmp")
+	if got != "@/wd/.tmp/infrakit-extravars-x.yml" {
+		t.Errorf("tmp rewrite = %q", got)
+	}
+	got = rewriteRemote(`C:\proj\site.yml`, `C:\proj`, "/remote/proj", ``, ``)
+	if got != "/remote/proj/site.yml" {
+		t.Errorf("project rewrite = %q", got)
+	}
+	if rewriteRemote("web1,web2", "", "/x", "", "/y") != "web1,web2" {
+		t.Error("host list untouched")
+	}
+}
+
+func TestEnvValueAndLineWriter(t *testing.T) {
+	if envValue([]string{"A=1", "INFRAKIT_EVENT_FILE=/tmp/ev.ndjson"}, "INFRAKIT_EVENT_FILE") != "/tmp/ev.ndjson" {
+		t.Fatal("envValue")
+	}
+	var lines []string
+	w := lineWriter(func(l string) { lines = append(lines, l) })
+	_, _ = w.Write([]byte("one\r\ntwo\nthr"))
+	_, _ = w.Write([]byte("ee\n"))
+	w.Flush()
+	if strings.Join(lines, "|") != "one|two|three" {
+		t.Errorf("lineWriter = %v", lines)
+	}
+}
+
+func TestSSHRunnerUnavailableWithoutResolver(t *testing.T) {
+	s := &sshRunner{settings: map[string]string{"remoteNodeId": "n1"}}
+	if _, err := s.target(context.Background()); err == nil {
+		t.Error("target must fail with no resolver")
+	}
+}
+
+func TestActiveRunnerExplicit(t *testing.T) {
+	e := &Engine{rt: NewRuntime(t.TempDir()), cfgDir: t.TempDir(), store: openTestStore(t)}
+	_ = e.store.PutSetting("ansibleRuntime", "container")
+	if r := e.activeRunner(context.Background()); r.Name() != RuntimeMode("container") {
 		t.Errorf("explicit container → %q", r.Name())
 	}
-	if r := pickRunner(context.Background(), rt, "/cfg", map[string]string{"ansibleRuntime": "system"}); r.Name() != RuntimeSystem {
+	_ = e.store.PutSetting("ansibleRuntime", "system")
+	if r := e.activeRunner(context.Background()); r.Name() != RuntimeSystem {
 		t.Errorf("explicit system → %q", r.Name())
+	}
+	// "remote" is only offered when a NodeResolver is wired
+	_ = e.store.PutSetting("ansibleRuntime", "remote")
+	if r := e.activeRunner(context.Background()); r.Name() == RuntimeMode("remote") {
+		t.Error("remote runner should be unavailable without a NodeResolver")
+	}
+	e.SetNodeResolver(func(context.Context, string) (RemoteTarget, error) { return RemoteTarget{}, nil })
+	if r := e.activeRunner(context.Background()); r.Name() != RuntimeMode("remote") {
+		t.Errorf("remote runner should be picked once wired, got %q", r.Name())
 	}
 }

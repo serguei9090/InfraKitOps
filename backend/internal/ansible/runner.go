@@ -8,31 +8,57 @@ import (
 	"time"
 )
 
+// RunReq is one ansible* invocation, in host terms — the runner translates
+// paths for its own execution context.
+type RunReq struct {
+	Tool     string   // "ansible-playbook" | "ansible" | "ansible-doc" | …
+	Dir      string   // project root ("" = none)
+	Argv     []string // already validated
+	Env      []string // extra KEY=VALUE (callback vars etc.)
+	Combined bool     // Capture: merge stderr into the returned bytes
+}
+
 // Runner executes ansible* commands for one RuntimeMode. AN6: the module's
 // single spawn point, so ansible can run in a container / WSL / a remote host
 // instead of only on the local PATH. See ANSIBLE_RUNTIME_PLAN.md.
 type Runner interface {
 	Name() RuntimeMode
-	// Probe reports whether this runner can execute right now, with detail for
-	// the Settings UI.
 	Probe(ctx context.Context) RunnerStatus
-	// Command builds an *exec.Cmd for `tool argv…` run with `dir` as the project
-	// root and `env` as extra environment (KEY=VALUE). Absolute paths in argv /
-	// env that live under `dir` or under TempDir() are translated into the
-	// execution context. The caller runs it (CombinedOutput / runStreaming / …).
-	Command(ctx context.Context, tool, dir string, argv, env []string) (*exec.Cmd, error)
-	// TempDir is a directory whose contents are visible to Command's execution
+	// Stream runs the request, calling onStdout / onStderr per line, blocking
+	// until the process exits.
+	Stream(ctx context.Context, req RunReq, onStdout, onStderr func(string)) error
+	// Capture runs the request and returns its output (stdout, or combined when
+	// req.Combined).
+	Capture(ctx context.Context, req RunReq) ([]byte, error)
+	// TempDir is a directory whose contents are visible to the execution
 	// context — for extra-vars, vault-password, and the NDJSON event file.
 	TempDir() string
 	// Setup provisions the runner (build image, install ansible, …), streaming
-	// progress lines. No-op for a plain PATH runner.
+	// progress. ApplyDeps installs just the control-node deps; Teardown removes
+	// what Setup created.
 	Setup(ctx context.Context, emit func(string)) error
-	// ApplyDeps installs just the control-node pip packages + collections
-	// (settings `controlNodePipPackages` / `controlNodeCollections`) into an
-	// already-provisioned runtime — no full rebuild.
 	ApplyDeps(ctx context.Context, emit func(string)) error
-	// Teardown removes what Setup created.
 	Teardown(ctx context.Context) error
+}
+
+// streamVia / captureVia run an *exec.Cmd for the local-ish runners.
+func streamVia(build func() (*exec.Cmd, error), onOut, onErr func(string)) error {
+	cmd, err := build()
+	if err != nil {
+		return err
+	}
+	return runStreaming(cmd, onOut, onErr)
+}
+
+func captureVia(build func() (*exec.Cmd, error), combined bool) ([]byte, error) {
+	cmd, err := build()
+	if err != nil {
+		return nil, err
+	}
+	if combined {
+		return cmd.CombinedOutput()
+	}
+	return cmd.Output()
 }
 
 // depLists parses the shared control-node dependency settings.
@@ -56,10 +82,15 @@ type RunnerStatus struct {
 
 	// wsl
 	WslInstalled  bool     `json:"wslInstalled,omitempty"`
-	Distro        string   `json:"distro,omitempty"`        // the distro ansible runs in
-	Distros       []string `json:"distros,omitempty"`       // installed distros
-	OnlineDistros []string `json:"onlineDistros,omitempty"` // `wsl -l -o`
-	DistroReady   bool     `json:"distroReady,omitempty"`   // target distro exists
+	Distro        string   `json:"distro,omitempty"`
+	Distros       []string `json:"distros,omitempty"`
+	OnlineDistros []string `json:"onlineDistros,omitempty"`
+	DistroReady   bool     `json:"distroReady,omitempty"`
+
+	// remote (ssh)
+	NodeID   string `json:"nodeId,omitempty"`
+	NodeName string `json:"nodeName,omitempty"`
+	Remote   string `json:"remote,omitempty"` // user@host
 }
 
 // InstallLinks are shown when a runtime the user might want isn't present.
@@ -70,84 +101,88 @@ var InstallLinks = map[string]string{
 	"uv":     "https://docs.astral.sh/uv/",
 }
 
-// pickRunner returns the Runner for `mode`, resolving "auto".
-func pickRunner(ctx context.Context, rt *Runtime, cfgDir string, settings map[string]string) Runner {
-	mode := RuntimeMode(settings["ansibleRuntime"])
-	local := &localRunner{rt: rt, mode: RuntimeSystem, settings: settings}
-	managed := &localRunner{rt: rt, mode: RuntimeManaged, settings: settings}
-	container := &containerRunner{cfgDir: cfgDir, image: nz(settings["containerImage"], defaultImage), settings: settings}
-	wsl := &wslRunner{cfgDir: cfgDir, settings: settings}
+// NodeResolver returns a remote control-node target for a node id — host/user/
+// port from the SSH-node registry, credential already resolved from the
+// caller's vault. Nil → the ssh runner is unavailable.
+type NodeResolver func(ctx context.Context, nodeID string) (RemoteTarget, error)
 
-	switch mode {
-	case RuntimeSystem:
-		return local
-	case RuntimeManaged:
-		return managed
-	case RuntimeMode("container"):
-		return container
-	case RuntimeMode("wsl"):
-		return wsl
-	default: // auto / ""
-		for _, r := range []Runner{local, managed, container, wsl} {
+// RemoteTarget is what the ssh runner needs to reach a control node.
+type RemoteTarget struct {
+	Name       string
+	Host       string
+	Port       int
+	User       string
+	Password   string // resolved
+	PrivateKey string // resolved
+	HostKeyFP  string
+}
+
+func (e *Engine) allRunners(settings map[string]string) []Runner {
+	rs := []Runner{
+		&localRunner{rt: e.rt, mode: RuntimeSystem, settings: settings},
+		&localRunner{rt: e.rt, mode: RuntimeManaged, settings: settings},
+		&containerRunner{cfgDir: e.cfgDir, image: nz(settings["containerImage"], defaultImage), settings: settings},
+		&wslRunner{cfgDir: e.cfgDir, settings: settings},
+	}
+	if e.nodeResolver != nil {
+		rs = append(rs, &sshRunner{cfgDir: e.cfgDir, settings: settings, resolve: e.nodeResolver})
+	}
+	return rs
+}
+
+// activeRunner resolves the Runner for the configured RuntimeMode.
+func (e *Engine) activeRunner(ctx context.Context) Runner {
+	settings := e.store.GetSettings()
+	mode := settings["ansibleRuntime"]
+	all := e.allRunners(settings)
+	byName := map[string]Runner{}
+	for _, r := range all {
+		byName[string(r.Name())] = r
+	}
+	if r, ok := byName[mode]; ok {
+		return r
+	}
+	if mode == "" || mode == "auto" {
+		for _, r := range all {
 			if r.Probe(ctx).Ready {
 				return r
 			}
 		}
-		return local // report its reason
 	}
+	return all[0] // system — reports its reason
+}
+
+func (e *Engine) runnerFor(mode string) Runner {
+	byName := map[string]Runner{}
+	for _, r := range e.allRunners(e.store.GetSettings()) {
+		byName[string(r.Name())] = r
+	}
+	if r, ok := byName[mode]; ok {
+		return r
+	}
+	return byName["system"]
 }
 
 // Runners probes every runner for capabilities.ansible.
 func (e *Engine) Runners(ctx context.Context) map[string]RunnerStatus {
-	return probeRunners(ctx, e.rt, e.cfgDir, e.store.GetSettings())
-}
-
-// runnerFor builds one runner by mode name ("system"|"managed"|"container"),
-// ignoring the configured default.
-func (e *Engine) runnerFor(mode string) Runner {
-	s := e.store.GetSettings()
-	switch mode {
-	case "container":
-		return &containerRunner{cfgDir: e.cfgDir, image: nz(s["containerImage"], defaultImage), settings: s}
-	case "managed":
-		return &localRunner{rt: e.rt, mode: RuntimeManaged, settings: s}
-	case "wsl":
-		return &wslRunner{cfgDir: e.cfgDir, settings: s}
-	default:
-		return &localRunner{rt: e.rt, mode: RuntimeSystem, settings: s}
-	}
-}
-
-// SetupRuntime provisions the runner for `mode` (build image / install ansible),
-// streaming progress.
-func (e *Engine) SetupRuntime(ctx context.Context, mode string, emit func(string)) error {
-	return e.runnerFor(mode).Setup(ctx, emit)
-}
-
-// ApplyRuntimeDeps installs just the control-node deps for `mode`.
-func (e *Engine) ApplyRuntimeDeps(ctx context.Context, mode string, emit func(string)) error {
-	return e.runnerFor(mode).ApplyDeps(ctx, emit)
-}
-
-// TeardownRuntime removes what SetupRuntime created for `mode`.
-func (e *Engine) TeardownRuntime(ctx context.Context, mode string) error {
-	return e.runnerFor(mode).Teardown(ctx)
-}
-
-// probeRunners returns the status of every runner for capabilities.ansible.
-func probeRunners(ctx context.Context, rt *Runtime, cfgDir string, settings map[string]string) map[string]RunnerStatus {
-	c, cancel := context.WithTimeout(ctx, 20*time.Second)
+	c, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	out := map[string]RunnerStatus{}
-	for _, r := range []Runner{
-		&localRunner{rt: rt, mode: RuntimeSystem, settings: settings},
-		&localRunner{rt: rt, mode: RuntimeManaged, settings: settings},
-		&containerRunner{cfgDir: cfgDir, image: nz(settings["containerImage"], defaultImage), settings: settings},
-		&wslRunner{cfgDir: cfgDir, settings: settings},
-	} {
+	for _, r := range e.allRunners(e.store.GetSettings()) {
 		out[string(r.Name())] = r.Probe(c)
 	}
 	return out
+}
+
+// SetupRuntime / ApplyRuntimeDeps / TeardownRuntime dispatch to one runner.
+func (e *Engine) SetupRuntime(ctx context.Context, mode string, emit func(string)) error {
+	return e.runnerFor(mode).Setup(ctx, emit)
+}
+func (e *Engine) ApplyRuntimeDeps(ctx context.Context, mode string, emit func(string)) error {
+	return e.runnerFor(mode).ApplyDeps(ctx, emit)
+}
+func (e *Engine) TeardownRuntime(ctx context.Context, mode string) error {
+	return e.runnerFor(mode).Teardown(ctx)
 }
 
 // --- localRunner: system / managed (today's behaviour) ------------
@@ -180,17 +215,24 @@ func (l *localRunner) Probe(ctx context.Context) RunnerStatus {
 	return s
 }
 
-func (l *localRunner) Command(ctx context.Context, tool, dir string, argv, env []string) (*exec.Cmd, error) {
-	bin := l.rt.Bin(ctx, l.mode, tool)
+func (l *localRunner) buildCmd(ctx context.Context, req RunReq) (*exec.Cmd, error) {
+	bin := l.rt.Bin(ctx, l.mode, req.Tool)
 	if bin == "" {
-		return nil, fmt.Errorf("%s not available — check the Ansible runtime", tool)
+		return nil, fmt.Errorf("%s not available — check the Ansible runtime", req.Tool)
 	}
-	cmd := exec.CommandContext(ctx, bin, argv...)
-	if dir != "" {
-		cmd.Dir = dir
+	cmd := exec.CommandContext(ctx, bin, req.Argv...)
+	if req.Dir != "" {
+		cmd.Dir = req.Dir
 	}
-	cmd.Env = append(baseEnv(), env...)
+	cmd.Env = append(baseEnv(), req.Env...)
 	return cmd, nil
+}
+
+func (l *localRunner) Stream(ctx context.Context, req RunReq, onOut, onErr func(string)) error {
+	return streamVia(func() (*exec.Cmd, error) { return l.buildCmd(ctx, req) }, onOut, onErr)
+}
+func (l *localRunner) Capture(ctx context.Context, req RunReq) ([]byte, error) {
+	return captureVia(func() (*exec.Cmd, error) { return l.buildCmd(ctx, req) }, req.Combined)
 }
 
 func (l *localRunner) Setup(ctx context.Context, emit func(string)) error {
@@ -200,7 +242,6 @@ func (l *localRunner) Setup(ctx context.Context, emit func(string)) error {
 	pip, colls := depLists(l.settings)
 	return l.rt.EnsureManaged(ctx, pip, colls, emit)
 }
-
 func (l *localRunner) ApplyDeps(ctx context.Context, emit func(string)) error {
 	if l.mode != RuntimeManaged {
 		return fmt.Errorf("the system runtime uses ansible on your PATH — install deps there yourself")
@@ -208,7 +249,6 @@ func (l *localRunner) ApplyDeps(ctx context.Context, emit func(string)) error {
 	pip, colls := depLists(l.settings)
 	return l.rt.ApplyManagedDeps(ctx, pip, colls, emit)
 }
-
 func (l *localRunner) Teardown(context.Context) error {
 	if l.mode == RuntimeManaged {
 		return l.rt.RemoveManaged()

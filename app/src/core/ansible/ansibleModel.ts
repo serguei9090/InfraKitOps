@@ -3,7 +3,7 @@
  * `internal/ansible` package. See ANSIBLE_MODULE_PLAN.md.
  */
 
-export type RuntimeMode = 'auto' | 'system' | 'managed' | 'container' | 'wsl'
+export type RuntimeMode = 'auto' | 'system' | 'managed' | 'container' | 'wsl' | 'remote'
 
 export interface RunnerStatus {
   mode: string
@@ -22,6 +22,10 @@ export interface RunnerStatus {
   distros?: string[]
   onlineDistros?: string[]
   distroReady?: boolean
+  // remote
+  nodeId?: string
+  nodeName?: string
+  remote?: string // user@host
 }
 
 export interface AnsibleBin {
@@ -50,6 +54,9 @@ export interface AnsibleSettings {
   controlNodeCollections: string
   wslDistro: string
   wslSource: string
+  remoteNodeId: string
+  remoteWorkdir: string
+  remoteProjectPath: string
   os: string // 'windows' | 'linux' | 'darwin' | …
   install: Record<string, string> // tool → install-docs URL
   runners: Record<string, RunnerStatus>

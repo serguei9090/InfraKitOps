@@ -92,6 +92,9 @@ func (h *AnsibleHandlers) GetSettings(w http.ResponseWriter, r *http.Request) {
 		"controlNodeCollections": s["controlNodeCollections"],
 		"wslDistro":              s["wslDistro"],
 		"wslSource":              nz(s["wslSource"], "import:"),
+		"remoteNodeId":           s["remoteNodeId"],
+		"remoteWorkdir":          s["remoteWorkdir"],
+		"remoteProjectPath":      s["remoteProjectPath"],
 		"os":                     runtime.GOOS,
 		"install":                ansible.InstallLinks,
 		"runners":                h.Engine.Runners(ctx),
@@ -112,6 +115,9 @@ func (h *AnsibleHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		ControlNodeCollections *string `json:"controlNodeCollections"`
 		WslDistro              *string `json:"wslDistro"`
 		WslSource              *string `json:"wslSource"`
+		RemoteNodeID           *string `json:"remoteNodeId"`
+		RemoteWorkdir          *string `json:"remoteWorkdir"`
+		RemoteProjectPath      *string `json:"remoteProjectPath"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 		apierr.Write(w, apierr.Validation(err.Error()))
@@ -129,10 +135,10 @@ func (h *AnsibleHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if b.Runtime != nil {
 		switch *b.Runtime {
-		case "auto", "system", "managed", "container", "wsl", "":
+		case "auto", "system", "managed", "container", "wsl", "remote", "":
 			_ = h.Store.PutSetting("ansibleRuntime", *b.Runtime)
 		default:
-			apierr.Write(w, apierr.Validation(`runtime must be auto | system | managed | container | wsl`))
+			apierr.Write(w, apierr.Validation(`runtime must be auto | system | managed | container | wsl | remote`))
 			return
 		}
 	}
@@ -142,6 +148,9 @@ func (h *AnsibleHandlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		"controlNodeCollections": b.ControlNodeCollections,
 		"wslDistro":              b.WslDistro,
 		"wslSource":              b.WslSource,
+		"remoteNodeId":           b.RemoteNodeID,
+		"remoteWorkdir":          b.RemoteWorkdir,
+		"remoteProjectPath":      b.RemoteProjectPath,
 	} {
 		if v != nil {
 			_ = h.Store.PutSetting(k, strings.TrimSpace(*v))

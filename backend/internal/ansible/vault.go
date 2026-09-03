@@ -86,11 +86,7 @@ func (e *Engine) Vault(ctx context.Context, owner string, mode RuntimeMode, spec
 
 	c, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	cmd, cerr := runner.Command(c, "ansible-vault", proj.Path, args, nil)
-	if cerr != nil {
-		return nil, cerr
-	}
-	out, runErr := cmd.CombinedOutput()
+	out, runErr := runner.Capture(c, RunReq{Tool: "ansible-vault", Dir: proj.Path, Argv: args, Combined: true})
 
 	res := &VaultResult{Op: spec.Op, OK: runErr == nil}
 	if spec.Op == "view" && runErr == nil {

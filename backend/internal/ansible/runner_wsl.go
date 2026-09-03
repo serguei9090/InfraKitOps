@@ -110,7 +110,15 @@ func winToWSL(p string) string {
 	return strings.ReplaceAll(p, "\\", "/")
 }
 
-func (w *wslRunner) Command(ctx context.Context, tool, dir string, argv, env []string) (*exec.Cmd, error) {
+func (w *wslRunner) Stream(ctx context.Context, req RunReq, onOut, onErr func(string)) error {
+	return streamVia(func() (*exec.Cmd, error) { return w.buildCmd(ctx, req) }, onOut, onErr)
+}
+func (w *wslRunner) Capture(ctx context.Context, req RunReq) ([]byte, error) {
+	return captureVia(func() (*exec.Cmd, error) { return w.buildCmd(ctx, req) }, req.Combined)
+}
+
+func (w *wslRunner) buildCmd(ctx context.Context, req RunReq) (*exec.Cmd, error) {
+	tool, dir, argv, env := req.Tool, req.Dir, req.Argv, req.Env
 	if runtime.GOOS != "windows" {
 		return nil, fmt.Errorf("WSL is Windows-only")
 	}

@@ -85,7 +85,15 @@ func (c *containerRunner) Probe(ctx context.Context) RunnerStatus {
 	return s
 }
 
-func (c *containerRunner) Command(ctx context.Context, tool, dir string, argv, env []string) (*exec.Cmd, error) {
+func (c *containerRunner) Stream(ctx context.Context, req RunReq, onOut, onErr func(string)) error {
+	return streamVia(func() (*exec.Cmd, error) { return c.buildCmd(ctx, req) }, onOut, onErr)
+}
+func (c *containerRunner) Capture(ctx context.Context, req RunReq) ([]byte, error) {
+	return captureVia(func() (*exec.Cmd, error) { return c.buildCmd(ctx, req) }, req.Combined)
+}
+
+func (c *containerRunner) buildCmd(ctx context.Context, req RunReq) (*exec.Cmd, error) {
+	tool, dir, argv, env := req.Tool, req.Dir, req.Argv, req.Env
 	eng := containerEngineName()
 	if eng == "" {
 		return nil, fmt.Errorf("no container engine (docker / podman) available")

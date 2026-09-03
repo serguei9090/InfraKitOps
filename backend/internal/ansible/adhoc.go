@@ -66,11 +66,7 @@ func (e *Engine) RunAdhoc(ctx context.Context, owner string, mode RuntimeMode, s
 	_ = evFile.Close()
 	defer os.Remove(evPath)
 
-	cmd, cerr := runner.Command(ctx, "ansible", proj.Path, args, e.callbackEnv(evPath))
-	if cerr != nil {
-		send("error", map[string]string{"error": cerr.Error()})
-		return 0
-	}
+	req := RunReq{Tool: "ansible", Dir: proj.Path, Argv: args, Env: e.callbackEnv(evPath)}
 
 	redArgv := "ansible " + strings.Join(args, " ")
 	run := &Run{
@@ -88,5 +84,5 @@ func (e *Engine) RunAdhoc(ctx context.Context, owner string, mode RuntimeMode, s
 		{"e": "play_start", "play": "ad-hoc: " + pattern, "hosts": []string{}},
 		{"e": "task_start", "task": taskName, "action": module, "uuid": "adhoc-0"},
 	}
-	return e.execRun(ctx, cmd, evPath, run, runID, pre, out)
+	return e.execRun(ctx, runner, req, evPath, run, runID, pre, out)
 }

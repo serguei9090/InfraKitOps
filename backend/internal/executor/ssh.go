@@ -74,7 +74,25 @@ func SSHTest(ctx context.Context, t *SSHTarget) (HostKeyResult, error) {
 	return hk, nil
 }
 
+// SSHRun opens a session to `t`, runs `script` under bash, and streams its
+// stdout/stderr to the writers, blocking until it exits. Host keys are pinned
+// exactly as a runbook SSH step. Exported for the Ansible module's remote
+// execution backend (AN6d) — same code path, no new dep.
+func SSHRun(ctx context.Context, t *SSHTarget, script string, stdout, stderr io.Writer) (Result, HostKeyResult) {
+	return runSSHIO(ctx, t, script, nil, stdout, stderr)
+}
+
+// SSHRunStdin is SSHRun with `stdin` piped to the remote command — used to
+// stream a tar archive of the project onto the control node.
+func SSHRunStdin(ctx context.Context, t *SSHTarget, script string, stdin io.Reader, stdout, stderr io.Writer) (Result, HostKeyResult) {
+	return runSSHIO(ctx, t, script, stdin, stdout, stderr)
+}
+
 func runSSH(ctx context.Context, t *SSHTarget, script string, stdout, stderr io.Writer) (Result, HostKeyResult) {
+	return runSSHIO(ctx, t, script, nil, stdout, stderr)
+}
+
+func runSSHIO(ctx context.Context, t *SSHTarget, script string, stdin io.Reader, stdout, stderr io.Writer) (Result, HostKeyResult) {
 	cfg, hkCh, err := clientConfig(t)
 	if err != nil {
 		return Result{ExitCode: -1, Err: err.Error()}, HostKeyResult{}
@@ -103,6 +121,9 @@ func runSSH(ctx context.Context, t *SSHTarget, script string, stdout, stderr io.
 	var outBuf, errBuf bytes.Buffer
 	sess.Stdout = io.MultiWriter(stdout, &outBuf)
 	sess.Stderr = io.MultiWriter(stderr, &errBuf)
+	if stdin != nil {
+		sess.Stdin = stdin
+	}
 
 	cmd := script
 	if t.Sudo {

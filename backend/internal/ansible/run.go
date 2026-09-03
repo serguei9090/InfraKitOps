@@ -18,14 +18,19 @@ import (
 
 // Engine runs playbooks and records them.
 type Engine struct {
-	store  *Store
-	rt     *Runtime
-	cfgDir string
-	cbDir  string // materialized callback plugin dir
+	store        *Store
+	rt           *Runtime
+	cfgDir       string
+	cbDir        string // materialized callback plugin dir
+	nodeResolver NodeResolver
 
 	apprMu   sync.Mutex
 	approves map[int64]pendingApproval
 }
+
+// SetNodeResolver wires the SSH-node registry (from main.go). Enables the
+// "remote" runtime.
+func (e *Engine) SetNodeResolver(r NodeResolver) { e.nodeResolver = r }
 
 type pendingApproval struct {
 	ch        chan bool
@@ -43,11 +48,6 @@ func NewEngine(store *Store, rt *Runtime, cfgDir string) (*Engine, error) {
 		return nil, err
 	}
 	return &Engine{store: store, rt: rt, cfgDir: cfgDir, cbDir: cb, approves: map[int64]pendingApproval{}}, nil
-}
-
-// activeRunner resolves the Runner for the configured RuntimeMode (AN6).
-func (e *Engine) activeRunner(ctx context.Context) Runner {
-	return pickRunner(ctx, e.rt, e.cfgDir, e.store.GetSettings())
 }
 
 var errApproveSelf = errors.New("a run must be approved by a different operator")
@@ -205,11 +205,8 @@ func (e *Engine) Run(ctx context.Context, owner string, mode RuntimeMode, trigge
 	_ = evFile.Close()
 	defer os.Remove(evPath)
 
-	cmd, cerr := runner.Command(ctx, "ansible-playbook", proj.Path, args, e.callbackEnv(evPath))
-	if cerr != nil {
-		return fail(cerr.Error())
-	}
-	return e.execRun(ctx, cmd, evPath, run, runID, nil, out)
+	req := RunReq{Tool: "ansible-playbook", Dir: proj.Path, Argv: args, Env: e.callbackEnv(evPath)}
+	return e.execRun(ctx, runner, req, evPath, run, runID, nil, out)
 }
 
 // callbackEnv is the environment that enables the streaming callback plugin and
@@ -250,12 +247,12 @@ func (e *Engine) gate(ctx context.Context, runID int64, run *Run, requires bool,
 	return true
 }
 
-// execRun spawns `cmd` for an already-recorded run (`runID`, run-start already
-// sent), tails the callback event file at `evPath`, and streams to `out` as
-// SSE. `preEvents` are synthetic events (ad-hoc uses them for a play + task
-// node). Returns runID.
+// execRun runs `req` through `runner` for an already-recorded run (`runID`,
+// run-start already sent), tails the callback event file at `evPath`, and
+// streams to `out` as SSE. `preEvents` are synthetic events (ad-hoc uses them
+// for a play + task node). Returns runID.
 func (e *Engine) execRun(
-	ctx context.Context, cmd *exec.Cmd, evPath string, run *Run, runID int64,
+	ctx context.Context, runner Runner, req RunReq, evPath string, run *Run, runID int64,
 	preEvents []map[string]any, out chan<- sse.Message,
 ) int64 {
 	send := func(ev string, data any) {
@@ -292,7 +289,7 @@ func (e *Engine) execRun(
 		})
 	}()
 
-	runErr := runStreaming(cmd,
+	runErr := runner.Stream(ctx, req,
 		func(l string) { send("stdout", map[string]string{"text": l}) },
 		func(l string) { send("stderr", map[string]string{"text": l}) },
 	)

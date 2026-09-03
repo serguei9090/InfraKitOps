@@ -198,13 +198,7 @@ func (e *Engine) GalaxyInstall(ctx context.Context, owner string, mode RuntimeMo
 	failed := false
 	for _, s := range steps {
 		send("stdout", map[string]string{"text": "$ ansible-galaxy " + strings.Join(s.args, " ")})
-		cmd, cerr := runner.Command(ctx, "ansible-galaxy", proj.Path, s.args, nil)
-		if cerr != nil {
-			send("error", map[string]string{"error": cerr.Error()})
-			send("run-end", map[string]string{"status": "failed"})
-			return
-		}
-		err := runStreaming(cmd,
+		err := runner.Stream(ctx, RunReq{Tool: "ansible-galaxy", Dir: proj.Path, Argv: s.args},
 			func(l string) { send("stdout", map[string]string{"text": l}) },
 			func(l string) { send("stderr", map[string]string{"text": l}) },
 		)

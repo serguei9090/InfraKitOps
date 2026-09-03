@@ -33,11 +33,7 @@ func (e *Engine) Doc(ctx context.Context, mode RuntimeMode, module string) (*Mod
 	}
 	c, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	cmd, cerr := e.activeRunner(c).Command(c, "ansible-doc", "", []string{"-j", module}, nil)
-	if cerr != nil {
-		return nil, cerr
-	}
-	out, err := cmd.Output()
+	out, err := e.activeRunner(c).Capture(c, RunReq{Tool: "ansible-doc", Argv: []string{"-j", module}})
 	if err != nil {
 		return nil, fmt.Errorf("ansible-doc %s: %w", module, trimExecErr(err))
 	}

@@ -37,11 +37,9 @@ func (e *Engine) SyntaxCheck(ctx context.Context, owner string, mode RuntimeMode
 	}
 	c, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	cmd, cerr := e.activeRunner(c).Command(c, "ansible-playbook", proj.Path, []string{"--syntax-check", abs}, nil)
-	if cerr != nil {
-		return &CheckResult{Kind: "syntax", Ran: false, Reason: cerr.Error()}, nil
-	}
-	out, err := cmd.CombinedOutput()
+	out, err := e.activeRunner(c).Capture(c, RunReq{
+		Tool: "ansible-playbook", Dir: proj.Path, Argv: []string{"--syntax-check", abs}, Combined: true,
+	})
 	return &CheckResult{
 		Kind:   "syntax",
 		Ran:    true,
@@ -63,11 +61,10 @@ func (e *Engine) Lint(ctx context.Context, owner string, mode RuntimeMode, proje
 	}
 	c, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	cmd, cerr := e.activeRunner(c).Command(c, "ansible-lint", proj.Path, []string{"-f", "json", abs}, nil)
-	if cerr != nil {
+	out, lerr := e.activeRunner(c).Capture(c, RunReq{Tool: "ansible-lint", Dir: proj.Path, Argv: []string{"-f", "json", abs}})
+	if lerr != nil && len(out) == 0 {
 		return &CheckResult{Kind: "lint", Ran: false, Reason: "ansible-lint is not installed (pip install ansible-lint)"}, nil
 	}
-	out, _ := cmd.Output() // non-zero exit == findings; parse anyway
 
 	res := &CheckResult{Kind: "lint", Ran: true}
 	var rows []struct {

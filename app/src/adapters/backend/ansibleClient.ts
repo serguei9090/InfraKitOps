@@ -31,6 +31,9 @@ export const putSettings = (patch: {
   controlNodeCollections?: string
   wslDistro?: string
   wslSource?: string
+  remoteNodeId?: string
+  remoteWorkdir?: string
+  remoteProjectPath?: string
 }) => backendRequest<AnsibleSettings>('PUT', '/ansible/settings', patch)
 
 /** Provision a runtime: mode "managed" → uv venv, "container" → build/pull the image. */

@@ -39,6 +39,7 @@ import (
 	"github.com/infrakit/backend/internal/server"
 	"github.com/infrakit/backend/internal/tlscert"
 	"github.com/infrakit/backend/internal/tools/iperf"
+	"github.com/infrakit/backend/internal/userctx"
 	"github.com/infrakit/backend/internal/vault"
 )
 
@@ -156,6 +157,28 @@ func main() {
 		ansibleSched := ansible.NewScheduler(ansibleStore, ansibleEngine)
 		ansibleSched.Start()
 		defer ansibleSched.Stop()
+		// AN6d — the SSH-node registry backs the "remote" execution runtime.
+		if orch != nil {
+			ansibleEngine.SetNodeResolver(func(ctx context.Context, nodeID string) (ansible.RemoteTarget, error) {
+				n, err := orch.GetNode(userctx.From(ctx), nodeID)
+				if err != nil {
+					return ansible.RemoteTarget{}, err
+				}
+				t := ansible.RemoteTarget{Name: n.Name, Host: n.Host, Port: n.Port, User: n.User, HostKeyFP: n.HostKeyFP}
+				if n.AuthSecret != "" && vlt != nil {
+					v, serr := vlt.Resolver().Resolve(ctx, n.AuthSecret)
+					if serr != nil {
+						return t, fmt.Errorf("can't read the node's auth secret — vault locked?")
+					}
+					if n.AuthKind == "key" {
+						t.PrivateKey = v
+					} else {
+						t.Password = v
+					}
+				}
+				return t, nil
+			})
+		}
 	}
 
 	defer iperf.StopServer() // kill any managed `iperf3 -s` child
