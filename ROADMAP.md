@@ -25,9 +25,13 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 
 ## Parked (need a trigger)
 
-- **Packaging P7e–P7h** ([PACKAGING_PLAN](PACKAGING_PLAN.md)) — clean-VM gate, brand
-  icons, web static deploy, Linux, release CI. **Paused by owner** until an
-  installer is wanted.
+- **Packaging** ([PACKAGING_PLAN](PACKAGING_PLAN.md)) — **release CI done**
+  (`release.yml`: tag `v*` → draft Release with Windows MSI/NSIS + Linux
+  deb/AppImage desktop installers **and** self-contained
+  `infrakit-studio-web-<v>-{linux,windows}-amd64.zip` bundles that serve
+  UI+API from one binary). **Hosted web deployment done** (DEPLOY_PLAN D0–D5,
+  Docker + compose). Remaining, owner-paused: brand icons, code signing
+  (needs certs), macOS, P7e clean-VM install/UAC/uninstall gate.
 - **A4f `Task.resources`** — always-inject resource URIs per task
   ([MCP_RESOURCES_PROMPTS_PLAN](MCP_RESOURCES_PROMPTS_PLAN.md) §7). Interactive
   attach shipped; this is the "pin it to a task" extra.
