@@ -4,8 +4,7 @@
  */
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { createStoragePort } from '@/adapters/storage/createStoragePort'
-import { storagePortAsZustandStorage } from '@/adapters/storage/zustandStorage'
+import { syncedStorage } from '@/adapters/storage/syncedSettings'
 import { SHORTCUTS, shortcutById } from '@/core/shortcuts/shortcuts'
 
 const SHORTCUT_IDS = SHORTCUTS.map((s) => s.id)
@@ -46,7 +45,7 @@ export const useShortcutStore = create<ShortcutStore>()(
     }),
     {
       name: 'shortcuts',
-      storage: createJSONStorage(() => storagePortAsZustandStorage(createStoragePort())),
+      storage: createJSONStorage(() => syncedStorage()),
     },
   ),
 )

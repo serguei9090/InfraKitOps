@@ -17,6 +17,7 @@ import {
   setUnauthorizedHandler,
 } from '@/adapters/backend/backendClient'
 import { resetSseConnection } from '@/adapters/backend/sseClient'
+import { pullSettings, stopSync } from '@/adapters/storage/syncedSettings'
 import type { AuthMode, AuthUser } from '@/core/auth/authModel'
 
 const SESSION_KEY = 'infrakit:session'
@@ -105,6 +106,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
           applyToken(null)
         }
       }
+      if (me) await pullSettings() // sync device-independent prefs before first paint
       set({ mode, ready: true, me, needsBootstrap })
     },
 
@@ -114,6 +116,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
         const r = await api.login(username, password)
         applyToken(r.token)
         resetBackendConnection()
+        await pullSettings()
         set({ me: r.user, busy: false, needsBootstrap: false })
         return true
       } catch (e) {
@@ -128,6 +131,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
         const r = await api.bootstrap(token, username, password)
         applyToken(r.token)
         resetBackendConnection()
+        await pullSettings()
         set({ me: r.user, busy: false, needsBootstrap: false })
         return true
       } catch (e) {
@@ -144,6 +148,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
       }
       applyToken(null)
       resetBackendConnection()
+      stopSync()
       set({ me: null, error: null })
     },
 

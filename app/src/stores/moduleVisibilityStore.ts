@@ -1,8 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { kModuleTaxonomy, type ModuleDef } from '@/adapters/ui/shell/moduleTaxonomy'
-import { createStoragePort } from '@/adapters/storage/createStoragePort'
-import { storagePortAsZustandStorage } from '@/adapters/storage/zustandStorage'
+import { syncedStorage } from '@/adapters/storage/syncedSettings'
 
 interface ModuleVisibilityStore {
   order: string[]
@@ -45,7 +44,7 @@ export const useModuleVisibilityStore = create<ModuleVisibilityStore>()(
     }),
     {
       name: 'module-prefs',
-      storage: createJSONStorage(() => storagePortAsZustandStorage(createStoragePort())),
+      storage: createJSONStorage(() => syncedStorage()),
       // New/removed modules since a prefs snapshot was saved shouldn't
       // vanish from `order` or silently break `visibleModulesInOrder` —
       // reconcile against the current taxonomy on every load instead of

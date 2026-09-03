@@ -259,9 +259,30 @@ works/degraded matrix. Linked from `DEPLOY_PLAN.md`.
 
 **Est. 0.5 d.**
 
-### D5 — settings sync (S3e)
+### D5 — settings sync (S3e) ✅ DONE
 
-In scope. Worth building because a hosted deploy = one user, many browsers.
+Landed:
+- Backend: `auth_user_settings` table (`user_id` PK, `data` JSON, `updated_at`)
+  in `auth.db`; `Store.GetUserSettings` / `PutUserSettings` (merge-patch, JSON
+  `null` deletes a key, dropped on user delete); `GET|PUT /api/v1/settings/user`
+  on `AuthHandlers` (session-gated, 256 KiB cap, exempt from the read-only
+  write-block — personal setting). 2 tests.
+- Frontend: `adapters/backend/userSettingsClient.ts`;
+  `adapters/storage/syncedSettings.ts` — `syncedStorage()` wraps the
+  `IStoragePort` zustand adapter (local write always + 800 ms debounced push
+  when enabled), `pullSettings()` fetches the blob on login/boot, writes
+  newer keys locally, `.persist.rehydrate()`s the affected stores;
+  `stopSync()` on logout. The 4 synced stores (`theme`, `module-prefs`,
+  `shortcuts`, `network-settings`) swapped onto `syncedStorage()`; `authStore`
+  calls `pullSettings` after `login`/`bootstrap`/`init`-with-session and
+  `stopSync` on `logout`. 4 tests. **Endpoint override NOT synced** (it names
+  the backend — must stay per-device).
+- **Verified E2E** via the real binary: bootstrap → `GET {}` → `PUT` merges →
+  `GET` returns merged → `PUT {theme:null}` deletes just that key.
+
+`SETTINGS_MODULE_PLAN.md` §S3e: killed → done.
+
+Original notes below.
 
 - Backend: `user_settings` table (per-user JSON blob), `GET/PUT
   /api/v1/settings/user` (auth-gated).

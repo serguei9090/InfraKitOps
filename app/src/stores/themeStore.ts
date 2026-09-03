@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { createStoragePort } from '@/adapters/storage/createStoragePort'
-import { storagePortAsZustandStorage } from '@/adapters/storage/zustandStorage'
+import { syncedStorage } from '@/adapters/storage/syncedSettings'
 
 export type ThemeMode = 'light' | 'dark'
 
@@ -25,7 +24,7 @@ export const useThemeStore = create<ThemeStore>()(
     }),
     {
       name: 'theme',
-      storage: createJSONStorage(() => storagePortAsZustandStorage(createStoragePort())),
+      storage: createJSONStorage(() => syncedStorage()),
     },
   ),
 )

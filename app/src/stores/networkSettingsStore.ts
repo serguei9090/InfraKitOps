@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { createStoragePort } from '@/adapters/storage/createStoragePort'
-import { storagePortAsZustandStorage } from '@/adapters/storage/zustandStorage'
+import { syncedStorage } from '@/adapters/storage/syncedSettings'
 
 export type GeoProvider = 'ip-api' | 'maxmind'
 
@@ -61,7 +60,7 @@ export const useNetworkSettingsStore = create<NetworkSettingsStore>()(
     }),
     {
       name: 'network-settings',
-      storage: createJSONStorage(() => storagePortAsZustandStorage(createStoragePort())),
+      storage: createJSONStorage(() => syncedStorage()),
       merge: (persisted, current) => ({
         ...current,
         ...DEFAULT_NETWORK_SETTINGS,
