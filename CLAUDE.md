@@ -590,6 +590,23 @@ shortcuts / network blob follow a login across browsers under `--auth on`.
 Single replica only (sqlite single-writer); HA/Postgres out of scope. Desktop
 sidecar path unchanged.
 
+### Targeted item sharing (done 2026-09-03, SH1–SH5)
+
+[`SHARING_PLAN.md`](SHARING_PLAN.md) — user→user sharing for **Runbooks**,
+**Prompt Library** and **FormFlow** on top of owner/publish. Multi-user only.
+`internal/sharedb` (generic `<thing>_share` CRUD + access helpers) feeds a
+`<thing>_share` table in each store; `Store.CanView`/`CanEdit` fold in the
+grant. Endpoints per module: `GET|PUT|DELETE /{module}/{id}/shares[/{userId}]`
+(**owner-only**, audited) + `PATCH /{module}/{id}/owner` (**admin-only**,
+audited — the only cross-user admin power; admins do **not** browse others'
+private items). `GET /users/pick` (id+username, any signed-in user).
+`auth.Service.OnUserDeleted` purges a departed user's grants. FormFlow got a
+**new** `internal/formstore` (on `llm.db`, mirrors `promptstore`) +
+mode-aware `schemaRepository.ts` (local name-keyed repo, or a server
+id-keyed one under `--auth on`). FE: one reusable
+`adapters/ui/share/ShareDialog.tsx` + `shareClient.ts`, a Share button on each
+module (multi-user only), admin "Reassign owner" section in the dialog.
+
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 
 A handful of the 44 client-only tools now have an **optional** backend upgrade —

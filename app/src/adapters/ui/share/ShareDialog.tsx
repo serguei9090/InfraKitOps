@@ -21,6 +21,7 @@ import {
   listShares,
   pickUsers,
   putShare,
+  reassignOwner,
   removeShare,
   type PickUser,
   type ShareGrant,
@@ -46,6 +47,8 @@ export function ShareDialog({ open, onOpenChange, base, noun, title }: ShareDial
   const [busy, setBusy] = useState(false)
   const [addId, setAddId] = useState('')
   const [addEdit, setAddEdit] = useState(false)
+  const [reassignId, setReassignId] = useState('')
+  const isAdmin = me?.role === 'admin'
 
   useEffect(() => {
     if (!open) return
@@ -96,6 +99,11 @@ export function ShareDialog({ open, onOpenChange, base, noun, title }: ShareDial
   async function revoke(g: ShareGrant) {
     const next = await run(removeShare(base, g.granteeId))
     if (next) setGrants(next)
+  }
+  async function doReassign() {
+    if (!reassignId) return
+    const r = await run(reassignOwner(base, reassignId))
+    if (r) onOpenChange(false)
   }
 
   return (
@@ -168,6 +176,44 @@ export function ShareDialog({ open, onOpenChange, base, noun, title }: ShareDial
             Add
           </Button>
         </div>
+
+        {isAdmin && (
+          <div className="flex flex-col gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5">
+            <p className="text-xs font-medium text-amber-700 dark:text-amber-500">
+              Admin — reassign owner
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Hand this {noun} to another user (e.g. when someone leaves). Audited. You
+              lose access unless it&apos;s also shared with you.
+            </p>
+            <div className="flex items-center gap-2">
+              <Select value={reassignId} onValueChange={(v) => setReassignId(v ?? '')}>
+                <SelectTrigger size="sm" className="flex-1">
+                  <SelectValue placeholder="New owner…">
+                    {(v) => (v ? nameOf(String(v)) : 'New owner…')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {users
+                    .filter((u) => u.id !== me?.id)
+                    .map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.username}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!reassignId || busy}
+                onClick={() => void doReassign()}
+              >
+                Reassign
+              </Button>
+            </div>
+          </div>
+        )}
 
         <DialogFooter>
           <DialogClose render={<Button variant="outline">Done</Button>} />

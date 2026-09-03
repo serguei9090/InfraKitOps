@@ -4,6 +4,11 @@ Give **Runbooks**, **Prompt Library** and **FormFlow** a user→user share
 model on top of the existing owner / publish scheme (`USER_MANAGEMENT_PLAN.md`
 U3). Only relevant under `--auth on`; solo/desktop unaffected.
 
+> **Status: SH1–SH5 all shipped (2026-09-03).** `internal/sharedb` +
+> `<thing>_share` tables in all three stores; owner-only share management,
+> admin-only audited owner-reassign; a reusable `<ShareDialog>` on each
+> module. Backend + FE green, E2E-verified for runbooks and prompts.
+
 Decisions locked (2026-09-03):
 
 | | |
@@ -57,7 +62,15 @@ func DeleteForGrantee(db, table, grantee string) error
 Each store keeps its own owner/publish logic and folds a `sharedb` check into
 its `canView` / `canEdit`.
 
-## 3. Phases
+## 3. Phases — all shipped
+
+| Phase | Commit | Notes |
+|---|---|---|
+| SH1 Runbooks + plumbing | `3db85e6` | `internal/sharedb`, `/users/pick`, `<ShareDialog>`, `auth.Service.OnUserDeleted` |
+| SH2 Prompt Library | `134b090` | `prompt_share`, Share button in `PromptInspector` |
+| SH3 FormFlow | `ccd7fa7` | **new** `internal/formstore` + mode-aware `schemaRepository.ts` |
+| SH4 audited reassign | folded into SH1–SH3 (backend) + this commit (FE) | `PATCH /{module}/{id}/owner`, admin-only, audited; admin "Reassign owner" section in `<ShareDialog>` |
+| SH5 polish | this commit | shared-form list label; docs |
 
 ### SH1 — Runbooks + shared plumbing (`internal/sharedb`, `/users/pick`, `<ShareDialog>`)
 
