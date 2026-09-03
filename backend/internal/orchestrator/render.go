@@ -34,8 +34,8 @@ func ExtractSpecArgs(spec *Spec) []string {
 
 // Values a run is executed with.
 type Values struct {
-	Args      map[string]string // user-supplied arg values
-	Steps     []RunStep         // prior step results (for {{steps.N.stdout}})
+	Args          map[string]string // user-supplied arg values
+	Steps         []RunStep         // prior step results (for {{steps.N.stdout}})
 	ResolveSecret func(name string) (string, error)
 }
 

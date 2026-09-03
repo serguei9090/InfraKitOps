@@ -25,9 +25,9 @@ const (
 // Step is the resolved unit an executor runs: the script already has every
 // {{VAR}} / {{secret:…}} / {{steps.N.…}} substituted in.
 type Step struct {
-	Kind    Kind
-	Script  string
-	Env     map[string]string
+	Kind   Kind
+	Script string
+	Env    map[string]string
 	// SSH holds the connection for ssh steps (R2 — nil for R0/R1).
 	SSH *SSHTarget
 	// HTTP holds the request for http steps (R2 — nil for R0/R1).

@@ -20,7 +20,7 @@ type Connection struct {
 	ID           string       `json:"id"`
 	Name         string       `json:"name"`
 	Provider     ProviderKind `json:"provider"`
-	BaseURL      string       `json:"baseUrl"`               // "" → provider default
+	BaseURL      string       `json:"baseUrl"`                // "" → provider default
 	AuthSecretID string       `json:"authSecretId,omitempty"` // Vault secret id; blank for keyless local providers
 	DefaultModel string       `json:"defaultModel,omitempty"`
 	CreatedAt    int64        `json:"createdAt"`

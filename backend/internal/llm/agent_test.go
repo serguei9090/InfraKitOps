@@ -159,4 +159,3 @@ func TestAgentLoopWaitsForApproval(t *testing.T) {
 		t.Fatalf("final answer = %q", answer.String())
 	}
 }
-

@@ -16,11 +16,11 @@ func TestRenderTask(t *testing.T) {
 
 func TestExtractJSON(t *testing.T) {
 	cases := map[string]string{
-		"here you go:\n```json\n{\"a\":1}\n```\nthanks":  `{"a":1}`,
+		"here you go:\n```json\n{\"a\":1}\n```\nthanks":   `{"a":1}`,
 		"prose {\"name\":\"x\",\"script\":\"echo\"} more": `{"name":"x","script":"echo"}`,
-		"[1, 2, 3] tail":                                  `[1, 2, 3]`,
-		"no json here":                                    "",
-		"{ broken":                                        "",
+		"[1, 2, 3] tail": `[1, 2, 3]`,
+		"no json here":   "",
+		"{ broken":       "",
 	}
 	for in, want := range cases {
 		if got := extractJSON(in); got != want {

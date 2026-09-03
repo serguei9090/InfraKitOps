@@ -92,12 +92,12 @@ type HTTPAssert struct {
 // Spec is the versioned payload of a runbook.
 type Spec struct {
 	Name                string     `json:"name"`
-	Description          string     `json:"description,omitempty"`
-	DetailedDescription  string     `json:"detailedDescription,omitempty"`
-	DefaultTimeoutSec    int        `json:"defaultTimeoutSec"`
-	Tags                 []string   `json:"tags"`
-	Args                 []ArgSpec  `json:"args"`
-	Steps                []StepSpec `json:"steps"`
+	Description         string     `json:"description,omitempty"`
+	DetailedDescription string     `json:"detailedDescription,omitempty"`
+	DefaultTimeoutSec   int        `json:"defaultTimeoutSec"`
+	Tags                []string   `json:"tags"`
+	Args                []ArgSpec  `json:"args"`
+	Steps               []StepSpec `json:"steps"`
 	// RequiresApproval gates a real (non-dry) run behind a second operator's
 	// OK in multi-user mode (USER_MANAGEMENT_PLAN U3). Ignored with --auth off.
 	RequiresApproval bool `json:"requiresApproval,omitempty"`
@@ -206,17 +206,17 @@ const (
 
 // RunStep is one executed step recorded in history.
 type RunStep struct {
-	Index            int    `json:"index"`
-	Name             string `json:"name"`
-	Executor         string `json:"executor"`
-	Target           string `json:"target,omitempty"`
-	CommandRedacted  string `json:"commandRedacted"`
-	Stdout           string `json:"stdout"`
-	Stderr           string `json:"stderr"`
-	ExitCode         int    `json:"exitCode"`
-	Status           string `json:"status"`
-	StartedAt        int64  `json:"startedAt"`
-	FinishedAt       int64  `json:"finishedAt"`
+	Index           int    `json:"index"`
+	Name            string `json:"name"`
+	Executor        string `json:"executor"`
+	Target          string `json:"target,omitempty"`
+	CommandRedacted string `json:"commandRedacted"`
+	Stdout          string `json:"stdout"`
+	Stderr          string `json:"stderr"`
+	ExitCode        int    `json:"exitCode"`
+	Status          string `json:"status"`
+	StartedAt       int64  `json:"startedAt"`
+	FinishedAt      int64  `json:"finishedAt"`
 }
 
 // Run is one execution recorded in history.

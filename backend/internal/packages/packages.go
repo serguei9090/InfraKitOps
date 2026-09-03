@@ -16,10 +16,10 @@ import (
 
 // Tool is the detection result for one CLI.
 type Tool struct {
-	Name      string `json:"name"`
-	Present   bool   `json:"present"`
-	Path      string `json:"path,omitempty"`
-	Version   string `json:"version,omitempty"`
+	Name    string `json:"name"`
+	Present bool   `json:"present"`
+	Path    string `json:"path,omitempty"`
+	Version string `json:"version,omitempty"`
 	// Manager + InstallCmd are filled when the tool is missing and a package
 	// manager that knows it is available.
 	Manager    string `json:"manager,omitempty"`

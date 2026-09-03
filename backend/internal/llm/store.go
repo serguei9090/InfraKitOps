@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS llm_settings (
 
 // migrations are additive ALTERs applied after the base schema. A "duplicate
 // column" error means the migration already ran — ignored. USER_MANAGEMENT_PLAN
-// U2: owner scoping. owner = '' is a pre-auth / single-user row.
+// U2: owner scoping. owner = ” is a pre-auth / single-user row.
 var migrations = []string{
 	`ALTER TABLE llm_connection ADD COLUMN owner TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE llm_task ADD COLUMN owner TEXT NOT NULL DEFAULT ''`,
@@ -67,7 +67,7 @@ func Open(dsn string) (*Store, error) {
 
 // scopeFilter returns the WHERE fragment + arg that limits a query to a user.
 // owner == "" (single-user) matches every row; a real user matches only their
-// own rows plus any still-unclaimed (owner = '') rows.
+// own rows plus any still-unclaimed (owner = ”) rows.
 func scopeFilter(owner string) (string, []any) {
 	if owner == "" {
 		return "", nil
