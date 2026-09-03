@@ -171,6 +171,14 @@ func (e *Engine) GalaxyInstall(ctx context.Context, owner string, mode RuntimeMo
 		return
 	}
 	runner := e.activeRunner(ctx)
+	if runner.Name() == "remote" {
+		// -p roles / -p collections would install into the throwaway remote
+		// workdir (recreated + deleted around every run), so nothing lands in
+		// the local project. Fail loudly instead of pretending it worked.
+		send("error", map[string]string{"error": "Galaxy install isn't available with the remote runtime — install collections on the control node, or switch to a local / container / WSL runtime"})
+		send("run-end", map[string]string{"status": "failed"})
+		return
+	}
 
 	type step struct {
 		label string

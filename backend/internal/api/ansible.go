@@ -301,6 +301,14 @@ func (h *AnsibleHandlers) CreateProject(w http.ResponseWriter, r *http.Request) 
 	project := ansible.Project{Name: b.Name, Source: "local"}
 	switch b.Mode {
 	case "existing":
+		// Registering an arbitrary absolute folder makes the project-file
+		// endpoints a host-wide read/write primitive (SafeJoin only jails to the
+		// registered root). Restrict it to admins, like the other instance-wide
+		// settings.
+		if !userctx.IsAdmin(r.Context()) {
+			apierr.Write(w, apierr.Permission("registering an existing folder is admin-only — use “new” or “git”"))
+			return
+		}
 		project.Path = filepath.Clean(strings.TrimSpace(b.Path))
 		if !filepath.IsAbs(project.Path) {
 			apierr.Write(w, apierr.Validation("an absolute path is required"))

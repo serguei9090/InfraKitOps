@@ -105,6 +105,9 @@ func (s *sshRunner) shipProject(ctx context.Context, t RemoteTarget, dir string)
 	var eb bytes.Buffer
 	script := "set -e; rm -rf " + wd + "; mkdir -p " + wd + "; tar xzf - -C " + wd
 	res, hk := executor.SSHRunStdin(ctx, sshTarget(t), script, pr, io.Discard, &eb)
+	// Unblock the tar writer goroutine if the remote never drained stdin
+	// (dial / auth / host-key failure returns before reading it).
+	_ = pr.CloseWithError(io.ErrClosedPipe)
 	if hk.Mismatch {
 		return "", fmt.Errorf("host-key mismatch")
 	}
@@ -253,11 +256,16 @@ func (s *sshRunner) Stream(ctx context.Context, req RunReq, onOut, onErr func(st
 	})
 	stderr := lineWriter(onErr)
 
-	res, hk := executor.SSHRun(ctx, sshTarget(t), script, stdout, stderr)
+	res, hk := executor.SSHRunStream(ctx, sshTarget(t), script, stdout, stderr)
 	stdout.Flush()
 	stderr.Flush()
 	if hk.Mismatch {
 		return fmt.Errorf("host-key mismatch for %s", t.Host)
+	}
+	// pull the jsonfile fact cache back so the local Facts browser can read it
+	// (Engine.Facts reads <project>/.facts) before the remote copy is wiped.
+	if req.Dir != "" {
+		s.pullFacts(context.Background(), t, wd, req.Dir)
 	}
 	// best-effort cleanup
 	if s.settings["remoteProjectPath"] == "" {
@@ -278,32 +286,87 @@ func (s *sshRunner) Capture(ctx context.Context, req RunReq) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	pre := ""
+	localTmp := s.TempDir()
+	pre, wd, remoteTmp := "", "", ""
 	if req.Dir != "" {
-		wd, serr := s.shipProject(ctx, t, req.Dir)
-		if serr != nil {
-			return nil, serr
+		wd, err = s.shipProject(ctx, t, req.Dir)
+		if err != nil {
+			return nil, err
 		}
-		pre = "cd " + wd + " && "
-		for i, a := range req.Argv {
-			req.Argv[i] = rewriteRemote(a, req.Dir, wd, s.TempDir(), wd+"/.tmp")
+		remoteTmp = wd + "/.tmp"
+		pre = "cd " + shSingle(wd) + " && mkdir -p " + remoteTmp + " && "
+		// ship any `-e @<tmp>` / `--vault-password-file <tmp>` files onto the
+		// remote before argv is rewritten (shipTempRefs matches on the local path).
+		if err := s.shipTempRefs(ctx, t, req.Argv, remoteTmp); err != nil {
+			return nil, err
 		}
 	}
-	parts := make([]string, 0, len(req.Argv)+1)
+	// forward the request env (ANSIBLE_CONFIG, fact-cache, …), path-translated.
+	var env []string
+	for _, kv := range req.Env {
+		k, _, _ := strings.Cut(kv, "=")
+		switch k {
+		case "ANSIBLE_CALLBACK_PLUGINS":
+			if wd != "" {
+				env = append(env, "ANSIBLE_CALLBACK_PLUGINS="+wd+"/.infrakit-cb")
+			}
+		case "INFRAKIT_EVENT_FILE": // no event tailing on Capture
+		default:
+			env = append(env, rewriteRemote(kv, req.Dir, wd, localTmp, remoteTmp))
+		}
+	}
+	parts := make([]string, 0, len(env)+len(req.Argv)+1)
+	parts = append(parts, prefixEnv(env)...)
 	parts = append(parts, shSingle(req.Tool))
 	for _, a := range req.Argv {
-		parts = append(parts, shSingle(a))
+		parts = append(parts, shSingle(rewriteRemote(a, req.Dir, wd, localTmp, remoteTmp)))
 	}
 	var buf bytes.Buffer
 	errW := io.Writer(io.Discard)
 	if req.Combined {
 		errW = &buf
 	}
-	res, _ := executor.SSHRun(ctx, sshTarget(t), pre+strings.Join(parts, " "), &buf, errW)
+	res, _ := executor.SSHRunStream(ctx, sshTarget(t), pre+strings.Join(parts, " "), &buf, errW)
+	if req.Dir != "" {
+		s.pullFacts(context.Background(), t, wd, req.Dir)
+	}
 	if res.ExitCode != 0 && buf.Len() == 0 {
 		return nil, fmt.Errorf("%s", nz(res.Err, "remote command failed"))
 	}
 	return buf.Bytes(), nil
+}
+
+// pullFacts copies the remote jsonfile fact cache (<wd>/.facts) back into the
+// local project dir so Engine.Facts — which reads the local <project>/.facts —
+// works with the remote runtime. Best-effort.
+func (s *sshRunner) pullFacts(ctx context.Context, t RemoteTarget, wd, localDir string) {
+	var buf bytes.Buffer
+	res, _ := executor.SSHRun(ctx, sshTarget(t),
+		"cd "+shSingle(wd)+" && tar cf - .facts 2>/dev/null || true", &buf, io.Discard)
+	if res.ExitCode != 0 || buf.Len() == 0 {
+		return
+	}
+	tr := tar.NewReader(&buf)
+	for {
+		hd, err := tr.Next()
+		if err != nil {
+			return
+		}
+		clean := filepath.Clean(hd.Name)
+		if hd.FileInfo().IsDir() || filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") {
+			continue
+		}
+		dst := filepath.Join(localDir, clean)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			continue
+		}
+		f, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+		if err != nil {
+			continue
+		}
+		_, _ = io.Copy(f, tr)
+		_ = f.Close()
+	}
 }
 
 // Setup installs ansible on the control node.
@@ -351,6 +414,7 @@ func (s *sshRunner) Teardown(ctx context.Context) error {
 type exitCodeErr struct{ code int }
 
 func (e *exitCodeErr) Error() string { return fmt.Sprintf("exit status %d", e.code) }
+func (e *exitCodeErr) ExitCode() int { return e.code }
 
 func envValue(env []string, key string) string {
 	for _, kv := range env {

@@ -26,6 +26,13 @@ type Engine struct {
 
 	apprMu   sync.Mutex
 	approves map[int64]pendingApproval
+
+	// arMu guards a short-lived cache of the auto-resolved runner so that
+	// back-to-back Capture calls (Inventory does two) don't re-probe
+	// docker/wsl/ssh every time when no system ansible is present.
+	arMu     sync.Mutex
+	arRunner Runner
+	arAt     time.Time
 }
 
 // SetNodeResolver wires the SSH-node registry (from main.go). Enables the
@@ -55,13 +62,20 @@ var errApproveSelf = errors.New("a run must be approved by a different operator"
 // ErrApproveSelf is exported for the handler to map to a 403.
 func ErrApproveSelf() error { return errApproveSelf }
 
-// awaitRunApproval blocks until a different operator approves runID, the
-// timeout elapses, or ctx ends. Returns true only on an explicit approval.
-func (e *Engine) awaitRunApproval(ctx context.Context, runID int64, requester string) bool {
+// registerApproval records a pending approval for runID and returns its
+// delivery channel. Must be called before the approval-required event is sent
+// so an approval that races the notification isn't dropped.
+func (e *Engine) registerApproval(runID int64, requester string) chan bool {
 	ch := make(chan bool, 1)
 	e.apprMu.Lock()
 	e.approves[runID] = pendingApproval{ch: ch, requester: requester}
 	e.apprMu.Unlock()
+	return ch
+}
+
+// awaitRunApproval blocks until a different operator approves runID, the
+// timeout elapses, or ctx ends. Returns true only on an explicit approval.
+func (e *Engine) awaitRunApproval(ctx context.Context, runID int64, ch chan bool) bool {
 	defer func() {
 		e.apprMu.Lock()
 		delete(e.approves, runID)
@@ -251,8 +265,9 @@ func (e *Engine) gate(ctx context.Context, runID int64, run *Run, requires bool,
 	}
 	run.Status = StatusAwaitingApproval
 	_ = e.store.setRunStatus(runID, StatusAwaitingApproval)
+	ch := e.registerApproval(runID, run.Owner)
 	send("approval-required", map[string]any{"runId": runID, "requestedBy": run.Owner})
-	if !e.awaitRunApproval(ctx, runID, run.Owner) {
+	if !e.awaitRunApproval(ctx, runID, ch) {
 		run.Status = StatusCancelled
 		_ = e.store.FinishRun(runID, StatusCancelled, "", "")
 		send("run-end", map[string]any{"runId": runID, "status": StatusCancelled, "reason": "not approved"})
@@ -368,12 +383,20 @@ func (e *Engine) tailEvents(ctx context.Context, path string, emit func(line str
 // classifyExit maps ansible-playbook's exit to a run status. Exit 4 = some
 // hosts unreachable; 2 = failed tasks; others = failed.
 func classifyExit(err error, events string) string {
+	// exit code, from either an *exec.ExitError (local/container/wsl runners) or
+	// the ssh runner's *exitCodeErr.
+	code := -1
 	var ee *exec.ExitError
-	if ok := asExit(err, &ee); ok {
-		if ee.ExitCode() == 4 || strings.Contains(events, `"e":"runner_unreachable"`) {
-			if !strings.Contains(events, `"e":"runner_failed"`) {
-				return StatusUnreachable
-			}
+	var ce *exitCodeErr
+	switch {
+	case asExit(err, &ee):
+		code = ee.ExitCode()
+	case errors.As(err, &ce):
+		code = ce.code
+	}
+	if code == 4 || strings.Contains(events, `"e":"runner_unreachable"`) {
+		if !strings.Contains(events, `"e":"runner_failed"`) {
+			return StatusUnreachable
 		}
 	}
 	return StatusFailed

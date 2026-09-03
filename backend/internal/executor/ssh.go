@@ -79,20 +79,27 @@ func SSHTest(ctx context.Context, t *SSHTarget) (HostKeyResult, error) {
 // exactly as a runbook SSH step. Exported for the Ansible module's remote
 // execution backend (AN6d) — same code path, no new dep.
 func SSHRun(ctx context.Context, t *SSHTarget, script string, stdout, stderr io.Writer) (Result, HostKeyResult) {
-	return runSSHIO(ctx, t, script, nil, stdout, stderr)
+	return runSSHIO(ctx, t, script, nil, stdout, stderr, true)
 }
 
 // SSHRunStdin is SSHRun with `stdin` piped to the remote command — used to
 // stream a tar archive of the project onto the control node.
 func SSHRunStdin(ctx context.Context, t *SSHTarget, script string, stdin io.Reader, stdout, stderr io.Writer) (Result, HostKeyResult) {
-	return runSSHIO(ctx, t, script, stdin, stdout, stderr)
+	return runSSHIO(ctx, t, script, stdin, stdout, stderr, true)
+}
+
+// SSHRunStream is SSHRun for callers that consume the output through their own
+// streaming writers and only need the exit code back — the whole-output copy
+// into Result.Stdout/Stderr is skipped so a long run doesn't buffer tens of MB.
+func SSHRunStream(ctx context.Context, t *SSHTarget, script string, stdout, stderr io.Writer) (Result, HostKeyResult) {
+	return runSSHIO(ctx, t, script, nil, stdout, stderr, false)
 }
 
 func runSSH(ctx context.Context, t *SSHTarget, script string, stdout, stderr io.Writer) (Result, HostKeyResult) {
-	return runSSHIO(ctx, t, script, nil, stdout, stderr)
+	return runSSHIO(ctx, t, script, nil, stdout, stderr, true)
 }
 
-func runSSHIO(ctx context.Context, t *SSHTarget, script string, stdin io.Reader, stdout, stderr io.Writer) (Result, HostKeyResult) {
+func runSSHIO(ctx context.Context, t *SSHTarget, script string, stdin io.Reader, stdout, stderr io.Writer, capture bool) (Result, HostKeyResult) {
 	cfg, hkCh, err := clientConfig(t)
 	if err != nil {
 		return Result{ExitCode: -1, Err: err.Error()}, HostKeyResult{}
@@ -119,8 +126,13 @@ func runSSHIO(ctx context.Context, t *SSHTarget, script string, stdin io.Reader,
 	defer sess.Close()
 
 	var outBuf, errBuf bytes.Buffer
-	sess.Stdout = io.MultiWriter(stdout, &outBuf)
-	sess.Stderr = io.MultiWriter(stderr, &errBuf)
+	if capture {
+		sess.Stdout = io.MultiWriter(stdout, &outBuf)
+		sess.Stderr = io.MultiWriter(stderr, &errBuf)
+	} else {
+		sess.Stdout = stdout
+		sess.Stderr = stderr
+	}
 	if stdin != nil {
 		sess.Stdin = stdin
 	}

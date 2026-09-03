@@ -20,6 +20,7 @@ const dedicatedDistro = "InfraKit-Ansible"
 type wslRunner struct {
 	cfgDir   string
 	settings map[string]string
+	persist  func(key, value string) error // Store.PutSetting — records a provisioned distro name
 }
 
 func (w *wslRunner) Name() RuntimeMode { return RuntimeMode("wsl") }
@@ -235,8 +236,12 @@ func (w *wslRunner) provision(ctx context.Context, emit func(string)) error {
 		if err := runStreaming(exec.CommandContext(ctx, "wsl.exe", "--install", "--no-launch", "-d", name), emit, emit); err != nil {
 			return err
 		}
-		// the installed distro is named <name>; record it so runs target it
+		// the installed distro is named <name>; persist it so later runs/probes
+		// target it instead of falling back to the (non-existent) default.
 		w.settings["wslDistro"] = name
+		if w.persist != nil {
+			_ = w.persist("wslDistro", name)
+		}
 		return nil
 
 	case strings.HasPrefix(src, "import:"):

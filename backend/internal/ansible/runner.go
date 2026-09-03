@@ -122,7 +122,7 @@ func (e *Engine) allRunners(settings map[string]string) []Runner {
 		&localRunner{rt: e.rt, mode: RuntimeSystem, settings: settings},
 		&localRunner{rt: e.rt, mode: RuntimeManaged, settings: settings},
 		&containerRunner{cfgDir: e.cfgDir, image: nz(settings["containerImage"], defaultImage), settings: settings},
-		&wslRunner{cfgDir: e.cfgDir, settings: settings},
+		&wslRunner{cfgDir: e.cfgDir, settings: settings, persist: e.store.PutSetting},
 	}
 	if e.nodeResolver != nil {
 		rs = append(rs, &sshRunner{cfgDir: e.cfgDir, settings: settings, resolve: e.nodeResolver})
@@ -143,8 +143,21 @@ func (e *Engine) activeRunner(ctx context.Context) Runner {
 		return r
 	}
 	if mode == "" || mode == "auto" {
+		// A miss here probes docker/wsl/ssh (each multi-second); activeRunner is
+		// called on every Capture and Inventory calls it twice. Cache the winner
+		// briefly so Doc/Inventory/Lint don't each pay the full probe cost.
+		e.arMu.Lock()
+		if e.arRunner != nil && time.Since(e.arAt) < 20*time.Second {
+			r := e.arRunner
+			e.arMu.Unlock()
+			return r
+		}
+		e.arMu.Unlock()
 		for _, r := range all {
 			if r.Probe(ctx).Ready {
+				e.arMu.Lock()
+				e.arRunner, e.arAt = r, time.Now()
+				e.arMu.Unlock()
 				return r
 			}
 		}
