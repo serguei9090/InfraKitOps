@@ -143,21 +143,45 @@ that is never stored.
 
 ## Backup & restore
 
-The data volume is the whole state.
+### Automatic snapshots (recommended)
+
+Run the backend with `--backup-dir` (the compose file sets
+`INFRAKIT_BACKUP_DIR=/data/backups`). Every `--backup-interval` (default
+`24h`) it writes a **consistent** archive — each `*.db` is copied with
+`VACUUM INTO` (a transactionally-clean copy even while writers are active),
+plus `vault.enc` and any per-user vaults, plus a `manifest.json`. Old
+archives are pruned to `--backup-keep` (default `7`). A final snapshot is
+taken on graceful shutdown.
+
+| Env / flag | Default | |
+|---|---|---|
+| `INFRAKIT_BACKUP_DIR` / `--backup-dir` | — (off) | where archives go |
+| `INFRAKIT_BACKUP_INTERVAL` / `--backup-interval` | `24h` | |
+| `INFRAKIT_BACKUP_KEEP` / `--backup-keep` | `7` | `0` = keep all |
+
+Mount `/data/backups` to a **separate** volume (or a host path, or sync it
+off-box with `rclone`/`restic`) so a lost `/data` volume doesn't take the
+backups with it.
+
+Ad-hoc (before an upgrade): `POST /api/v1/admin/backup` (admin token) — takes
+a snapshot now and returns its path.
+
+### Restore
 
 ```bash
-# safest: stop, copy, start
 docker compose stop infrakit
-docker run --rm -v deploy_data:/data -v "$PWD:/backup" busybox \
-  tar czf /backup/infrakit-$(date +%F).tgz -C /data .
+docker run --rm -v deploy_data:/data -v "$PWD:/b" busybox \
+  sh -c 'cd /data && rm -f *.db vault.enc && tar xzf /b/infrakit-backup-<ts>.tgz'
 docker compose start infrakit
 ```
 
-A hot copy can tear the WAL. If you cannot stop the service, copy
-`*.db`, `*.db-wal`, `*.db-shm` **together** and accept a small risk, or use
-`sqlite3 <db> ".backup <out>"` per database.
+Migrations are forward-only — restore onto the **same or older** backend
+version, never a newer one. WAL/SHM sidecar files are regenerated on start.
 
-Restore = stop, wipe the volume, untar, start.
+### Manual (no `--backup-dir`)
+
+Stop the container, `tar` the `/data` volume, start. A hot `tar` can tear the
+WAL — stop first, or use the automatic snapshots above.
 
 ---
 

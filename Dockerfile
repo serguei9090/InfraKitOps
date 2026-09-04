@@ -39,15 +39,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates git openssh-client curl \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --home /app --shell /usr/sbin/nologin app \
-    && mkdir -p /data /app/web \
-    && chown -R app:app /data /app
+    && mkdir -p /data /backups /app/web \
+    && chown -R app:app /data /backups /app
 
 COPY --from=api  /out/infrakit-backend  /usr/local/bin/infrakit-backend
 COPY --from=web  /src/app/dist          /app/web
 
 USER app
 WORKDIR /app
-VOLUME ["/data"]
+VOLUME ["/data", "/backups"]
 EXPOSE 8080
 
 # Sensible hosted defaults; every one is overridable at `docker run`.
@@ -56,7 +56,8 @@ ENV INFRAKIT_ADDR=0.0.0.0:8080 \
     INFRAKIT_BEHIND_PROXY=1 \
     INFRAKIT_STATIC_DIR=/app/web \
     INFRAKIT_DATA_DIR=/data \
-    INFRAKIT_LOG_FORMAT=json
+    INFRAKIT_LOG_FORMAT=json \
+    INFRAKIT_BACKUP_DIR=/backups
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -fsS http://localhost:8080/api/v1/health || exit 1

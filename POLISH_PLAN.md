@@ -8,7 +8,16 @@ Order (recommended): **PL1 → PL3 → PL6 → PL5 → PL2 → PL4.**
 
 ---
 
-## PL1 — DB backup automation
+## PL1 — DB backup automation ✅ DONE (`<pl1>`)
+
+Landed: `internal/backup` (`Snapshot` — `VACUUM INTO` per `*.db` + verbatim
+`vault.enc` + per-user vaults + `manifest.json`, tar.gz; `Prune`;
+`Scheduler`), `--backup-dir` / `--backup-interval` / `--backup-keep`
+(+ `INFRAKIT_*`), timer + graceful-shutdown snapshot, admin-only
+`POST /api/v1/admin/backup`. Dockerfile/compose add a **separate** `/backups`
+volume + `INFRAKIT_BACKUP_DIR`. DEPLOY.md restore procedure. `backup_test`:
+snapshot → queryable copy, prune keeps N, empty-dir errors. Verified live:
+3s-interval archives written + pruned to keep=2, archive contents valid.
 
 **Now.** `DEPLOY.md` documents a manual "stop the container, `tar` the `/data`
 volume, start it". A hot `tar` can tear the WAL. The image has no `sqlite3`

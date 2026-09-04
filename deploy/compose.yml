@@ -27,8 +27,12 @@ services:
       INFRAKIT_CORS_ORIGIN: "${CORS_ORIGIN:-}"
       INFRAKIT_LOG_FORMAT: "json"
       INFRAKIT_ERROR_WEBHOOK: "${ERROR_WEBHOOK:-}"
+      INFRAKIT_BACKUP_DIR: "/backups"
+      INFRAKIT_BACKUP_INTERVAL: "${BACKUP_INTERVAL:-24h}"
+      INFRAKIT_BACKUP_KEEP: "${BACKUP_KEEP:-7}"
     volumes:
       - data:/data
+      - backups:/backups
     secrets:
       - vault_passphrase
     expose:
@@ -63,5 +67,6 @@ secrets:
 
 volumes:
   data:
+  backups: # keep this on separate storage / sync it off-box
   caddy_data:
   caddy_config:

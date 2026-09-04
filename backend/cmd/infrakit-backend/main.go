@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"github.com/infrakit/backend/internal/ansible"
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/auth"
+	"github.com/infrakit/backend/internal/backup"
 	"github.com/infrakit/backend/internal/formstore"
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
@@ -72,6 +74,9 @@ func main() {
 	logLevel := flag.String("log-level", "info", `log level: debug | info | warn | error`)
 	errorWebhook := flag.String("error-webhook", "", "POST a JSON blob here on a panic / internal error (Slack incoming webhook or any collector; off when empty)")
 	pprofAddr := flag.String("pprof", "", "if set, serve net/http/pprof on this address (bind loopback only, e.g. 127.0.0.1:6060)")
+	backupDir := flag.String("backup-dir", "", "if set, write consistent DB+vault snapshots here on a timer")
+	backupInterval := flag.Duration("backup-interval", 24*time.Hour, "how often to snapshot when --backup-dir is set")
+	backupKeep := flag.Int("backup-keep", 7, "number of snapshot archives to retain (0 = keep all)")
 	var corsOrigins multiFlag
 	flag.Var(&corsOrigins, "cors-origin", "extra browser origin allowed under --auth on (repeatable)")
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -88,9 +93,24 @@ func main() {
 		"log-level":             logLevel,
 		"error-webhook":         errorWebhook,
 		"pprof":                 pprofAddr,
+		"backup-dir":            backupDir,
 	})
 	if !flagPassed("behind-proxy") && envTruthy("INFRAKIT_BEHIND_PROXY") {
 		*behindProxy = true
+	}
+	if !flagPassed("backup-interval") {
+		if v := os.Getenv("INFRAKIT_BACKUP_INTERVAL"); v != "" {
+			if d, err := time.ParseDuration(v); err == nil {
+				*backupInterval = d
+			}
+		}
+	}
+	if !flagPassed("backup-keep") {
+		if v := os.Getenv("INFRAKIT_BACKUP_KEEP"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				*backupKeep = n
+			}
+		}
 	}
 	if len(corsOrigins) == 0 {
 		if v := os.Getenv("INFRAKIT_CORS_ORIGIN"); v != "" {
@@ -341,10 +361,26 @@ func main() {
 	}
 	os.Stdout.Sync()
 
+	var backupSched *backup.Scheduler
+	if *backupDir != "" {
+		if dir, err := appDataDir(); err == nil {
+			backupSched = &backup.Scheduler{
+				DataDir:  dir,
+				OutDir:   *backupDir,
+				Version:  api.Version,
+				Interval: *backupInterval,
+				Keep:     *backupKeep,
+			}
+		} else {
+			obs.Warnf("backup: cannot resolve data dir: %v (backups disabled)", err)
+		}
+	}
+
 	wd := server.NewWatchdog(*idleTimeout, *parentPID)
 	handler := server.NewRouter(server.Options{
 		Token:          tok,
 		Auth:           authSvc,
+		Backup:         backupSched,
 		CORSOrigins:    corsOrigins,
 		TrustProxy:     *behindProxy,
 		OnActivity:     wd.Touch,
@@ -388,6 +424,10 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if backupSched != nil {
+		go backupSched.Run(ctx)
+	}
+
 	// Watchdog and signals both trigger the same graceful shutdown.
 	go func() {
 		wd.Run(ctx)
@@ -396,6 +436,13 @@ func main() {
 
 	go func() {
 		<-ctx.Done()
+		if backupSched != nil {
+			if p, err := backupSched.Once(); err != nil {
+				slog.Warn("shutdown backup failed", "err", err)
+			} else {
+				slog.Info("shutdown backup written", "archive", p)
+			}
+		}
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpServer.Shutdown(shutdownCtx)

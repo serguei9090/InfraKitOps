@@ -13,6 +13,7 @@ import (
 	"github.com/infrakit/backend/internal/ansible"
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/auth"
+	"github.com/infrakit/backend/internal/backup"
 	"github.com/infrakit/backend/internal/formstore"
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
@@ -37,6 +38,8 @@ type Options struct {
 	// TrustProxy → the access log believes X-Forwarded-For for the client ip
 	// (set with --behind-proxy).
 	TrustProxy bool
+	// Backup, when set, backs the admin "snapshot now" endpoint.
+	Backup *backup.Scheduler
 	// OnActivity, if set, is called once per request so an idle watchdog can
 	// reset its timer.
 	OnActivity func()
@@ -106,6 +109,7 @@ func NewRouter(opts Options) http.Handler {
 	anh := &api.AnsibleHandlers{Store: opts.AnsibleStore, Engine: opts.AnsibleEngine, Runtime: opts.AnsibleRuntime, Vault: opts.Vault}
 	ph := &api.PromptHandlers{Store: opts.Prompts}
 	fh := &api.FormHandlers{Store: opts.Forms}
+	adminH := &api.AdminHandlers{Backup: opts.Backup}
 	ah := &api.AuthHandlers{
 		Service: opts.Auth,
 		UserOf:  func(r *http.Request) *auth.User { return UserFrom(r.Context()) },
@@ -136,6 +140,7 @@ func NewRouter(opts Options) http.Handler {
 				r.Delete("/{id}", ah.DeleteUser)
 			})
 			r.Get("/audit", ah.ListAudit)
+			r.Post("/admin/backup", adminH.BackupNow)
 			r.Get("/settings/user", ah.GetUserSettings)
 			r.Put("/settings/user", ah.PutUserSettings)
 
