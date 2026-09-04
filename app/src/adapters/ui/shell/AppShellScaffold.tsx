@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { canSeeModule } from '@/core/auth/authModel'
 import { ErrorToaster } from '@/adapters/ui/errors/ErrorToaster'
 import { ErrorHistoryButton } from '@/adapters/ui/errors/ErrorHistoryDrawer'
+import { ErrorBoundary } from '@/adapters/ui/errors/ErrorBoundary'
 import { UserMenu } from '@/adapters/ui/auth/UserMenu'
 import { AppSidebar } from './AppSidebar'
 import { moduleContainingRoute } from './moduleTaxonomy'
@@ -83,7 +84,9 @@ export function AppShellScaffold() {
                 </p>
               </div>
             ) : (
-              <Outlet />
+              <ErrorBoundary resetKeys={[location.pathname]}>
+                <Outlet />
+              </ErrorBoundary>
             )}
           </main>
         </div>

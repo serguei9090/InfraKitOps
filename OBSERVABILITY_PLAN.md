@@ -10,11 +10,13 @@ vendored; metrics are hand-rolled Prometheus text.
 
 ## Phases
 
-> **O0, O2, O4 shipped 2026-09-03** — backend `internal/obs` (slog setup +
+> **ALL SHIPPED 2026-09-03.** O0/O2/O4 — backend `internal/obs` (slog setup +
 > printf bridges + `Recoverer` + `AccessLog` + hand-rolled `/metrics` + error
 > webhook), all 44 `log.*` migrated, `--log-format/--log-level/--error-webhook/--pprof`
 > flags + `INFRAKIT_*`, `backend.yml` grep guard, DEPLOY.md + Dockerfile +
-> compose. O1 + O3-frontend next.
+> compose. O1 — `<ErrorBoundary>` (App + per-route in the shell) +
+> `window.addEventListener('error')`. O3-frontend — `errorWebhook.ts`
+> (`VITE_ERROR_WEBHOOK`, ≤1/s) fed from `errorStore.report`.
 
 ### O0 — backend: structured logging + access log + slog recoverer
 

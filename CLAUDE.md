@@ -590,6 +590,23 @@ shortcuts / network blob follow a login across browsers under `--auth on`.
 Single replica only (sqlite single-writer); HA/Postgres out of scope. Desktop
 sidecar path unchanged.
 
+### Observability (done 2026-09-03, O0–O4)
+
+[`OBSERVABILITY_PLAN.md`](OBSERVABILITY_PLAN.md) — closed the prod-readiness
+gaps. Backend **`internal/obs`**: `slog` (`--log-format text|json`,
+`--log-level`), `obs.Infof/Warnf/Fatalf` bridges (all stdlib `log.*` migrated;
+`backend.yml` guards it), `obs.Recoverer` (panic → slog + stack + coded 500),
+`obs.AccessLog` (one structured line/request: method/path/status/dur_ms/ip/
+req_id/user), **dependency-free `GET /api/v1/metrics`** (Prometheus text —
+`infrakit_http_requests_total`, duration histogram, in-flight, build_info,
+runtime), **error webhook** (`--error-webhook` / `INFRAKIT_ERROR_WEBHOOK` →
+POST on panic/500, ≤1/s), `--pprof <addr>` (separate loopback listener).
+Frontend: **`<ErrorBoundary>`** (`adapters/ui/errors/`, wraps `RouterProvider`
++ the shell's `<Outlet>` keyed by pathname), `window.addEventListener('error')`
+in `installErrorHandlers`, `errorWebhook.ts` (`VITE_ERROR_WEBHOOK`) fed from
+`errorStore.report`. Dockerfile/compose default `INFRAKIT_LOG_FORMAT=json`.
+No new deps.
+
 ### Targeted item sharing (done 2026-09-03, SH1–SH5)
 
 [`SHARING_PLAN.md`](SHARING_PLAN.md) — user→user sharing for **Runbooks**,

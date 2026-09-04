@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from './routes'
 import { useAuthStore } from './stores/authStore'
 import { AuthGate, ForcedPasswordChange } from './adapters/ui/auth/AuthGate'
+import { ErrorBoundary } from './adapters/ui/errors/ErrorBoundary'
 
 function App() {
   const ready = useAuthStore((s) => s.ready)
@@ -21,7 +22,11 @@ function App() {
   if (mode === 'on' && !me) return <AuthGate />
   if (mode === 'on' && me?.mustChangePw) return <ForcedPasswordChange />
 
-  return <RouterProvider router={router} />
+  return (
+    <ErrorBoundary>
+      <RouterProvider router={router} />
+    </ErrorBoundary>
+  )
 }
 
 export default App

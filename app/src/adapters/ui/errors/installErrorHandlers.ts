@@ -17,4 +17,16 @@ export function installErrorHandlers() {
     if (isAborted(ev.reason)) return
     reportError(ev.reason)
   })
+
+  // Synchronous errors outside React's tree (event handlers, timers, module
+  // eval). React render errors are caught by <ErrorBoundary>.
+  window.addEventListener('error', (ev) => {
+    // Resource load failures (<img>/<script>/<link>) surface here with no
+    // `error` object — ignore them, they're not app crashes.
+    if (!ev.error) return
+    if (isAborted(ev.error)) return
+    const msg = String(ev.error?.message ?? ev.message ?? '')
+    if (msg.includes('ResizeObserver loop')) return // benign browser noise
+    reportError(ev.error, 'script')
+  })
 }

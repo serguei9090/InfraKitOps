@@ -6,6 +6,7 @@
  */
 import { create } from 'zustand'
 import { classify, isAborted, type AppError } from '@/core/errors/appError'
+import { sendErrorReport } from '@/adapters/backend/errorWebhook'
 
 export interface SurfacedError extends AppError {
   id: string
@@ -63,6 +64,7 @@ export const useErrorStore = create<ErrorStore>((set, get) => ({
       (e) => e.code === err.code && e.detail === err.detail && now - e.at < DEDUP_MS,
     )
     if (dup) return err
+    sendErrorReport(err) // no-op unless VITE_ERROR_WEBHOOK is set
     const retry = err.retryable ? opts?.retry : undefined
     const entry: SurfacedError = { ...err, id: newId(), at: now, retry }
 
