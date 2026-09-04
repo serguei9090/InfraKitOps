@@ -3,6 +3,26 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
+# Plain .NET instead of Get-FileHash — on some hosted-runner pwsh installs
+# Get-FileHash / New-TemporaryFile throw CommandNotFoundException even
+# though the rest of Microsoft.PowerShell.Utility (Invoke-WebRequest,
+# Write-Host, ...) resolves fine. Not worth chasing why; this has no
+# cmdlet dependency at all.
+function Get-Sha256Hex([string]$Path) {
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+      $hash = $sha256.ComputeHash($stream)
+    } finally {
+      $stream.Dispose()
+    }
+  } finally {
+    $sha256.Dispose()
+  }
+  return -join ($hash | ForEach-Object { $_.ToString('x2') })
+}
+
 $out = "bin"
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 $fail = $false
@@ -13,7 +33,7 @@ foreach ($line in Get-Content "tools.lock") {
   $dest = Join-Path $out "$tool-$goos-$goarch"
 
   if (Test-Path $dest) {
-    $have = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLower()
+    $have = Get-Sha256Hex $dest
     if ($have -eq $want) { Write-Host "ok    $dest"; continue }
   }
 
@@ -34,7 +54,7 @@ foreach ($line in Get-Content "tools.lock") {
     Invoke-WebRequest -Uri $url -OutFile $tmp
   }
 
-  $got = (Get-FileHash $tmp -Algorithm SHA256).Hash.ToLower()
+  $got = Get-Sha256Hex $tmp
   if ($got -ne $want) {
     Write-Warning "SHA-256 MISMATCH for $tool $goos/$goarch`n  want $want`n  got  $got"
     Remove-Item $tmp -Force
