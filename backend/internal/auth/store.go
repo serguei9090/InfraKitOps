@@ -319,6 +319,15 @@ func (s *Store) PutUserSettings(userID string, patch map[string]json.RawMessage)
 
 const sessionTTL = 14 * 24 * time.Hour
 
+// sessionSlideInterval throttles LookupSession's expiry-slide write: with a
+// 14-day TTL, sliding on every single read serializes all authenticated
+// traffic through auth.db's one sqlite connection (PL6 load test found this
+// as the dominant cost behind GET /runbooks' latency under load — every
+// authed endpoint pays it, not just runbooks). Re-sliding once per interval
+// is indistinguishable to the session lifetime but cuts writes ~99% under
+// sustained polling.
+const sessionSlideInterval = 5 * time.Minute
+
 // CreateSession issues a token for a user and returns the plaintext token.
 func (s *Store) CreateSession(userID, userAgent string) (string, error) {
 	raw := make([]byte, 32)
@@ -361,12 +370,14 @@ func (s *Store) LookupSession(tok string) (*Session, *User, error) {
 	if u.Disabled {
 		return nil, nil, ErrDisabled
 	}
-	sess.ExpiresAt = now.Add(sessionTTL).UnixMilli()
-	sess.LastSeenAt = now.UnixMilli()
-	_, _ = s.db.Exec(
-		`UPDATE auth_session SET expires_at = ?, last_seen_at = ? WHERE token_hash = ?`,
-		sess.ExpiresAt, sess.LastSeenAt, th,
-	)
+	if now.UnixMilli()-sess.LastSeenAt >= sessionSlideInterval.Milliseconds() {
+		sess.ExpiresAt = now.Add(sessionTTL).UnixMilli()
+		sess.LastSeenAt = now.UnixMilli()
+		_, _ = s.db.Exec(
+			`UPDATE auth_session SET expires_at = ?, last_seen_at = ? WHERE token_hash = ?`,
+			sess.ExpiresAt, sess.LastSeenAt, th,
+		)
+	}
 	return &sess, u, nil
 }
 

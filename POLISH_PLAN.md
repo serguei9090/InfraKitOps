@@ -262,12 +262,21 @@ in `loadtest/RESULTS.md` / `loadtest/out-*.json`. Headline:
 - **Writes**: 0 `SQLITE_BUSY`/5xx up to 80 concurrent writers / 469
   writes/s — didn't find the SQLite ceiling, Postgres isn't a near-term
   need on write volume.
-- **Real finding**: `GET /api/v1/runbooks` degrades hard under concurrent
-  load (p95 3.9s vs `/health`'s 1.5ms), causing dropped k6 iterations at
-  high RPS. Traced to an N+1 in `orchestrator.ListRunbooks`
-  (`backend/internal/orchestrator/store.go:228` — per-row `GetRunbook` +
-  `SharedAccess` instead of a batch query). Flagged as a follow-up task,
-  not fixed here (out of scope for a load-test run).
+- **Real finding, fixed**: `GET /api/v1/runbooks` degraded hard under
+  concurrent load (p95 3.9s vs `/health`'s 1.5ms), 50,015 dropped k6
+  iterations — with **zero runbooks in the table**, ruling out row count.
+  Two bugs, fixed in order of actual impact (verified with a before/after
+  rebuild+rerun, not assumed):
+  1. **Dominant** — `auth.LookupSession` slid every session's 14-day TTL
+     forward on *every authenticated request* (`SELECT`+`SELECT`+`UPDATE`
+     on `auth.db`, `SetMaxOpenConns(1)`), serializing all authed traffic
+     project-wide. Throttled to re-slide only every 5 min
+     (`internal/auth/store.go`). **p95 3.89s → 34ms**, dropped iterations
+     50,015 → 304, throughput 541 → 1051 req/s.
+  2. **Secondary** — N+1 in `orchestrator.ListRunbooks`
+     (`backend/internal/orchestrator/store.go:228` — per-row `GetRunbook` +
+     `SharedAccess`), batched into one query each. Real bug, wasn't the
+     driver on an empty table — matters as runbook/share counts grow.
 
 **Now.** Never run. The SSE connection ceiling and the SQLite single-writer
 throughput ceiling are unknown — the latter is what decides *when* Postgres
@@ -316,7 +325,7 @@ standalone binary).
 | PL3 | Component-test infra + ErrorBoundary test | ✅ RTL + happy-dom, per-file docblock, 3 tests |
 | PL4 | Grafana dashboard + Prometheus config | ✅ config files + compose overlay + DEPLOY.md |
 | PL5 | errorStrings comment reword | ✅ |
-| PL6 | Load test — run for real | ✅ k6 scripts + `docker compose` run on Docker Desktop's Linux VM, real numbers in `loadtest/RESULTS.md` — found+flagged an N+1 in `ListRunbooks`, no SQLite write ceiling hit |
+| PL6 | Load test — run for real | ✅ k6 scripts + `docker compose` run on Docker Desktop's Linux VM, real numbers in `loadtest/RESULTS.md` — found+fixed session-slide write contention (p95 3.9s→34ms) + `ListRunbooks` N+1, no SQLite write ceiling hit |
 
 Frontend 1341 tests / 86 files green, backend all green, no new runtime deps
 (3 dev-only for PL3).

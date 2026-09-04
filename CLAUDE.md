@@ -628,11 +628,18 @@ provisioning) + `deploy/compose.observability.yml` overlay. **PL5** —
 `deploy/compose.loadtest.yml` (local-only override, no Caddy/TLS) on Docker
 Desktop's Linux VM — real numbers in `loadtest/RESULTS.md`: no ceiling on
 static/health/SSE (200 concurrent streams, no leak) or on SQLite writes (0
-`SQLITE_BUSY` to 80 concurrent writers / 469 writes/s); found and flagged
-(not fixed — out of scope) an N+1 in `orchestrator.ListRunbooks`
-(`store.go:228`, per-row queries instead of a batch) that makes
-`GET /runbooks` the actual latency ceiling under load, p95 3.9s. No new
-runtime deps.
+`SQLITE_BUSY` to 80 concurrent writers / 469 writes/s). Found **and fixed**
+two real bugs behind `GET /runbooks` hitting p95 3.9s under load: (1) the
+dominant one — `auth.LookupSession` slid every session's 14-day TTL forward
+on **every single authenticated request** (`SELECT`+`SELECT`+`UPDATE` on
+`auth.db`, which is `SetMaxOpenConns(1)`), serializing all authed traffic
+project-wide, not just runbooks; throttled to re-slide only every 5 min
+(`sessionSlideInterval`, `internal/auth/store.go`) — p95 **3.9s → 34ms**,
+dropped k6 iterations 50,015 → 304, throughput 541 → 1051 req/s. (2)
+secondary — N+1 in `orchestrator.ListRunbooks` (`store.go:228`, per-row
+`GetRunbook`+`SharedAccess`) batched into one query each; matters once a
+deployment has many runbooks, wasn't the driver on the empty test table.
+No new runtime deps.
 
 ### Targeted item sharing (done 2026-09-03, SH1–SH5)
 

@@ -224,32 +224,93 @@ func (s *Store) GetRunbook(id string) (*Runbook, error) {
 }
 
 // ListRunbooks returns the runbooks viewer may see (published ∪ own ∪ orphan),
-// newest-updated first.
+// newest-updated first. Batches the per-runbook version/draft/share lookups
+// into one query each instead of N+1 round trips per row (PL6 load test
+// found GET /runbooks at p95 3.9s under concurrent load — this was why).
 func (s *Store) ListRunbooks(viewer string) ([]*Runbook, error) {
-	rows, err := s.db.Query(`SELECT id FROM runbook ORDER BY updated_at DESC`)
+	rows, err := s.db.Query(`SELECT id, slug, published, created_at, updated_at, owner FROM runbook ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
 	}
-	var ids []string
+	byID := make(map[string]*Runbook)
+	var order []string
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		rb := &Runbook{}
+		var pub int
+		if err := rows.Scan(&rb.ID, &rb.Slug, &pub, &rb.CreatedAt, &rb.UpdatedAt, &rb.Owner); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		ids = append(ids, id)
+		rb.Published = pub == 1
+		byID[rb.ID] = rb
+		order = append(order, rb.ID)
 	}
 	rows.Close()
-	out := make([]*Runbook, 0, len(ids))
-	for _, id := range ids {
-		rb, err := s.GetRunbook(id)
-		if err != nil {
+	if len(order) == 0 {
+		return []*Runbook{}, nil
+	}
+
+	vrows, err := s.db.Query(`SELECT runbook_id, version, created_at, note, pinned, spec_json FROM runbook_version ORDER BY runbook_id, version`)
+	if err != nil {
+		return nil, err
+	}
+	for vrows.Next() {
+		var rid string
+		var v Version
+		var note sql.NullString
+		var pinned int
+		var specJSON string
+		if err := vrows.Scan(&rid, &v.Version, &v.CreatedAt, &note, &pinned, &specJSON); err != nil {
+			vrows.Close()
 			return nil, err
 		}
-		if !canView(viewer, rb.Owner, rb.Published) {
-			if v, _ := s.SharedAccess(id, viewer); !v {
-				continue
+		if rb, ok := byID[rid]; ok {
+			v.Note = note.String
+			v.Pinned = pinned == 1
+			_ = json.Unmarshal([]byte(specJSON), &v.Spec)
+			rb.Versions = append(rb.Versions, v)
+		}
+	}
+	vrows.Close()
+
+	drows, err := s.db.Query(`SELECT runbook_id, spec_json FROM runbook_draft`)
+	if err != nil {
+		return nil, err
+	}
+	for drows.Next() {
+		var rid, specJSON string
+		if err := drows.Scan(&rid, &specJSON); err != nil {
+			drows.Close()
+			return nil, err
+		}
+		if rb, ok := byID[rid]; ok {
+			var d Spec
+			if json.Unmarshal([]byte(specJSON), &d) == nil {
+				rb.Draft = &d
 			}
+		}
+	}
+	drows.Close()
+
+	shared := make(map[string]bool)
+	if viewer != "" {
+		srows, err := s.db.Query(`SELECT `+shareCol+` FROM `+shareTable+` WHERE grantee_id = ?`, viewer)
+		if err == nil {
+			for srows.Next() {
+				var rid string
+				if srows.Scan(&rid) == nil {
+					shared[rid] = true
+				}
+			}
+			srows.Close()
+		}
+	}
+
+	out := make([]*Runbook, 0, len(order))
+	for _, id := range order {
+		rb := byID[id]
+		if !canView(viewer, rb.Owner, rb.Published) && !shared[id] {
+			continue
 		}
 		out = append(out, rb)
 	}
