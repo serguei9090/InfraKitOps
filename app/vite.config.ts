@@ -51,6 +51,9 @@ export default mergeConfig(
   viteConfig,
   defineVitestConfig({
     test: {
+      // Core logic (*.test.ts) runs on node — fast, no DOM. Component tests
+      // (*.test.tsx) opt into a DOM with a `@vitest-environment happy-dom`
+      // docblock at the top of the file.
       environment: 'node',
     },
   }),

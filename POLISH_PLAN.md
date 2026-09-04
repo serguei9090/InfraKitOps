@@ -104,7 +104,15 @@ use — the current bridge works.
 
 ---
 
-## PL3 — front-end component-test infrastructure + `<ErrorBoundary>` test
+## PL3 — front-end component-test infrastructure + `<ErrorBoundary>` test ✅ DONE (`<pl3>`)
+
+Landed: dev deps `@testing-library/react` + `@testing-library/dom` +
+`happy-dom`. `.test.tsx` files opt into a DOM with a
+`// @vitest-environment happy-dom` docblock (no config change — `test.projects`
+/ `environmentMatchGlobs` avoided; the node suite is untouched, same runtime).
+`ErrorBoundary.test.tsx` — renders children clean, shows the fallback +
+Reload + calls `reportError` on a child throw, recovers on `resetKeys` change.
+85 test files / 1339 tests green.
 
 **Now.** Zero component tests. All 1336 tests are core `.test.ts` on the
 `node` vitest environment (`vite.config.ts` → `environment: 'node'`). No
