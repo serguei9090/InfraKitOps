@@ -14,6 +14,7 @@ const mem: IStoragePort = {
   remove: async (k) => {
     store.delete(k)
   },
+  keys: async () => [...store.keys()],
 }
 
 const blob = (name: string) => JSON.stringify({ name, schema: {}, values: {} })
