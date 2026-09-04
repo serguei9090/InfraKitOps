@@ -18,27 +18,30 @@ foreach ($line in Get-Content "tools.lock") {
   }
 
   Write-Host "fetch $dest"
-  $tmp = New-TemporaryFile
+  # [System.IO.Path] helpers instead of New-TemporaryFile — the latter isn't
+  # reliably available under pwsh on hosted runners (CommandNotFoundException).
+  $tmp = [System.IO.Path]::GetTempFileName()
   if ($url -like '*.zip') {
-    $zip = "$($tmp.FullName).zip"
+    $zip = "$tmp.zip"
     Invoke-WebRequest -Uri $url -OutFile $zip
-    $ex = New-TemporaryFile; Remove-Item $ex
-    Expand-Archive -Path $zip -DestinationPath $ex.FullName -Force
-    $bin = Get-ChildItem -Path $ex.FullName -Recurse -Include 'iperf3*','*.exe' | Select-Object -First 1
-    Copy-Item $bin.FullName $tmp.FullName -Force
-    Remove-Item $zip, $ex.FullName -Recurse -Force
+    $exDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
+    New-Item -ItemType Directory -Path $exDir -Force | Out-Null
+    Expand-Archive -Path $zip -DestinationPath $exDir -Force
+    $bin = Get-ChildItem -Path $exDir -Recurse -Include 'iperf3*','*.exe' | Select-Object -First 1
+    Copy-Item $bin.FullName $tmp -Force
+    Remove-Item $zip, $exDir -Recurse -Force
   } else {
-    Invoke-WebRequest -Uri $url -OutFile $tmp.FullName
+    Invoke-WebRequest -Uri $url -OutFile $tmp
   }
 
-  $got = (Get-FileHash $tmp.FullName -Algorithm SHA256).Hash.ToLower()
+  $got = (Get-FileHash $tmp -Algorithm SHA256).Hash.ToLower()
   if ($got -ne $want) {
     Write-Warning "SHA-256 MISMATCH for $tool $goos/$goarch`n  want $want`n  got  $got"
-    Remove-Item $tmp.FullName -Force
+    Remove-Item $tmp -Force
     $fail = $true
     continue
   }
-  Move-Item $tmp.FullName $dest -Force
+  Move-Item $tmp $dest -Force
   Write-Host "  verified"
 }
 
