@@ -16,7 +16,7 @@ Prereqs: Docker + Docker Compose, a DNS name pointing at the host (or use
 `localhost` for a trial).
 
 ```bash
-git clone <this repo> && cd infrakit-studio/deploy
+git clone https://github.com/serguei9090/InfraKitOps.git && cd InfraKitOps/deploy
 cp .env.example .env
 $EDITOR .env                                   # set DOMAIN
 

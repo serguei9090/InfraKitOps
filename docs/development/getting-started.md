@@ -11,8 +11,8 @@
 ## Clone and run the frontend
 
 ```bash
-git clone <this repo>
-cd infrakit-studio/app
+git clone https://github.com/serguei9090/InfraKitOps.git
+cd InfraKitOps/app
 bun install
 bun run dev            # http://localhost:1420
 ```
