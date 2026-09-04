@@ -1,0 +1,161 @@
+{
+    "metrics": {
+        "http_req_duration": {
+            "min": -8.432015,
+            "med": 0.573058,
+            "max": 143.945786,
+            "p(90)": 2.914184400000001,
+            "p(95)": 6.795971599999983,
+            "avg": 1.6586338566962349,
+            "thresholds": {
+                "p(99)<500": false
+            }
+        },
+        "data_received": {
+            "count": 13074716849,
+            "rate": 79265240.0762722
+        },
+        "http_req_blocked": {
+            "avg": 0.008643293266729184,
+            "min": 0.001301,
+            "med": 0.00487,
+            "max": 25.057675,
+            "p(90)": 0.007901,
+            "p(95)": 0.009208
+        },
+        "http_req_sending": {
+            "p(90)": 0.0440366,
+            "p(95)": 0.05513,
+            "avg": 0.04185787018176942,
+            "min": 0.003702,
+            "med": 0.013628,
+            "max": 65.825028
+        },
+        "http_req_connecting": {
+            "max": 10.795495,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.00015524461243328466,
+            "min": 0,
+            "med": 0
+        },
+        "vus": {
+            "value": 0,
+            "min": 0,
+            "max": 65
+        },
+        "http_req_duration{expected_response:true}": {
+            "med": 0.573058,
+            "max": 143.945786,
+            "p(90)": 2.914184400000001,
+            "p(95)": 6.795971599999983,
+            "avg": 1.6586338566962349,
+            "min": -8.432015
+        },
+        "http_req_tls_handshaking": {
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0
+        },
+        "http_req_receiving": {
+            "avg": 0.29593063619442006,
+            "min": -8.916991,
+            "med": 0.085692,
+            "max": 111.744026,
+            "p(90)": 0.257103,
+            "p(95)": 0.4461231999999987
+        },
+        "iteration_duration": {
+            "med": 2.436865,
+            "max": 210.860889,
+            "p(90)": 12.683835400000003,
+            "p(95)": 22.14262124999999,
+            "avg": 5.679475542758777,
+            "min": 0.870024
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 263245,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "data_sent": {
+            "count": 22024817,
+            "rate": 133525.06423682027
+        },
+        "iterations": {
+            "count": 87748,
+            "rate": 531.9707008985594
+        },
+        "vus_max": {
+            "max": 101,
+            "value": 101,
+            "min": 100
+        },
+        "http_reqs": {
+            "count": 263245,
+            "rate": 1595.918165178024
+        },
+        "http_req_waiting": {
+            "avg": 1.3208453503200415,
+            "min": 0,
+            "med": 0.422134,
+            "max": 109.982634,
+            "p(90)": 2.3687136000000004,
+            "p(95)": 5.464187999999995
+        },
+        "checks": {
+            "passes": 350992,
+            "fails": 0,
+            "value": 1
+        },
+        "dropped_iterations": {
+            "count": 1,
+            "rate": 0.006062482346019959
+        }
+    },
+    "setup_data": {
+        "asset": "/assets/index-O6k0hkUO.js"
+    },
+    "root_group": {
+        "groups": {},
+        "checks": {
+                "index 200": {
+                    "fails": 0,
+                    "name": "index 200",
+                    "path": "::index 200",
+                    "id": "f8eeec8cab0b254279c11245c6ad769e",
+                    "passes": 87748
+                },
+                "asset 200": {
+                    "name": "asset 200",
+                    "path": "::asset 200",
+                    "id": "4dd471b00a873a49e56674e01cd196d3",
+                    "passes": 87748,
+                    "fails": 0
+                },
+                "asset cached immutable": {
+                    "fails": 0,
+                    "name": "asset cached immutable",
+                    "path": "::asset cached immutable",
+                    "id": "79b0b03cd4fe4d559d89d47b2ff8311c",
+                    "passes": 87748
+                },
+                "spa 200": {
+                    "name": "spa 200",
+                    "path": "::spa 200",
+                    "id": "b16095a352de41d9386fddd809d056c4",
+                    "passes": 87748,
+                    "fails": 0
+                }
+            },
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+}

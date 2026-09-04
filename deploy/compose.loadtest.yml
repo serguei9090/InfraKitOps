@@ -1,0 +1,11 @@
+# PL6 load-test override — exposes infrakit directly on 8080, skips Caddy/TLS.
+# Local-only, throwaway. Use:
+#
+#   cd deploy
+#   printf 'loadtest-only-passphrase-not-for-prod' > vault_passphrase.txt
+#   DOMAIN=localhost docker compose -f compose.yml -f compose.loadtest.yml up -d --build infrakit
+#
+services:
+  infrakit:
+    ports:
+      - "8080:8080"

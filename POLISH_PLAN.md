@@ -240,15 +240,34 @@ if a customer/market demands it, and scope it as its own multi-week plan.
 
 ---
 
-## PL6 — load test ✅ SCRIPTS DONE (`<pl6>`) — a run still needs a Linux host
+## PL6 — load test ✅ DONE, run 2026-09-04
 
 Landed: `loadtest/` — k6 scripts `static.js` (SPA + hashed asset throughput),
 `api-read.js` (authed GET rising-RPS ramp), `sse.js` (concurrent held streams
 + leak check), `write-contention.js` (ramp VUs on `PUT /prompts/{id}` until
 `SQLITE_BUSY`/5xx → the Postgres-trigger number). `README.md` (how to run,
-token, metrics sampling alongside), `RESULTS.md` (stub — four numbers + a
-verdict to fill after a run). **No CI workflow** — GH runners are 2-core, the
-numbers would mislead; run against a real `docker compose` on a Linux box.
+token, metrics sampling alongside), `RESULTS.md`. **No CI workflow** — GH
+runners are 2-core, the numbers would mislead.
+
+**Run 2026-09-04**, against the real prod Dockerfile image via `docker compose
+-f compose.yml -f compose.loadtest.yml` (new local-only override, publishes
+8080 directly, skips Caddy/TLS) on Docker Desktop's Linux VM (8 vCPU), k6 as
+a sibling container on the same compose network. Full numbers + raw k6 JSON
+in `loadtest/RESULTS.md` / `loadtest/out-*.json`. Headline:
+
+- **Static + health**: no ceiling found at tested load (~1600 req/s, p99
+  21ms / 6ms).
+- **SSE**: 200 concurrent held streams, 0 errors, no goroutine/mem leak on
+  disconnect (16 goroutines idle before and after).
+- **Writes**: 0 `SQLITE_BUSY`/5xx up to 80 concurrent writers / 469
+  writes/s — didn't find the SQLite ceiling, Postgres isn't a near-term
+  need on write volume.
+- **Real finding**: `GET /api/v1/runbooks` degrades hard under concurrent
+  load (p95 3.9s vs `/health`'s 1.5ms), causing dropped k6 iterations at
+  high RPS. Traced to an N+1 in `orchestrator.ListRunbooks`
+  (`backend/internal/orchestrator/store.go:228` — per-row `GetRunbook` +
+  `SharedAccess` instead of a batch query). Flagged as a follow-up task,
+  not fixed here (out of scope for a load-test run).
 
 **Now.** Never run. The SSE connection ceiling and the SQLite single-writer
 throughput ceiling are unknown — the latter is what decides *when* Postgres
@@ -288,7 +307,7 @@ standalone binary).
 
 ---
 
-## Summary — ALL DONE 2026-09-03
+## Summary — ALL DONE, PL6 run 2026-09-04
 
 | # | Item | Status |
 |---|---|---|
@@ -297,7 +316,7 @@ standalone binary).
 | PL3 | Component-test infra + ErrorBoundary test | ✅ RTL + happy-dom, per-file docblock, 3 tests |
 | PL4 | Grafana dashboard + Prometheus config | ✅ config files + compose overlay + DEPLOY.md |
 | PL5 | errorStrings comment reword | ✅ |
-| PL6 | Load test scripts | ✅ k6 scripts + README + RESULTS stub — a run still needs a Linux host |
+| PL6 | Load test — run for real | ✅ k6 scripts + `docker compose` run on Docker Desktop's Linux VM, real numbers in `loadtest/RESULTS.md` — found+flagged an N+1 in `ListRunbooks`, no SQLite write ceiling hit |
 
 Frontend 1341 tests / 86 files green, backend all green, no new runtime deps
 (3 dev-only for PL3).

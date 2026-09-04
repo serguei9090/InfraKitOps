@@ -624,7 +624,15 @@ drops the `"(shared)"` hack. **PL3** — FE component tests now possible:
 provisioning) + `deploy/compose.observability.yml` overlay. **PL5** —
 `errorStrings.ts` comment reword (English-only, i18n is a separate effort).
 **PL6** — `loadtest/` k6 scripts (static, api-read, sse, write-contention)
-+ README + RESULTS stub — a run needs a Linux host. No new runtime deps.
++ README. **Run for real 2026-09-04** against the prod Dockerfile image via
+`deploy/compose.loadtest.yml` (local-only override, no Caddy/TLS) on Docker
+Desktop's Linux VM — real numbers in `loadtest/RESULTS.md`: no ceiling on
+static/health/SSE (200 concurrent streams, no leak) or on SQLite writes (0
+`SQLITE_BUSY` to 80 concurrent writers / 469 writes/s); found and flagged
+(not fixed — out of scope) an N+1 in `orchestrator.ListRunbooks`
+(`store.go:228`, per-row queries instead of a batch) that makes
+`GET /runbooks` the actual latency ceiling under load, p95 3.9s. No new
+runtime deps.
 
 ### Targeted item sharing (done 2026-09-03, SH1–SH5)
 
