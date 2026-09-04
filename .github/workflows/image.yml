@@ -51,12 +51,17 @@ jobs:
 
       - name: Smoke test — the image serves the API
         run: |
+          # --entrypoint sh overrides the image's exec-form ENTRYPOINT so this
+          # actually runs as a shell script — `docker run image sh -c '...'`
+          # alone just appends "sh -c ..." as CLI args to infrakit-backend,
+          # which silently ignores them (exec-form ENTRYPOINT always wins).
           docker run -d --name ik \
             -e INFRAKIT_AUTH=on \
             -e INFRAKIT_VAULT_PASSPHRASE_FILE=/tmp/vp \
             -p 8080:8080 \
+            --entrypoint sh \
             infrakit-studio:ci \
-            sh -c 'echo ci-passphrase-123456 > /tmp/vp && exec infrakit-backend'
+            -c 'echo ci-passphrase-123456 > /tmp/vp && exec infrakit-backend'
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:8080/api/v1/health | grep -q '"authMode":"on"'; then
               echo "health OK"; ok=1; break
