@@ -216,7 +216,15 @@ if a customer/market demands it, and scope it as its own multi-week plan.
 
 ---
 
-## PL6 — load test
+## PL6 — load test ✅ SCRIPTS DONE (`<pl6>`) — a run still needs a Linux host
+
+Landed: `loadtest/` — k6 scripts `static.js` (SPA + hashed asset throughput),
+`api-read.js` (authed GET rising-RPS ramp), `sse.js` (concurrent held streams
++ leak check), `write-contention.js` (ramp VUs on `PUT /prompts/{id}` until
+`SQLITE_BUSY`/5xx → the Postgres-trigger number). `README.md` (how to run,
+token, metrics sampling alongside), `RESULTS.md` (stub — four numbers + a
+verdict to fill after a run). **No CI workflow** — GH runners are 2-core, the
+numbers would mislead; run against a real `docker compose` on a Linux box.
 
 **Now.** Never run. The SSE connection ceiling and the SQLite single-writer
 throughput ceiling are unknown — the latter is what decides *when* Postgres
