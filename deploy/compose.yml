@@ -25,6 +25,8 @@ services:
       INFRAKIT_STATIC_DIR: "/app/web"
       INFRAKIT_VAULT_PASSPHRASE_FILE: "/run/secrets/vault_passphrase"
       INFRAKIT_CORS_ORIGIN: "${CORS_ORIGIN:-}"
+      INFRAKIT_LOG_FORMAT: "json"
+      INFRAKIT_ERROR_WEBHOOK: "${ERROR_WEBHOOK:-}"
     volumes:
       - data:/data
     secrets:

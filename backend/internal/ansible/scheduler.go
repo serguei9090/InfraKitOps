@@ -2,7 +2,7 @@ package ansible
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -147,6 +147,6 @@ func (s *Scheduler) fire(ctx context.Context, sc Schedule) {
 	} else {
 		sc.LastStatus = StatusFailed
 	}
-	log.Printf("ansible scheduler: job %s (schedule %s) → %s", sc.JobID, sc.ID, sc.LastStatus)
+	slog.Info("ansible schedule fired", "job", sc.JobID, "schedule", sc.ID, "status", sc.LastStatus)
 	_ = s.store.saveScheduleRaw(owner, sc)
 }

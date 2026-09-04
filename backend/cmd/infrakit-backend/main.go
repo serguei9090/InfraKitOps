@@ -18,9 +18,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -35,6 +36,7 @@ import (
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/mcp"
+	"github.com/infrakit/backend/internal/obs"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/promptstore"
 	"github.com/infrakit/backend/internal/server"
@@ -66,6 +68,10 @@ func main() {
 	staticDir := flag.String("static-dir", "", "serve the built web frontend from this directory (\"\" = API only)")
 	vaultPassphraseFile := flag.String("vault-passphrase-file", "", "unlock (or init) the shared vault at boot from this file's contents (headless deploy)")
 	behindProxy := flag.Bool("behind-proxy", false, "a trusted reverse proxy terminates TLS in front of this process (relaxes the non-loopback TLS gate; trusts X-Forwarded-*)")
+	logFormat := flag.String("log-format", "text", `log output: "text" (human) or "json"`)
+	logLevel := flag.String("log-level", "info", `log level: debug | info | warn | error`)
+	errorWebhook := flag.String("error-webhook", "", "POST a JSON blob here on a panic / internal error (Slack incoming webhook or any collector; off when empty)")
+	pprofAddr := flag.String("pprof", "", "if set, serve net/http/pprof on this address (bind loopback only, e.g. 127.0.0.1:6060)")
 	var corsOrigins multiFlag
 	flag.Var(&corsOrigins, "cors-origin", "extra browser origin allowed under --auth on (repeatable)")
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -78,6 +84,10 @@ func main() {
 		"tls":                   tlsMode,
 		"tls-key":               tlsKey,
 		"vault-passphrase-file": vaultPassphraseFile,
+		"log-format":            logFormat,
+		"log-level":             logLevel,
+		"error-webhook":         errorWebhook,
+		"pprof":                 pprofAddr,
 	})
 	if !flagPassed("behind-proxy") && envTruthy("INFRAKIT_BEHIND_PROXY") {
 		*behindProxy = true
@@ -98,6 +108,13 @@ func main() {
 	if *showVersion {
 		fmt.Println(api.Version)
 		return
+	}
+
+	obs.Setup(os.Stderr, *logFormat, *logLevel)
+	obs.SetBuildVersion(api.Version)
+	obs.SetErrorWebhook(*errorWebhook)
+	if *pprofAddr != "" {
+		startPprof(*pprofAddr)
 	}
 
 	tok := *token
@@ -122,7 +139,7 @@ func main() {
 			unlockVaultFromFile(vlt, *vaultPassphraseFile)
 		}
 	} else if *vaultPassphraseFile != "" {
-		log.Fatalf("--vault-passphrase-file set but the vault is disabled (--vault off)")
+		obs.Fatalf("--vault-passphrase-file set but the vault is disabled (--vault off)")
 	}
 	var engine *orchestrator.Engine
 	if orch != nil {
@@ -150,12 +167,12 @@ func main() {
 
 		if *authMode == "on" {
 			if ps, err := promptstore.New(llmStore.DB()); err != nil {
-				log.Printf("prompts: %v (server-side prompt library disabled)", err)
+				obs.Warnf("prompts: %v (server-side prompt library disabled)", err)
 			} else {
 				promptStore = ps
 			}
 			if fs, err := formstore.New(llmStore.DB()); err != nil {
-				log.Printf("forms: %v (server-side form sharing disabled)", err)
+				obs.Warnf("forms: %v (server-side form sharing disabled)", err)
 			} else {
 				formStore = fs
 			}
@@ -167,20 +184,20 @@ func main() {
 		llmEngine = llm.NewEngine(llmStore, secrets)
 
 		if hist, err := llm.NewHistory(llmStore.DB()); err != nil {
-			log.Printf("llm history: %v (conversation history disabled)", err)
+			obs.Warnf("llm history: %v (conversation history disabled)", err)
 		} else {
 			llmHistory = hist
 		}
 
 		if us, err := llm.NewUsageStore(llmStore.DB()); err != nil {
-			log.Printf("llm usage: %v (usage accounting disabled)", err)
+			obs.Warnf("llm usage: %v (usage accounting disabled)", err)
 		} else {
 			llmUsage = us
 			llmEngine.SetUsageRecorder(us)
 		}
 
 		if mcpStore, err := mcp.NewStore(llmStore.DB()); err != nil {
-			log.Printf("mcp: %v (mcp disabled)", err)
+			obs.Warnf("mcp: %v (mcp disabled)", err)
 		} else {
 			var mcpSecrets mcp.SecretResolver
 			if vlt != nil {
@@ -227,12 +244,12 @@ func main() {
 	if *authMode == "on" {
 		authStore := openAuth(*authDBPath)
 		if authStore == nil {
-			log.Fatal("auth: --auth on but the auth database could not be opened")
+			obs.Fatal("auth: --auth on but the auth database could not be opened")
 		}
 		defer authStore.Close()
 		svc, err := auth.NewService(authStore)
 		if err != nil {
-			log.Fatalf("auth: %v", err)
+			obs.Fatalf("auth: %v", err)
 		}
 		authSvc = svc
 		// When the first admin is created, claim every pre-auth row for them
@@ -280,12 +297,12 @@ func main() {
 		if tok := svc.SetupToken(); tok != "" {
 			fmt.Printf("SETUP-TOKEN %s\n", tok)
 		}
-		log.Printf("auth: multi-user mode ON")
+		obs.Infof("auth: multi-user mode ON")
 	}
 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
-		log.Fatalf("bind %s: %v", *addr, err)
+		obs.Fatalf("bind %s: %v", *addr, err)
 	}
 
 	// TLS (U6). --tls auto self-signs into the config dir; the client pins the
@@ -294,7 +311,7 @@ func main() {
 	tlsHost, _, _ := net.SplitHostPort(*addr)
 	cert, fingerprint, terr := tlscert.Load(*tlsMode, cfgDir, *tlsKey, []string{tlsHost})
 	if terr != nil {
-		log.Fatalf("tls: %v", terr)
+		obs.Fatalf("tls: %v", terr)
 	}
 	tlsOn := *tlsMode != "" && *tlsMode != "off"
 
@@ -304,9 +321,9 @@ func main() {
 	// front of this process; downgrade the gate to a warning.
 	if *authMode == "on" && !tlsOn && !isLoopback(ln.Addr()) {
 		if *behindProxy {
-			log.Printf("WARNING: --auth on, non-loopback bind (%s), no TLS on this process — trusting --behind-proxy for TLS termination. Do NOT expose this port directly.", ln.Addr())
+			obs.Warnf("WARNING: --auth on, non-loopback bind (%s), no TLS on this process — trusting --behind-proxy for TLS termination. Do NOT expose this port directly.", ln.Addr())
 		} else {
-			log.Fatalf("refusing to start: --auth on with a non-loopback bind (%s) needs --tls (auto or a real cert), or --behind-proxy if a trusted reverse proxy terminates TLS", ln.Addr())
+			obs.Fatalf("refusing to start: --auth on with a non-loopback bind (%s) needs --tls (auto or a real cert), or --behind-proxy if a trusted reverse proxy terminates TLS", ln.Addr())
 		}
 	}
 	if *behindProxy {
@@ -329,6 +346,7 @@ func main() {
 		Token:          tok,
 		Auth:           authSvc,
 		CORSOrigins:    corsOrigins,
+		TrustProxy:     *behindProxy,
 		OnActivity:     wd.Touch,
 		History:        store,
 		Orchestrator:   orch,
@@ -353,7 +371,7 @@ func main() {
 
 	if *staticDir != "" {
 		handler = server.StaticHandler(*staticDir, handler)
-		log.Printf("web: serving frontend from %s", *staticDir)
+		obs.Infof("web: serving frontend from %s", *staticDir)
 	}
 
 	httpServer := &http.Server{
@@ -388,7 +406,7 @@ func main() {
 		serve = func(l net.Listener) error { return httpServer.ServeTLS(l, "", "") }
 	}
 	if err := serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("serve: %v", err)
+		obs.Fatalf("serve: %v", err)
 	}
 }
 
@@ -444,27 +462,27 @@ func applyEnv(flags map[string]*string) {
 func unlockVaultFromFile(reg *vault.Registry, path string) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		log.Fatalf("vault-passphrase-file: %v", err)
+		obs.Fatalf("vault-passphrase-file: %v", err)
 	}
 	pw := strings.TrimRight(string(raw), "\r\n")
 	if pw == "" {
-		log.Fatalf("vault-passphrase-file %s: empty", path)
+		obs.Fatalf("vault-passphrase-file %s: empty", path)
 	}
 	v := reg.For("") // the shared / single-user vault
 	st := v.Status()
 	switch {
 	case st.Unlocked:
-		log.Printf("vault: already unlocked (keyring); passphrase file ignored")
+		obs.Warnf("vault: already unlocked (keyring); passphrase file ignored")
 	case !st.Initialised:
 		if err := v.Init(pw); err != nil {
-			log.Fatalf("vault: init from passphrase file: %v", err)
+			obs.Fatalf("vault: init from passphrase file: %v", err)
 		}
-		log.Printf("vault: initialised + unlocked from passphrase file")
+		obs.Infof("vault: initialised + unlocked from passphrase file")
 	default:
 		if err := v.Unlock(pw); err != nil {
-			log.Fatalf("vault: unlock from passphrase file: %v", err)
+			obs.Fatalf("vault: unlock from passphrase file: %v", err)
 		}
-		log.Printf("vault: unlocked from passphrase file")
+		obs.Infof("vault: unlocked from passphrase file")
 	}
 }
 
@@ -490,17 +508,17 @@ func openHistory(path string) *history.Store {
 	if path == "" {
 		appDir, err := appDataDir()
 		if err != nil {
-			log.Printf("history: cannot resolve config dir: %v (history disabled)", err)
+			obs.Warnf("history: cannot resolve config dir: %v (history disabled)", err)
 			return nil
 		}
 		path = filepath.Join(appDir, "history.db")
 	}
 	store, err := history.Open("file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
-		log.Printf("history: open %s: %v (history disabled)", path, err)
+		obs.Warnf("history: open %s: %v (history disabled)", path, err)
 		return nil
 	}
-	log.Printf("history: %s", path)
+	obs.Infof("history: %s", path)
 	return store
 }
 
@@ -527,17 +545,17 @@ func openOrchestrator(path string) *orchestrator.Store {
 	if path == "" {
 		d, err := appDataDir()
 		if err != nil {
-			log.Printf("runbooks: config dir: %v (module disabled)", err)
+			obs.Warnf("runbooks: config dir: %v (module disabled)", err)
 			return nil
 		}
 		path = filepath.Join(d, "orchestrator.db")
 	}
 	s, err := orchestrator.Open("file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
-		log.Printf("runbooks: open %s: %v (module disabled)", path, err)
+		obs.Warnf("runbooks: open %s: %v (module disabled)", path, err)
 		return nil
 	}
-	log.Printf("runbooks: %s", path)
+	obs.Infof("runbooks: %s", path)
 	return s
 }
 
@@ -551,17 +569,17 @@ func openLLM(path string) *llm.Store {
 	if path == "" {
 		d, err := appDataDir()
 		if err != nil {
-			log.Printf("llm: config dir: %v (module disabled)", err)
+			obs.Warnf("llm: config dir: %v (module disabled)", err)
 			return nil
 		}
 		path = filepath.Join(d, "llm.db")
 	}
 	s, err := llm.Open("file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
-		log.Printf("llm: open %s: %v (module disabled)", path, err)
+		obs.Warnf("llm: open %s: %v (module disabled)", path, err)
 		return nil
 	}
-	log.Printf("llm: %s", path)
+	obs.Infof("llm: %s", path)
 	return s
 }
 
@@ -574,7 +592,7 @@ func openAnsible(path string) (*ansible.Store, *ansible.Engine, *ansible.Runtime
 	}
 	cfgDir, err := appDataDir()
 	if err != nil {
-		log.Printf("ansible: config dir: %v (module disabled)", err)
+		obs.Warnf("ansible: config dir: %v (module disabled)", err)
 		return nil, nil, nil
 	}
 	if path == "" {
@@ -582,17 +600,17 @@ func openAnsible(path string) (*ansible.Store, *ansible.Engine, *ansible.Runtime
 	}
 	s, err := ansible.Open("file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
-		log.Printf("ansible: open %s: %v (module disabled)", path, err)
+		obs.Warnf("ansible: open %s: %v (module disabled)", path, err)
 		return nil, nil, nil
 	}
 	rt := ansible.NewRuntime(cfgDir)
 	eng, err := ansible.NewEngine(s, rt, cfgDir)
 	if err != nil {
-		log.Printf("ansible: engine: %v (module disabled)", err)
+		obs.Warnf("ansible: engine: %v (module disabled)", err)
 		_ = s.Close()
 		return nil, nil, nil
 	}
-	log.Printf("ansible: %s", path)
+	obs.Infof("ansible: %s", path)
 	return s, eng, rt
 }
 
@@ -602,17 +620,17 @@ func openAuth(path string) *auth.Store {
 	if path == "" {
 		d, err := appDataDir()
 		if err != nil {
-			log.Printf("auth: config dir: %v", err)
+			obs.Infof("auth: config dir: %v", err)
 			return nil
 		}
 		path = filepath.Join(d, "auth.db")
 	}
 	s, err := auth.Open("file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
-		log.Printf("auth: open %s: %v", path, err)
+		obs.Infof("auth: open %s: %v", path, err)
 		return nil
 	}
-	log.Printf("auth: %s", path)
+	obs.Infof("auth: %s", path)
 	return s
 }
 
@@ -626,19 +644,37 @@ func openVaultRegistry(path string, autoLock time.Duration) *vault.Registry {
 	if path == "" {
 		d, err := appDataDir()
 		if err != nil {
-			log.Printf("vault: config dir: %v (vault disabled)", err)
+			obs.Warnf("vault: config dir: %v (vault disabled)", err)
 			return nil
 		}
 		path = filepath.Join(d, "vault.enc")
 	}
-	log.Printf("vault: %s (+ vault/ per user)", path)
+	obs.Infof("vault: %s (+ vault/ per user)", path)
 	return vault.NewRegistry(path, autoLock)
+}
+
+// startPprof serves net/http/pprof on its own listener — never on the main
+// mux. The operator is expected to bind loopback (e.g. 127.0.0.1:6060).
+func startPprof(addr string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	slog.Warn("pprof enabled — do not expose this port", "addr", addr)
+	go func() {
+		s := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+		if err := s.ListenAndServe(); err != nil {
+			slog.Warn("pprof server stopped", "err", err)
+		}
+	}()
 }
 
 func mustToken() string {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		log.Fatalf("token: %v", err)
+		obs.Fatalf("token: %v", err)
 	}
 	return hex.EncodeToString(b)
 }

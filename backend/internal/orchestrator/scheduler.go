@@ -2,7 +2,7 @@ package orchestrator
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -158,7 +158,7 @@ func (s *Scheduler) fire(ctx context.Context, sc RunSchedule) {
 	} else {
 		sc.LastStatus = StatusFailed
 	}
-	log.Printf("scheduler: ran %s (schedule %s) → %s", sc.RunbookID, sc.ID, sc.LastStatus)
+	slog.Info("runbook schedule fired", "runbook", sc.RunbookID, "schedule", sc.ID, "status", sc.LastStatus)
 	_ = s.store.saveScheduleRaw(sc)
 }
 

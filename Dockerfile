@@ -55,7 +55,8 @@ ENV INFRAKIT_ADDR=0.0.0.0:8080 \
     INFRAKIT_AUTH=on \
     INFRAKIT_BEHIND_PROXY=1 \
     INFRAKIT_STATIC_DIR=/app/web \
-    INFRAKIT_DATA_DIR=/data
+    INFRAKIT_DATA_DIR=/data \
+    INFRAKIT_LOG_FORMAT=json
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -fsS http://localhost:8080/api/v1/health || exit 1

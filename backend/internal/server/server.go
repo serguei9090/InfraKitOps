@@ -17,6 +17,7 @@ import (
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/mcp"
+	"github.com/infrakit/backend/internal/obs"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/promptstore"
 	"github.com/infrakit/backend/internal/vault"
@@ -33,6 +34,9 @@ type Options struct {
 	// CORSOrigins are extra browser origins allowed in addition to the
 	// built-in localhost / tauri set (U6, for a hosted web deployment).
 	CORSOrigins []string
+	// TrustProxy → the access log believes X-Forwarded-For for the client ip
+	// (set with --behind-proxy).
+	TrustProxy bool
 	// OnActivity, if set, is called once per request so an idle watchdog can
 	// reset its timer.
 	OnActivity func()
@@ -75,7 +79,9 @@ type Options struct {
 // NewRouter returns the fully wired API handler.
 func NewRouter(opts Options) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Recoverer)
+	r.Use(middleware.RequestID)
+	r.Use(obs.Recoverer)
+	r.Use(obs.AccessLog(opts.TrustProxy))
 	r.Use(cors(opts.CORSOrigins))
 	r.Use(activity(opts.OnActivity))
 	if opts.Auth != nil {
@@ -111,6 +117,7 @@ func NewRouter(opts Options) http.Handler {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", api.Health)
+		r.Get("/metrics", obs.MetricsHandler()) // Prometheus text; behind the normal auth
 
 		if opts.Auth != nil {
 			r.Route("/auth", func(r chi.Router) {

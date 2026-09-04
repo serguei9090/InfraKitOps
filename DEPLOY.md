@@ -79,6 +79,24 @@ Every `INFRAKIT_*` var maps to a `--flag`; an explicit flag still wins.
 | `INFRAKIT_CORS_ORIGIN` | — | comma-separated extra browser origins (only if the frontend is on another origin) |
 | `INFRAKIT_MAX_CONCURRENT_RUNS` | `4` | cap on runbooks running at once |
 | `INFRAKIT_VAULT_AUTOLOCK` | `15m` | idle time before the vault re-locks (`0` = never) |
+| `INFRAKIT_LOG_FORMAT` | `text` | `json` for log aggregation (Loki/ELK/Datadog); the compose file sets this |
+| `INFRAKIT_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `INFRAKIT_ERROR_WEBHOOK` | — | POST a JSON blob here on a panic / internal error (Slack incoming webhook or any collector) |
+| `--pprof <addr>` | — | flag only — serve `net/http/pprof` on a **separate loopback** listener for debugging |
+
+### Observability
+
+- **Access log** — one structured line per request (`method`, `path`,
+  `status`, `dur_ms`, `ip`, `req_id`, `user`). Set `INFRAKIT_LOG_FORMAT=json`
+  and ship stderr to your log stack.
+- **Metrics** — `GET /api/v1/metrics` in Prometheus text format
+  (`infrakit_http_requests_total`, `..._request_duration_seconds` histogram,
+  `infrakit_http_in_flight`, `infrakit_build_info`, goroutines, heap). It sits
+  behind the normal auth — a Prometheus scrape job needs
+  `authorization: Bearer <token>` (single-user) or a session token
+  (multi-user).
+- **Crash reporting** — set `INFRAKIT_ERROR_WEBHOOK` to get a POST on every
+  panic / 500. Rate-limited to ≤1/s, best-effort.
 
 ---
 

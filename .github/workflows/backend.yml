@@ -40,6 +40,13 @@ jobs:
             echo "::error::bare {\"error\"} HTTP response in internal/api — use apierr.Write(w, apierr.X(...)). SSE error events may carry a \"code\" key."
             exit 1
           fi
+      - name: structured logging only (OBSERVABILITY_PLAN O0)
+        shell: bash
+        run: |
+          if grep -rnE '\blog\.(Print|Fatal)' --include='*.go' internal cmd | grep -v '_test.go' | grep -v 'internal/obs/'; then
+            echo "::error::stdlib log.Print/Fatal outside internal/obs — use log/slog or internal/obs."
+            exit 1
+          fi
       - run: go test ./... -count=1
 
   vendor-tools:

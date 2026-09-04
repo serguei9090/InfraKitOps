@@ -2,7 +2,7 @@ package vault
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"sync"
 	"time"
@@ -56,7 +56,7 @@ func (r *Registry) For(userID string) *Vault {
 	}
 	v, err := Open(r.pathFor(userID), r.autoLock)
 	if err != nil {
-		log.Printf("vault: open %s: %v (starting empty)", r.pathFor(userID), err)
+		slog.Warn("vault open failed, starting empty", "path", r.pathFor(userID), "err", err)
 		v = &Vault{path: r.pathFor(userID), autoLock: r.autoLock}
 	}
 	r.vaults[userID] = v
