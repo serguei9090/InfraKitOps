@@ -568,7 +568,9 @@ multi-user runbook approvals, admin audit log, self-signed TLS
 (`--tls auto`) + fingerprint pinning + a hard non-loopback gate.
 **Remaining = parked only**: Packaging P7e–P7h (owner-paused), A4f
 `Task.resources` always-inject, the Tauri desktop custom-cert verifier
-(U6 deferred). **Killed**: A3d embeddings.
+(U6 deferred), a **client-only file-encryption tool** (security module,
+added to `ROADMAP.md` 2026-09-04 — build only when asked). **Killed**: A3d
+embeddings.
 
 ### Hosted web deployment (done 2026-09-03, D0–D5)
 

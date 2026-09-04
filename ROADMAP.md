@@ -35,6 +35,18 @@ Effort: **S** = hours · **M** = half-day+ · **L** = multi-day / grind.
 - **A4f `Task.resources`** — always-inject resource URIs per task
   ([MCP_RESOURCES_PROMPTS_PLAN](MCP_RESOURCES_PROMPTS_PLAN.md) §7). Interactive
   attach shipped; this is the "pin it to a task" extra.
+- **Security module — file encryption tool** (2026-09-04, not started, build
+  only when explicitly asked). Client-only utility, same pattern as the
+  other 44 tools: encrypt/decrypt a dropped file with a passphrase using the
+  browser's Web Crypto API (AES-256-GCM, PBKDF2/Argon2-ish KDF from the
+  passphrase) — no backend needed, fits `ToolDetailScaffold` (T1). Natural
+  home is a new `security` rail module or folded into an existing one
+  (Utilities?) — decide at build time. Distinct from the existing
+  server-side **Vault** (secrets storage for runbooks/AI keys/SSH — a
+  different feature, not a file-encryption tool) and from `pdf-inspector`'s
+  encryption *status* read. Could grow later into other client-side crypto
+  utilities (checksum/sign a file, etc.) if asked, but scope stays exactly
+  "encrypt/decrypt a file with a passphrase" until requested otherwise.
 
 ## Killed (won't build)
 
