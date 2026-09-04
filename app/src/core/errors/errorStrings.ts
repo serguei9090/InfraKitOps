@@ -1,8 +1,12 @@
 /**
- * E3d — every user-facing error string in one place. A future i18n layer only
- * has to translate this file; `appError.ts` reads the pieces to build its
- * presets. Voice: title is a short noun/verb phrase, hint is one imperative
- * sentence saying what to do. No jargon, no stack traces.
+ * E3d — every user-facing error string in one place. `appError.ts` reads the
+ * pieces to build its presets. Voice: title is a short noun/verb phrase, hint
+ * is one imperative sentence saying what to do. No jargon, no stack traces.
+ *
+ * The app ships English only. If i18n is ever added it's a separate,
+ * multi-week effort (a `t()` layer + threading it through the 44 tools) —
+ * this file being the single home for error copy is the one piece already in
+ * place. See POLISH_PLAN.md PL5.
  */
 import type { ErrorCode } from './appError'
 

@@ -59,12 +59,11 @@ function retypeField(field: SchemaField, newType: FieldType): SchemaField {
 
 export function FormFlowBuilderScreen() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const openTemplateName = searchParams.get('t')
-  // No `?t=` → a fresh/blank design. `?t=name` alone → fill mode (the live
-  // form, Download/Preview/Copy). `?t=name&mode=edit` → design mode for that
-  // saved template's schema/field mapper — same two shapes the "XML/YAML
-  // Form Designer" sidebar entry and its saved-template rows link to.
-  const mode: 'design' | 'fill' = !openTemplateName || searchParams.get('mode') === 'edit' ? 'design' : 'fill'
+  const openId = searchParams.get('t')
+  // No `?t=` → a fresh/blank design. `?t=<id>` alone → fill mode (the live
+  // form, Download/Preview/Copy). `?t=<id>&mode=edit` → design mode for that
+  // saved form's schema/field mapper — the two shapes the sidebar links to.
+  const mode: 'design' | 'fill' = !openId || searchParams.get('mode') === 'edit' ? 'design' : 'fill'
 
   const [pasteText, setPasteText] = useState('')
   const [formatOverride, setFormatOverride] = useState<SourceFormat | undefined>(undefined)
@@ -74,24 +73,26 @@ export function FormFlowBuilderScreen() {
   const [saveDialogName, setSaveDialogName] = useState('')
   const [sourceExpanded, setSourceExpanded] = useState(true)
   const [shareOpen, setShareOpen] = useState(false)
+  const [canShare, setCanShare] = useState(false)
   const multiUser = useAuthStore((s) => s.mode === 'on')
-  const shareId = multiUser && templateName ? repository.ownedFormId?.(templateName) : undefined
+  const shareId = multiUser && openId && canShare ? openId : undefined
 
   const { control, register, reset } = useForm<Record<string, unknown>>({
     defaultValues: {},
   })
 
   useEffect(() => {
-    if (!openTemplateName) {
+    if (!openId) {
       setSchema(null)
       setTemplateName(null)
       setParseError(null)
       setSourceExpanded(true)
+      setCanShare(false)
       reset({})
       return
     }
     let cancelled = false
-    repository.load(openTemplateName).then((raw) => {
+    repository.load(openId).then((raw) => {
       if (cancelled || raw == null) return
       const template = JSON.parse(raw) as SavedFormFlowTemplate
       setSchema(template.schema)
@@ -100,11 +101,19 @@ export function FormFlowBuilderScreen() {
       setSourceExpanded(false)
       reset(template.values)
     })
+    // "can I share this" = multi-user + I own it (not a form shared to me).
+    if (multiUser) {
+      repository.list().then((entries) => {
+        if (cancelled) return
+        const e = entries.find((x) => x.id === openId)
+        setCanShare(!!e && !e.shared)
+      })
+    }
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openTemplateName])
+  }, [openId, multiUser])
 
   function handleParse() {
     try {
@@ -136,12 +145,14 @@ export function FormFlowBuilderScreen() {
     const name = saveDialogName.trim()
     const values = control._formValues
     const template: SavedFormFlowTemplate = { name, schema, values }
-    await repository.save(name, JSON.stringify(template))
+    // Reuse the current id (rename in place) unless the name changed enough
+    // that the user clearly wants a new form — keep it simple: same id when
+    // editing an existing one, new id from a fresh design.
+    const id = await repository.save(openId, name, JSON.stringify(template))
+    setTemplateName(name)
     setSaveDialogName('')
-    // Route to this template's edit URL so the address bar and the sidebar's
-    // saved-templates list agree with what's on screen (and a refresh keeps
-    // working, since state is now derived from the URL, not React state).
-    setSearchParams({ t: name, mode: 'edit' })
+    // Route to the id so the address bar + sidebar agree and a refresh works.
+    setSearchParams({ t: id, mode: 'edit' })
   }
 
   const output = useOutput(schema, control)

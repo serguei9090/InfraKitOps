@@ -1,75 +1,26 @@
-import type { ISchemaRepository } from '@/core/ports/ISchemaRepository'
+import type { ISchemaRepository, SchemaEntry } from '@/core/ports/ISchemaRepository'
 import type { IStoragePort } from '@/core/ports/IStoragePort'
 import { createStoragePort } from './createStoragePort'
 
 /**
- * `ISchemaRepository` on top of the general `IStoragePort` — same
- * index-plus-entries scheme as before: `NAMES_KEY` holds the list of every
- * saved template name, each template's JSON lives under
- * `formflow_template_<name>`. Backed by `localStorage` on web or a real file
- * on desktop.
+ * FormFlow form persistence (POLISH_PLAN.md PL2). id-keyed:
+ *
+ *   formflow_index      → [{ id, name }]
+ *   formflow_form_<id>  → one form's JSON
  *
  * Under `--auth on` a `BackendSchemaRepository` takes over so forms live
- * server-side and can be shared (SHARING_PLAN.md SH3). `createSchemaRepository`
- * picks per call by auth mode, mirroring `promptRepository.ts`.
+ * server-side and can be shared. `createSchemaRepository()` picks per call by
+ * auth mode, mirroring `promptRepository.ts`.
+ *
+ * Migrates the pre-PL2 name-keyed layout (`formflow_template_names` +
+ * `formflow_template_<name>`) on first `list()`.
  */
-const NAMES_KEY = 'formflow_template_names'
+const INDEX_KEY = 'formflow_index'
+const OLD_NAMES_KEY = 'formflow_template_names'
 
-function templateKey(name: string): string {
-  return `formflow_template_${name}`
-}
+const formKey = (id: string) => `formflow_form_${id}`
+const oldKey = (name: string) => `formflow_template_${name}`
 
-export class SchemaRepository implements ISchemaRepository {
-  private readonly storage: IStoragePort
-  constructor(storage: IStoragePort) {
-    this.storage = storage
-  }
-
-  private async readNames(): Promise<string[]> {
-    const raw = await this.storage.get(NAMES_KEY)
-    if (raw == null) return []
-    try {
-      const decoded: unknown = JSON.parse(raw)
-      return Array.isArray(decoded) ? decoded.filter((v): v is string => typeof v === 'string') : []
-    } catch {
-      return []
-    }
-  }
-
-  private writeNames(names: string[]): Promise<void> {
-    return this.storage.set(NAMES_KEY, JSON.stringify(names))
-  }
-
-  async listNames(): Promise<string[]> {
-    return [...(await this.readNames())].sort()
-  }
-
-  async load(name: string): Promise<string | null> {
-    return this.storage.get(templateKey(name))
-  }
-
-  async save(name: string, schemaJson: string): Promise<void> {
-    const names = await this.readNames()
-    if (!names.includes(name)) {
-      names.push(name)
-      await this.writeNames(names)
-    }
-    await this.storage.set(templateKey(name), schemaJson)
-  }
-
-  async delete(name: string): Promise<void> {
-    const names = await this.readNames()
-    const next = names.filter((n) => n !== name)
-    if (next.length !== names.length) {
-      await this.writeNames(next)
-    }
-    await this.storage.remove(templateKey(name))
-  }
-}
-
-// --- multi-user: server-side, shareable -----------------------------
-
-const SHARED_SUFFIX = ' (shared)'
 const genId = () =>
   `form_${
     typeof crypto?.randomUUID === 'function'
@@ -77,58 +28,119 @@ const genId = () =>
       : Math.random().toString(36).slice(2) + Date.now().toString(36)
   }`
 
-class BackendSchemaRepository implements ISchemaRepository {
-  /** display name → entry. Rebuilt on every listNames/load. */
-  private byDisplay = new Map<string, { id: string; name: string; canEdit: boolean; shared: boolean }>()
+interface IndexEntry {
+  id: string
+  name: string
+}
 
-  private async refresh() {
-    const { listForms } = await import('@/adapters/backend/formClient')
-    const forms = await listForms()
-    this.byDisplay.clear()
-    for (const f of forms) {
-      let display = f.shared ? f.name + SHARED_SUFFIX : f.name
-      // de-collide identical display names (two shared "x", etc.)
-      let n = 2
-      while (this.byDisplay.has(display)) display = `${f.name}${SHARED_SUFFIX} ${n++}`
-      this.byDisplay.set(display, { id: f.id, name: f.name, canEdit: f.canEdit, shared: f.shared })
+export class SchemaRepository implements ISchemaRepository {
+  private readonly storage: IStoragePort
+  private migrated = false
+  constructor(storage: IStoragePort) {
+    this.storage = storage
+  }
+
+  private async readIndex(): Promise<IndexEntry[]> {
+    const raw = await this.storage.get(INDEX_KEY)
+    if (raw == null) return []
+    try {
+      const v: unknown = JSON.parse(raw)
+      return Array.isArray(v) ? (v as IndexEntry[]).filter((e) => e && e.id && e.name) : []
+    } catch {
+      return []
     }
   }
-
-  async listNames(): Promise<string[]> {
-    await this.refresh()
-    return [...this.byDisplay.keys()].sort()
+  private writeIndex(idx: IndexEntry[]): Promise<void> {
+    return this.storage.set(INDEX_KEY, JSON.stringify(idx))
   }
 
-  async load(display: string): Promise<string | null> {
-    if (this.byDisplay.size === 0) await this.refresh()
-    const hit = this.byDisplay.get(display)
-    if (!hit) return null
+  private async migrate(): Promise<void> {
+    if (this.migrated) return
+    this.migrated = true
+    const rawNames = await this.storage.get(OLD_NAMES_KEY)
+    if (rawNames == null) return
+    let names: string[] = []
+    try {
+      const v: unknown = JSON.parse(rawNames)
+      names = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+    } catch {
+      names = []
+    }
+    if (names.length === 0) {
+      await this.storage.remove(OLD_NAMES_KEY)
+      return
+    }
+    const idx = await this.readIndex()
+    for (const name of names) {
+      const json = await this.storage.get(oldKey(name))
+      if (json == null) continue
+      const id = genId()
+      idx.push({ id, name })
+      await this.storage.set(formKey(id), json)
+      await this.storage.remove(oldKey(name))
+    }
+    await this.writeIndex(idx)
+    await this.storage.remove(OLD_NAMES_KEY)
+  }
+
+  async list(): Promise<SchemaEntry[]> {
+    await this.migrate()
+    const idx = await this.readIndex()
+    return idx
+      .map((e) => ({ id: e.id, name: e.name, canEdit: true, shared: false }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  async load(id: string): Promise<string | null> {
+    return this.storage.get(formKey(id))
+  }
+
+  async save(id: string | null, name: string, schemaJson: string): Promise<string> {
+    await this.migrate()
+    const idx = await this.readIndex()
+    const finalId = id ?? genId()
+    const existing = idx.find((e) => e.id === finalId)
+    if (existing) existing.name = name
+    else idx.push({ id: finalId, name })
+    await this.writeIndex(idx)
+    await this.storage.set(formKey(finalId), schemaJson)
+    return finalId
+  }
+
+  async delete(id: string): Promise<void> {
+    const idx = await this.readIndex()
+    const next = idx.filter((e) => e.id !== id)
+    if (next.length !== idx.length) await this.writeIndex(next)
+    await this.storage.remove(formKey(id))
+  }
+}
+
+// --- multi-user: server-side, shareable -----------------------------
+
+class BackendSchemaRepository implements ISchemaRepository {
+  async list(): Promise<SchemaEntry[]> {
+    const { listForms } = await import('@/adapters/backend/formClient')
+    const forms = await listForms()
+    return forms
+      .map((f) => ({ id: f.id, name: f.name, canEdit: f.canEdit, shared: f.shared }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  async load(id: string): Promise<string | null> {
     const { getForm } = await import('@/adapters/backend/formClient')
-    const blob = await getForm(hit.id)
-    return JSON.stringify(blob)
+    return JSON.stringify(await getForm(id))
   }
 
-  async save(name: string, schemaJson: string): Promise<void> {
-    await this.refresh()
-    const own = this.byDisplay.get(name) ?? this.byDisplay.get(name + SHARED_SUFFIX)
-    const id = own && !own.shared ? own.id : own?.shared && own.canEdit ? own.id : genId()
+  async save(id: string | null, name: string, schemaJson: string): Promise<string> {
+    const finalId = id ?? genId()
     const { putForm } = await import('@/adapters/backend/formClient')
-    await putForm(id, name, JSON.parse(schemaJson))
-    await this.refresh()
+    await putForm(finalId, name, JSON.parse(schemaJson))
+    return finalId
   }
 
-  async delete(display: string): Promise<void> {
-    if (this.byDisplay.size === 0) await this.refresh()
-    const hit = this.byDisplay.get(display)
-    if (!hit || hit.shared) return // only the owner deletes
+  async delete(id: string): Promise<void> {
     const { deleteForm } = await import('@/adapters/backend/formClient')
-    await deleteForm(hit.id)
-    await this.refresh()
-  }
-
-  ownedFormId(name: string): string | undefined {
-    const hit = this.byDisplay.get(name)
-    return hit && !hit.shared ? hit.id : undefined
+    await deleteForm(id)
   }
 }
 
@@ -150,20 +162,17 @@ class ModeAwareSchemaRepository implements ISchemaRepository {
     return this.local()
   }
 
-  async listNames() {
-    return (await this.pick()).listNames()
+  async list() {
+    return (await this.pick()).list()
   }
-  async load(name: string) {
-    return (await this.pick()).load(name)
+  async load(id: string) {
+    return (await this.pick()).load(id)
   }
-  async save(name: string, json: string) {
-    return (await this.pick()).save(name, json)
+  async save(id: string | null, name: string, json: string) {
+    return (await this.pick()).save(id, name, json)
   }
-  async delete(name: string) {
-    return (await this.pick()).delete(name)
-  }
-  ownedFormId(name: string): string | undefined {
-    return this.backendRepo?.ownedFormId(name)
+  async delete(id: string) {
+    return (await this.pick()).delete(id)
   }
 }
 

@@ -60,7 +60,18 @@ watch archives appear + prune; restore one into a fresh `--data-dir` and boot.
 
 ---
 
-## PL2 — FormFlow: id-based front-end repo
+## PL2 — FormFlow: id-based front-end repo ✅ DONE (`<pl2>`)
+
+Landed: `ISchemaRepository` → entry-based (`list(): SchemaEntry[]`,
+`load(id)`, `save(id|null, name, json) → id`, `delete(id)`). Local repo
+id-keyed (`formflow_index` + `formflow_form_<id>`) with a one-time migration
+of the pre-PL2 `formflow_template_*` keys on first `list()`/`save()`.
+`BackendSchemaRepository` drops the `"(shared)"` suffix hack — `shared` is a
+flag. `FormFlowBuilderScreen` + `AppSidebar` use `?t=<id>`, show the name +
+a "shared" badge, hide delete on shared forms. `schemaRepository.test.ts`:
+id round-trip, rename-in-place, migration (idempotent). **Verified in
+browser**: real prefixed old keys migrate on page load, sidebar shows the
+form, clicking opens `?t=form_<uuid>`.
 
 **Now.** `ISchemaRepository` is name-keyed (`load(name)`, `save(name)`,
 `?t=<name>` URL). The backend (`formstore`) is id-keyed; `schemaRepository.ts`'s
@@ -184,7 +195,11 @@ do it for a turnkey handoff, skip if operators build their own.
 
 ---
 
-## PL5 — `errorStrings.ts` — decide i18n or not
+## PL5 — `errorStrings.ts` — decide i18n or not ✅ DONE (`<pl5>`) — Option A
+
+Reworded the file comment: no longer promises an i18n layer that doesn't
+exist; states the app is English-only and full i18n is a separate multi-week
+effort. No code change — the file is live and correct as-is.
 
 **Now.** `core/errors/errorStrings.ts` is **live code** — `appError.ts`
 imports `ERROR_STRINGS` / `RETRYABLE_CODES` / `STICKY_CODES` to build its

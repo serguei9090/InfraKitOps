@@ -1,13 +1,18 @@
-/** Outbound port: persistence for user-saved FormFlow schemas/templates. */
+/** One saved FormFlow form in a list. */
+export interface SchemaEntry {
+  id: string
+  name: string
+  /** false for a form shared read-only with the caller. */
+  canEdit: boolean
+  /** reached via a share grant, not owned (multi-user only). */
+  shared: boolean
+}
+
+/** Outbound port: persistence for user-saved FormFlow forms/templates.
+ *  id-keyed — `save(null, …)` creates and returns a fresh id. */
 export interface ISchemaRepository {
-  listNames(): Promise<string[]>
-  load(name: string): Promise<string | null>
-  save(name: string, schemaJson: string): Promise<void>
-  delete(name: string): Promise<void>
-  /**
-   * Multi-user only: the server id of a form the caller owns, for the share
-   * dialog. `undefined` in single-user mode or for a not-yet-saved / shared
-   * form. Populated by `listNames()` / `load()`.
-   */
-  ownedFormId?(name: string): string | undefined
+  list(): Promise<SchemaEntry[]>
+  load(id: string): Promise<string | null>
+  save(id: string | null, name: string, schemaJson: string): Promise<string>
+  delete(id: string): Promise<void>
 }

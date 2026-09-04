@@ -6,6 +6,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { createSchemaRepository } from '@/adapters/storage/schemaRepository'
+import type { SchemaEntry } from '@/core/ports/ISchemaRepository'
 import { useModuleVisibilityStore, visibleModulesInOrder } from '@/stores/moduleVisibilityStore'
 import { useSearchQueryStore } from '@/stores/searchQueryStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -183,7 +184,7 @@ function ToolListPane({ module, currentPath }: { module: ModuleDef; currentPath:
       )
     : module.tools
 
-  const openTemplateName = currentPath === FORMFLOW_BUILDER_ROUTE ? searchParams.get('t') : null
+  const openFormId = currentPath === FORMFLOW_BUILDER_ROUTE ? searchParams.get('t') : null
 
   return (
     <div className="flex h-full w-60 flex-col overflow-hidden">
@@ -195,7 +196,7 @@ function ToolListPane({ module, currentPath }: { module: ModuleDef; currentPath:
           // The FormFlow builder route is shared by the "new design" entry and
           // every saved template's fill/edit view (disambiguated by `?t=`) —
           // this row owns the highlight only when no template is open.
-          const selected = enabled && currentPath === tool.route && !(tool.id === 'formflow-builder' && openTemplateName)
+          const selected = enabled && currentPath === tool.route && !(tool.id === 'formflow-builder' && openFormId)
           // Group heading: shown when not searching and this tool starts a new
           // group. The first one gets no divider rule (module title is above).
           const showHeading = !query && Boolean(tool.group) && tool.group !== tools[i - 1]?.group
@@ -232,7 +233,7 @@ function ToolListPane({ module, currentPath }: { module: ModuleDef; currentPath:
           )
         })}
         {module.id === 'formflow' ? (
-          <FormFlowTemplateRows openTemplateName={openTemplateName} navigate={navigate} />
+          <FormFlowTemplateRows openFormId={openFormId} navigate={navigate} />
         ) : null}
       </div>
       {module.id === 'network' ? (
@@ -259,39 +260,39 @@ function ToolListPane({ module, currentPath }: { module: ModuleDef; currentPath:
  * elsewhere is reflected without a dedicated pub/sub channel.
  */
 function FormFlowTemplateRows({
-  openTemplateName,
+  openFormId,
   navigate,
 }: {
-  openTemplateName: string | null
+  openFormId: string | null
   navigate: ReturnType<typeof useNavigate>
 }) {
-  const [names, setNames] = useState<string[] | null>(null)
-  const [toDelete, setToDelete] = useState<string | null>(null)
+  const [entries, setEntries] = useState<SchemaEntry[] | null>(null)
+  const [toDelete, setToDelete] = useState<SchemaEntry | null>(null)
 
   function refresh() {
-    schemaRepository.listNames().then(setNames)
+    schemaRepository.list().then(setEntries)
   }
 
-  useEffect(refresh, [openTemplateName])
+  useEffect(refresh, [openFormId])
 
   async function confirmDelete() {
     if (!toDelete) return
-    await schemaRepository.delete(toDelete)
-    if (openTemplateName === toDelete) navigate(FORMFLOW_BUILDER_ROUTE)
+    await schemaRepository.delete(toDelete.id)
+    if (openFormId === toDelete.id) navigate(FORMFLOW_BUILDER_ROUTE)
     setToDelete(null)
     refresh()
   }
 
-  if (!names || names.length === 0) return null
+  if (!entries || entries.length === 0) return null
 
   return (
     <>
       <div className="mt-1 flex flex-col gap-0.5 border-t border-border/60 pt-1">
-        {names.map((name) => {
-          const selected = openTemplateName === name
+        {entries.map((e) => {
+          const selected = openFormId === e.id
           return (
             <div
-              key={name}
+              key={e.id}
               className={cn(
                 'group flex items-center gap-1 rounded-[10px] pl-2.5 pr-1 py-1 text-sm',
                 selected ? 'bg-primary/15 text-foreground font-medium' : 'text-foreground hover:bg-accent/40',
@@ -300,27 +301,34 @@ function FormFlowTemplateRows({
               <FolderOpen className="size-[15px] shrink-0 text-muted-foreground" />
               <button
                 type="button"
-                onClick={() => navigate(`${FORMFLOW_BUILDER_ROUTE}?t=${encodeURIComponent(name)}`)}
+                onClick={() => navigate(`${FORMFLOW_BUILDER_ROUTE}?t=${e.id}`)}
                 className="min-w-0 flex-1 truncate py-1 text-left"
               >
-                {name}
+                {e.name}
+                {e.shared && (
+                  <span className="ml-1.5 rounded bg-muted px-1 py-px text-[10px] text-muted-foreground">
+                    shared
+                  </span>
+                )}
               </button>
               <button
                 type="button"
-                aria-label={`Edit "${name}"`}
-                onClick={() => navigate(`${FORMFLOW_BUILDER_ROUTE}?t=${encodeURIComponent(name)}&mode=edit`)}
+                aria-label={`Edit "${e.name}"`}
+                onClick={() => navigate(`${FORMFLOW_BUILDER_ROUTE}?t=${e.id}&mode=edit`)}
                 className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-foreground"
               >
                 <Pencil className="size-3.5" />
               </button>
-              <button
-                type="button"
-                aria-label={`Delete "${name}"`}
-                onClick={() => setToDelete(name)}
-                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-destructive"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
+              {!e.shared && (
+                <button
+                  type="button"
+                  aria-label={`Delete "${e.name}"`}
+                  onClick={() => setToDelete(e)}
+                  className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              )}
             </div>
           )
         })}
@@ -330,7 +338,7 @@ function FormFlowTemplateRows({
           <DialogHeader>
             <DialogTitle>Delete template?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">"{toDelete}" will be permanently deleted. This cannot be undone.</p>
+          <p className="text-sm text-muted-foreground">"{toDelete?.name}" will be permanently deleted. This cannot be undone.</p>
           <DialogFooter>
             <DialogClose render={<Button variant="outline">Cancel</Button>} />
             <Button variant="destructive" onClick={() => void confirmDelete()}>
