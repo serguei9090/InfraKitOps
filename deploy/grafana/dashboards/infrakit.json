@@ -1,0 +1,124 @@
+{
+  "uid": "infrakit-overview",
+  "title": "InfraKit Studio — overview",
+  "tags": ["infrakit"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate (req/s by method)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum(rate(infrakit_http_requests_total[5m])) by (method)",
+          "legendFormat": "{{method}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "5xx rate (errors/s)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "color": { "mode": "fixed", "fixedColor": "red" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(infrakit_http_requests_total{code=~\"5..\"}[5m]))",
+          "legendFormat": "5xx"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum(rate(infrakit_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(infrakit_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(infrakit_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "In-flight requests",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [{ "expr": "infrakit_http_in_flight", "legendFormat": "in-flight" }]
+    },
+    {
+      "id": 5,
+      "title": "Goroutines",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 16 },
+      "targets": [{ "expr": "infrakit_goroutines", "legendFormat": "goroutines" }]
+    },
+    {
+      "id": 6,
+      "title": "Heap allocated",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [{ "expr": "infrakit_mem_alloc_bytes", "legendFormat": "heap" }]
+    },
+    {
+      "id": 7,
+      "title": "Uptime",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 7, "w": 4, "x": 16, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [{ "expr": "time() - infrakit_start_time_seconds", "legendFormat": "uptime" }]
+    },
+    {
+      "id": 8,
+      "title": "Build",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 16 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^version$/" },
+        "textMode": "name",
+        "colorMode": "none"
+      },
+      "targets": [{ "expr": "infrakit_build_info", "legendFormat": "{{version}}", "instant": true }]
+    }
+  ]
+}

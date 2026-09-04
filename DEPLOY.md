@@ -98,6 +98,20 @@ Every `INFRAKIT_*` var maps to a `--flag`; an explicit flag still wins.
 - **Crash reporting** — set `INFRAKIT_ERROR_WEBHOOK` to get a POST on every
   panic / 500. Rate-limited to ≤1/s, best-effort.
 
+### Optional: full metrics stack (Prometheus + Grafana)
+
+```bash
+cd deploy
+echo -n "$TOKEN" > infrakit_token       # bearer/session token for /metrics
+docker compose -f compose.yml -f compose.observability.yml up -d
+```
+
+Grafana → `http://localhost:3000` (`admin` / `$GRAFANA_PASSWORD`, default
+`admin`). The **InfraKit Studio — overview** dashboard is auto-provisioned —
+request rate, 5xx rate, latency p50/p95/p99, in-flight, goroutines, heap,
+uptime. `deploy/prometheus.yml` is the scrape config; adjust `scheme` to
+`https` and add a `tls_config` when scraping through Caddy.
+
 ---
 
 ## TLS options

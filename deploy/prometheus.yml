@@ -1,0 +1,24 @@
+# Prometheus scrape config for InfraKit Studio's /api/v1/metrics.
+# Used by deploy/compose.observability.yml. Standalone: point `targets` at
+# your instance and drop in the bearer token.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: infrakit
+    metrics_path: /api/v1/metrics
+    scheme: http # 'https' when scraping through Caddy / a real cert
+    # The endpoint sits behind the normal auth. Single-user: the TOKEN the
+    # backend prints. Multi-user: a long-lived session token. Put it in a
+    # file so it isn't in the config:
+    #   echo -n "$TOKEN" > /etc/prometheus/infrakit_token && chmod 600 …
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/infrakit_token
+    # For --tls auto (self-signed), pin instead of disabling verification:
+    # tls_config:
+    #   ca_file: /etc/prometheus/infrakit_ca.pem
+    static_configs:
+      - targets: ['infrakit:8080'] # inside the compose network

@@ -154,7 +154,16 @@ not just this one file. **New deps:** 3 dev-only.
 
 ---
 
-## PL4 — Grafana dashboard + Prometheus config
+## PL4 — Grafana dashboard + Prometheus config ✅ DONE (`<pl4>`)
+
+Landed (config only, no repo code): `deploy/prometheus.yml` (scrape
+`/api/v1/metrics` with a bearer `credentials_file`), `deploy/grafana/dashboards/infrakit.json`
+(8 panels — request rate, 5xx rate, latency p50/p95/p99, in-flight,
+goroutines, heap, uptime, build), `deploy/grafana/provisioning/*`,
+`deploy/compose.observability.yml` (overlay: `prometheus:` + `grafana:` on
+`:3000`). `DEPLOY.md` "full metrics stack" subsection.
+`docker compose -f compose.yml -f compose.observability.yml config` valid;
+dashboard JSON + provisioning YAML validated.
 
 **Now.** `/api/v1/metrics` exposes the series; names are in `DEPLOY.md`; no
 turnkey dashboard. **Not application code** — config for two sidecar apps.
@@ -279,13 +288,16 @@ standalone binary).
 
 ---
 
-## Summary
+## Summary — ALL DONE 2026-09-03
 
-| # | Item | Effort | New deps | Priority |
-|---|---|---|---|---|
-| PL1 | DB backup automation | 0.5 d | none | **high** |
-| PL3 | Component-test infra + ErrorBoundary test | 2 h | 3 dev | **high** |
-| PL6 | Load test (scripts here, run on Linux) | 1 d | none | **high** |
-| PL5 | errorStrings comment reword | 10 min | none | quick |
-| PL2 | FormFlow id-based FE | 1 d | none | med (if used) |
-| PL4 | Grafana dashboard + Prometheus config | 2–3 h | none | low |
+| # | Item | Status |
+|---|---|---|
+| PL1 | DB backup automation | ✅ `internal/backup`, flags, admin endpoint, compose volume |
+| PL2 | FormFlow id-based FE | ✅ entry-based repo + migration, browser-verified |
+| PL3 | Component-test infra + ErrorBoundary test | ✅ RTL + happy-dom, per-file docblock, 3 tests |
+| PL4 | Grafana dashboard + Prometheus config | ✅ config files + compose overlay + DEPLOY.md |
+| PL5 | errorStrings comment reword | ✅ |
+| PL6 | Load test scripts | ✅ k6 scripts + README + RESULTS stub — a run still needs a Linux host |
+
+Frontend 1341 tests / 86 files green, backend all green, no new runtime deps
+(3 dev-only for PL3).
