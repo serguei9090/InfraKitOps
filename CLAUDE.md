@@ -607,6 +607,25 @@ in `installErrorHandlers`, `errorWebhook.ts` (`VITE_ERROR_WEBHOOK`) fed from
 `errorStore.report`. Dockerfile/compose default `INFRAKIT_LOG_FORMAT=json`.
 No new deps.
 
+### Post-observability polish (done 2026-09-03, PL1–PL6)
+
+[`POLISH_PLAN.md`](POLISH_PLAN.md). **PL1** — `internal/backup`: consistent
+hot snapshots (`VACUUM INTO` per `*.db` + `vault.enc`, tar.gz + manifest),
+`--backup-dir`/`-interval`/`-keep` (+ `INFRAKIT_*`), timer + shutdown
+snapshot, admin `POST /api/v1/admin/backup`; compose gets a separate
+`/backups` volume. **PL2** — `ISchemaRepository` is entry-based
+(`list(): SchemaEntry[]`, `load(id)`, `save(id|null,name,json)→id`); local
+repo id-keyed (`formflow_index`) with a one-time migration of the old
+`formflow_template_*` keys; `?t=<id>` everywhere; FormFlow's backend adapter
+drops the `"(shared)"` hack. **PL3** — FE component tests now possible:
+`@testing-library/react` + `happy-dom` (dev), `.test.tsx` opts in with a
+`// @vitest-environment happy-dom` docblock; `ErrorBoundary.test.tsx`.
+**PL4** — `deploy/prometheus.yml` + `deploy/grafana/` (8-panel dashboard +
+provisioning) + `deploy/compose.observability.yml` overlay. **PL5** —
+`errorStrings.ts` comment reword (English-only, i18n is a separate effort).
+**PL6** — `loadtest/` k6 scripts (static, api-read, sse, write-contention)
++ README + RESULTS stub — a run needs a Linux host. No new runtime deps.
+
 ### Targeted item sharing (done 2026-09-03, SH1–SH5)
 
 [`SHARING_PLAN.md`](SHARING_PLAN.md) — user→user sharing for **Runbooks**,
