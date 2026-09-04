@@ -60,6 +60,7 @@ describe('syncedSettings', () => {
     getUserSettings.mockResolvedValue({ 'network-settings': fresh })
 
     await mod.pullSettings()
+    await vi.runAllTimersAsync()
 
     expect(mem.get('network-settings')).toBe(fresh)
   })
