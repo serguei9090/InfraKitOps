@@ -119,8 +119,13 @@ func TestCapabilitiesShapesResponse(t *testing.T) {
 	if !body.Capabilities["subnet-calculator"].Available {
 		t.Fatal("subnet-calculator should always be available")
 	}
-	if body.Capabilities["discovery-protocol"].Available {
-		t.Fatal("discovery-protocol (LLDP/CDP) is a deferred N4 item")
+	// discovery-protocol's availability is genuinely environment-dependent
+	// (pktmon.exe + running elevated on Windows, lldpctl on Linux/mac) —
+	// assert the shape (the key exists), not a fixed value. A hosted CI
+	// runner is elevated with pktmon.exe present, so it legitimately comes
+	// back true there and false on an unprivileged dev machine.
+	if _, ok := body.Capabilities["discovery-protocol"]; !ok {
+		t.Fatal("discovery-protocol missing from capabilities response")
 	}
 }
 
