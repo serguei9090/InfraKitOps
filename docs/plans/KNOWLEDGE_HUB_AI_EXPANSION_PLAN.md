@@ -57,18 +57,18 @@ Plus:
 ## 2. How the Knowledge Hub works today (so the change stays mechanical)
 
 One data file drives everything:
-[`app/src/core/cheatsheets/cheatsheetContent.ts`](app/src/core/cheatsheets/cheatsheetContent.ts)
+[`app/src/core/cheatsheets/cheatsheetContent.ts`](../../app/src/core/cheatsheets/cheatsheetContent.ts)
 
 - `ResourceType` union + `RESOURCE_TYPES` ordering array
 - `EXTERNAL_RESOURCE_LINKS: ReferenceLink[]` — `{ name, url, description, type, tags }`
 - One thin screen per "kind", each filters `EXTERNAL_RESOURCE_LINKS` by `type`
   and hands the subset to the shared
-  [`ResourceLinkListView.tsx`](app/src/adapters/ui/tools/ResourceLinkListView.tsx)
+  [`ResourceLinkListView.tsx`](../../app/src/adapters/ui/tools/ResourceLinkListView.tsx)
   (owns search box + tag chips + card grid)
 - Register a screen: 1 entry in
-  [`moduleTaxonomy.ts`](app/src/adapters/ui/shell/moduleTaxonomy.ts) + 1 route in
-  [`routes.tsx`](app/src/routes.tsx)
-- Structural tests: [`cheatsheetContent.test.ts`](app/src/core/cheatsheets/cheatsheetContent.test.ts)
+  [`moduleTaxonomy.ts`](../../app/src/adapters/ui/shell/moduleTaxonomy.ts) + 1 route in
+  [`routes.tsx`](../../app/src/routes.tsx)
+- Structural tests: [`cheatsheetContent.test.ts`](../../app/src/core/cheatsheets/cheatsheetContent.test.ts)
 
 `src/core/**` stays React-free — this file already is, keep it that way.
 

@@ -4,7 +4,7 @@ Plan for running InfraKit Studio as a **hosted web service** instead of (or
 alongside) the desktop app.
 
 > **Status: D0–D5 all shipped (2026-09-03).** `docker compose up -d --build`
-> in `deploy/` gives a working hosted instance. See [`DEPLOY.md`](DEPLOY.md)
+> in `deploy/` gives a working hosted instance. See [`DEPLOY.md`](../deployment/DEPLOY.md)
 > for operating it. Each phase below carries a ✅ with what landed.
 
 ### Decisions locked (2026-09-03)

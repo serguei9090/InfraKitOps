@@ -15,8 +15,8 @@ client-side tools work entirely offline; the backend modules light up when the G
 sidecar is present.
 
 MIT licensed. See [`CLAUDE.md`](CLAUDE.md) for the stack rationale and conventions,
-[`InfraKit Studio Specification.md`](InfraKit%20Studio%20Specification.md) for the
-product spec, [`design.md`](design.md) for the UI/architecture rationale, and the
+[`InfraKit Studio Specification.md`](docs/plans/InfraKit%20Studio%20Specification.md) for the
+product spec, [`design.md`](docs/plans/design.md) for the UI/architecture rationale, and the
 `*_PLAN.md` files for per-module design history.
 
 ## Why one app instead of ten
@@ -60,7 +60,7 @@ and `backend/` (Go) are the only active codebases.
 
 **Not done:** Windows code signing (installer triggers a SmartScreen warning — see
 below), brand icons, clean-VM install gate, macOS/Linux packaging. Tracked in
-[`PACKAGING_PLAN.md`](PACKAGING_PLAN.md) / [`ROADMAP.md`](ROADMAP.md).
+[`PACKAGING_PLAN.md`](docs/plans/PACKAGING_PLAN.md) / [`ROADMAP.md`](ROADMAP.md).
 
 ## Stack
 

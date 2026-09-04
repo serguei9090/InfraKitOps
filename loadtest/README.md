@@ -1,7 +1,7 @@
 # loadtest/
 
 [k6](https://k6.io) scripts to find the ceilings that matter for a hosted
-InfraKit deployment (POLISH_PLAN.md PL6). The one that decides *when you need
+InfraKit deployment (`docs/plans/POLISH_PLAN.md` PL6). The one that decides *when you need
 Postgres* is `write-contention.js`.
 
 ## Run

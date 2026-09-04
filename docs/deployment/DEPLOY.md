@@ -2,7 +2,7 @@
 
 InfraKit Studio ships as a desktop app (see the GitHub Releases) **and** as a
 container you can host for a team. This doc covers the hosted path. Rationale
-and phase history: [`DEPLOY_PLAN.md`](DEPLOY_PLAN.md).
+and phase history: [`DEPLOY_PLAN.md`](../plans/DEPLOY_PLAN.md).
 
 > **One replica only.** The datastore is SQLite (single writer). This is fine
 > for a team or personal deployment. Horizontal scaling would need a Postgres

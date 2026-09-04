@@ -69,9 +69,9 @@ jobs:
 
             Open `http://127.0.0.1:8080`; the first start prints a
             `SETUP-TOKEN` for creating the admin account. To expose it on a
-            network add TLS — see `README.md` in the zip and `DEPLOY.md` in
-            the repo. A `Dockerfile` + `deploy/compose.yml` (Caddy HTTPS) are
-            also in the repo.
+            network add TLS — see `README.md` in the zip and
+            `docs/deployment/DEPLOY.md` in the repo. A `Dockerfile` +
+            `deploy/compose.yml` (Caddy HTTPS) are also in the repo.
 
   desktop:
     needs: create-release

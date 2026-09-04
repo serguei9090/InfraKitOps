@@ -1,9 +1,9 @@
 # InfraKit Studio — CLAUDE.md
 
 Project guidance for Claude Code sessions working in this repo. Product context lives in
-[`InfraKit Studio Specification.md`](InfraKit%20Studio%20Specification.md), UI/architecture
-rationale in [`design.md`](design.md), migration rationale/steps in
-[`MIGRATION_PLAN.md`](MIGRATION_PLAN.md).
+[`InfraKit Studio Specification.md`](docs/plans/InfraKit%20Studio%20Specification.md), UI/architecture
+rationale in [`design.md`](docs/plans/design.md), migration rationale/steps in
+[`MIGRATION_PLAN.md`](docs/plans/MIGRATION_PLAN.md).
 
 ## Stack decision (2026-08-25)
 
@@ -180,7 +180,7 @@ App in `app/`:
   keys, like `schemaRepository.ts`). Single-tool shell module —
   `ModuleDef.hideToolPane` + `moduleRailRoute()` open it directly from the rail
   (FormFlow now also skips its one-card page). Plan + phases:
-  [`PROMPT_MODULE_PLAN.md`](PROMPT_MODULE_PLAN.md). **P1–P4 done** — 10 full
+  [`PROMPT_MODULE_PLAN.md`](docs/plans/PROMPT_MODULE_PLAN.md). **P1–P4 done** — 10 full
   IT-troubleshooting seed templates + gallery + promote-to-template; dnd
   reorder (messages + tree prompts/folders); export/import JSON
   (`core/prompt/promptIo.ts`); ⌘S / ⌘↵ shortcuts. Deferred: responsive Tabs.
@@ -195,7 +195,7 @@ App in `app/`:
 
 The **Network Toolkit** module (`moduleTaxonomy.ts` id `network`) is the first part of
 the app with a **backend process** — it starts the deferred Phase 8, scoped to network
-diagnostics only. Plan + roadmap: [`NETWORK_MODULE_PLAN.md`](NETWORK_MODULE_PLAN.md).
+diagnostics only. Plan + roadmap: [`NETWORK_MODULE_PLAN.md`](docs/plans/NETWORK_MODULE_PLAN.md).
 
 - **`backend/`** — a Go module (`github.com/infrakit/backend`). One binary,
   `cmd/infrakit-backend`, that runs as a **Tauri sidecar** on desktop and a standalone
@@ -232,7 +232,7 @@ diagnostics only. Plan + roadmap: [`NETWORK_MODULE_PLAN.md`](NETWORK_MODULE_PLAN
 **Runbooks** (`moduleTaxonomy.ts` id `runbook`, route `/tools/runbook`) is a
 **backend-mandatory** module for reusable multi-step command runbooks — the
 second big consumer of the Go backend. Plan + phases:
-[`RUNBOOK_MODULE_PLAN.md`](RUNBOOK_MODULE_PLAN.md).
+[`RUNBOOK_MODULE_PLAN.md`](docs/plans/RUNBOOK_MODULE_PLAN.md).
 
 - **Backend**: `internal/vault/` (Argon2id → AES-256-GCM, `vault.enc` file,
   RAM-only key, auto-lock), `internal/executor/` (executor adapters — R0:
@@ -268,7 +268,7 @@ second big consumer of the Go backend. Plan + phases:
 ### AI module — "AI Hub" (started 2026-08-31, A0–A2 done)
 
 Central LLM layer every module reuses instead of wiring its own AI. Plan +
-phases: [`AI_MODULE_PLAN.md`](AI_MODULE_PLAN.md). Supersedes the never-built
+phases: [`AI_MODULE_PLAN.md`](docs/plans/AI_MODULE_PLAN.md). Supersedes the never-built
 `core/prompt/ai` stub; delivers the deferred Prompt Library P5 + Runbooks R4
 Assistant.
 
@@ -309,7 +309,7 @@ Assistant.
   transcript + POSTs it; nothing saved unless the user opts in. **A3c**
   (token in/out totals, NO cost — owner cut pricing), **A3d** (embeddings, on
   demand), **A3e** (reliability) still planned. **A4 = MCP tools + tool-calling** — own plan
-  [`AI_MCP_PLAN.md`](AI_MCP_PLAN.md). **A4a done 2026-09-01**: `internal/mcp/`
+  [`AI_MCP_PLAN.md`](docs/plans/AI_MCP_PLAN.md). **A4a done 2026-09-01**: `internal/mcp/`
   on `modelcontextprotocol/go-sdk` v1.7.0 (first new backend dep since the LLM
   module — MIT/Apache) — `mcp_server` registry in `llm.db`, `Manager`
   (stdio `CommandTransport` + http `StreamableClientTransport`, tool cache,
@@ -335,7 +335,7 @@ Assistant.
   tool transcript + token totals in saved chats · per-server `ServerStatus`
   (connected/toolCount/lastError) in McpView. **A4 complete.** **A4f done
   2026-09-01** (`a7a1cf5`/`1543929`/`34557de`/`79e050a`,
-  [`MCP_RESOURCES_PROMPTS_PLAN.md`](MCP_RESOURCES_PROMPTS_PLAN.md)): MCP
+  [`MCP_RESOURCES_PROMPTS_PLAN.md`](docs/plans/MCP_RESOURCES_PROMPTS_PLAN.md)): MCP
   *resources* + *prompts* — `internal/mcp` gains `Resources`/`ReadResource`/
   `Prompts`/`GetPrompt` (+ `rpAt` 60s cache, Resource/Prompt `list_changed`
   handlers, `ServerStatus` resource/prompt counts, `dial` test seam); 4
@@ -356,7 +356,7 @@ Assistant.
 `ModuleSettingsDialog` (deleted). Left menu of sections from a
 `SETTINGS_SECTIONS` registry (`registry.tsx`); a module with settings adds one
 entry + its panel, no edit to `SettingsScaffold`. Plan +
-phases: [`SETTINGS_MODULE_PLAN.md`](SETTINGS_MODULE_PLAN.md).
+phases: [`SETTINGS_MODULE_PLAN.md`](docs/plans/SETTINGS_MODULE_PLAN.md).
 
 - **S0 done**: scaffold + routes (`/settings`, `/settings/:section`), rail gear
   → `navigate('/settings')`. Sections: **General** (theme, expanded-sidebar,
@@ -392,9 +392,9 @@ phases: [`SETTINGS_MODULE_PLAN.md`](SETTINGS_MODULE_PLAN.md).
 **Ansible** (`moduleTaxonomy.ts` id `ansible`, route `/tools/ansible`) — a
 **backend-mandatory** dedicated module (its own T7 console, NOT a Runbooks
 section) for running Ansible playbooks with a live play→task→host tree.
-Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
+Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](docs/plans/ANSIBLE_MODULE_PLAN.md)
 (AN0–AN5, +AN6 deferred). Proposal:
-[`ANSIBLE_MODULE_PROPOSAL.md`](ANSIBLE_MODULE_PROPOSAL.md).
+[`ANSIBLE_MODULE_PROPOSAL.md`](docs/plans/ANSIBLE_MODULE_PROPOSAL.md).
 
 - **Backend** `internal/ansible/` + new `ansible.db` (sibling of
   `orchestrator.db`, `--ansible-db` flag). **No new Go deps** — shells out
@@ -474,7 +474,7 @@ Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
   `ApprovalsView` tab (multi-user), RunView awaiting state. Scaffold now
   only forces Runtime when there's no workspace folder.
 - **AN0–AN5 complete.** **AN6a + AN6b done** (`e889f5e`,
-  [`ANSIBLE_RUNTIME_PLAN.md`](ANSIBLE_RUNTIME_PLAN.md)): `internal/ansible/runner.go`
+  [`ANSIBLE_RUNTIME_PLAN.md`](docs/plans/ANSIBLE_RUNTIME_PLAN.md)): `internal/ansible/runner.go`
   `Runner` interface (`Name`/`Probe`/`Command`/`TempDir`/`Setup`/`Teardown`) is
   now the module's one ansible* spawn point — all 7 exec sites route through
   `e.activeRunner(ctx).Command(...)`. `localRunner` = today's system/managed
@@ -526,7 +526,7 @@ Plan + phases: [`ANSIBLE_MODULE_PLAN.md`](ANSIBLE_MODULE_PLAN.md)
 ### Shared error handling (started 2026-08-31, E0–E2 done)
 
 One classify-and-present system for backend/transport failures across every
-module. Plan: [`ERROR_HANDLING_PLAN.md`](ERROR_HANDLING_PLAN.md).
+module. Plan: [`ERROR_HANDLING_PLAN.md`](docs/plans/ERROR_HANDLING_PLAN.md).
 
 - **Backend** `internal/apierr` — coded `Error{code,error,hint,status}`
   (closed code set: `auth_failed`/`unreachable`/`timeout`/`rate_limited`/
@@ -561,7 +561,7 @@ module. Plan: [`ERROR_HANDLING_PLAN.md`](ERROR_HANDLING_PLAN.md).
 (U0–U6) done.** See it and the `*_PLAN.md` docs for detail. Landed since
 2026-09-01: AI **A3b/A3c/A3e**, **A4e/A4f**, **E3** (complete),
 **S3a–S3d + S3f**, **CS** jsrsasign→peculiar, and **user management**
-([`USER_MANAGEMENT_PLAN.md`](USER_MANAGEMENT_PLAN.md)) — opt-in multi-tenant
+([`USER_MANAGEMENT_PLAN.md`](docs/plans/USER_MANAGEMENT_PLAN.md)) — opt-in multi-tenant
 auth (`--auth on`, **off by default — solo desktop byte-identical**),
 per-user AI/vault/runbook/history data, server-side Prompt Library,
 multi-user runbook approvals, admin audit log, self-signed TLS
@@ -574,7 +574,7 @@ embeddings.
 
 ### Hosted web deployment (done 2026-09-03, D0–D5)
 
-[`DEPLOY_PLAN.md`](DEPLOY_PLAN.md) / [`DEPLOY.md`](DEPLOY.md) — run the app as
+[`DEPLOY_PLAN.md`](docs/plans/DEPLOY_PLAN.md) / [`DEPLOY.md`](docs/deployment/DEPLOY.md) — run the app as
 a **container** for a team, not just the desktop build. `docker compose up -d
 --build` in [`deploy/`](deploy/) (Caddy TLS → one backend container serving
 `/api/v1` + the built frontend). New backend flags/env:
@@ -594,7 +594,7 @@ sidecar path unchanged.
 
 ### Observability (done 2026-09-03, O0–O4)
 
-[`OBSERVABILITY_PLAN.md`](OBSERVABILITY_PLAN.md) — closed the prod-readiness
+[`OBSERVABILITY_PLAN.md`](docs/plans/OBSERVABILITY_PLAN.md) — closed the prod-readiness
 gaps. Backend **`internal/obs`**: `slog` (`--log-format text|json`,
 `--log-level`), `obs.Infof/Warnf/Fatalf` bridges (all stdlib `log.*` migrated;
 `backend.yml` guards it), `obs.Recoverer` (panic → slog + stack + coded 500),
@@ -611,7 +611,7 @@ No new deps.
 
 ### Post-observability polish (done 2026-09-03, PL1–PL6)
 
-[`POLISH_PLAN.md`](POLISH_PLAN.md). **PL1** — `internal/backup`: consistent
+[`POLISH_PLAN.md`](docs/plans/POLISH_PLAN.md). **PL1** — `internal/backup`: consistent
 hot snapshots (`VACUUM INTO` per `*.db` + `vault.enc`, tar.gz + manifest),
 `--backup-dir`/`-interval`/`-keep` (+ `INFRAKIT_*`), timer + shutdown
 snapshot, admin `POST /api/v1/admin/backup`; compose gets a separate
@@ -645,7 +645,7 @@ No new runtime deps.
 
 ### Targeted item sharing (done 2026-09-03, SH1–SH5)
 
-[`SHARING_PLAN.md`](SHARING_PLAN.md) — user→user sharing for **Runbooks**,
+[`SHARING_PLAN.md`](docs/plans/SHARING_PLAN.md) — user→user sharing for **Runbooks**,
 **Prompt Library** and **FormFlow** on top of owner/publish. Multi-user only.
 `internal/sharedb` (generic `<thing>_share` CRUD + access helpers) feeds a
 `<thing>_share` table in each store; `Store.CanView`/`CanEdit` fold in the
@@ -663,7 +663,7 @@ module (multi-user only), admin "Reassign owner" section in the dialog.
 ### Utility-tool "power mode" endpoints (added 2026-08-27)
 
 A handful of the 44 client-only tools now have an **optional** backend upgrade —
-see [`TOOL_STRATEGY_REVIEW.md`](TOOL_STRATEGY_REVIEW.md). The browser path is
+see [`TOOL_STRATEGY_REVIEW.md`](docs/plans/TOOL_STRATEGY_REVIEW.md). The browser path is
 unchanged and still works with no backend; these light up only when the sidecar
 / service is present, gated through `adapters/backend/useOptionalBackend.ts`
 (same capability map as the network tools). Endpoints, all non-history:

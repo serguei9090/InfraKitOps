@@ -8,7 +8,7 @@ This module rebuilds that idea **inside InfraKit Studio, from scratch and
 better** — the prototype is replaced, not imported.
 
 This module realises the backend vision already stated in
-[`CLAUDE.md`](CLAUDE.md): *"a Go service for ansible/ssh command execution … "*.
+[`CLAUDE.md`](../../CLAUDE.md): *"a Go service for ansible/ssh command execution … "*.
 It extends the same Go backend the Network Toolkit started (§11).
 
 ---

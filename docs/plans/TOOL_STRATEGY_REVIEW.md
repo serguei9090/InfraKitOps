@@ -11,9 +11,9 @@ implementation the right one, or would a Go library / CLI wrapper be better?*
 > `adapters/backend/useOptionalBackend.ts`.
 
 Scope: all 44 tools across the 7 modules in
-[`moduleTaxonomy.ts`](app/src/adapters/ui/shell/moduleTaxonomy.ts). Applies the
+[`moduleTaxonomy.ts`](../../app/src/adapters/ui/shell/moduleTaxonomy.ts). Applies the
 three-tier rule and the bundled-binary license gate from
-[`CLAUDE.md`](CLAUDE.md).
+[`CLAUDE.md`](../../CLAUDE.md).
 
 ## Bottom line
 
@@ -56,7 +56,7 @@ Nothing to do here.
 
 | Tool | Now | Verdict |
 |------|-----|---------|
-| **SSH Key Pair Generator** | Ed25519 via `@noble/curves`; **RSA-4096 throws** ([`sshKeyGenerator.ts:74`](app/src/core/utility/sshKeyGenerator.ts)) | **BUCKET 3** — backend adds RSA / ECDSA / encrypted keys via Go stdlib. Client Ed25519 stays the zero-dep default |
+| **SSH Key Pair Generator** | Ed25519 via `@noble/curves`; **RSA-4096 throws** ([`sshKeyGenerator.ts:74`](../../app/src/core/utility/sshKeyGenerator.ts)) | **BUCKET 3** — backend adds RSA / ECDSA / encrypted keys via Go stdlib. Client Ed25519 stays the zero-dep default |
 | Hash & Checksum | `@noble/hashes` + `crypto-js` | **KEEP** — correct and fast |
 | bcrypt Hash & Verify | `bcryptjs` | **KEEP** — Go `x/crypto/bcrypt` is only marginally faster; not worth it |
 | Data Converter | `js-yaml` / `smol-toml` / `fast-xml-parser` | **KEEP** — `yq` (MIT) would add nothing |

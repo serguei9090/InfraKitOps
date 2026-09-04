@@ -6,7 +6,7 @@ Network-tools backend for InfraKit Studio. One binary, two deployment modes:
 - **web** — a standalone HTTP service (or absent, in which case the network
   tools show a "backend unavailable" state and the other 44 tools are unaffected)
 
-Full design: [`../NETWORK_MODULE_PLAN.md`](../NETWORK_MODULE_PLAN.md).
+Full design: [`../docs/plans/NETWORK_MODULE_PLAN.md`](../docs/plans/NETWORK_MODULE_PLAN.md).
 
 ## Run
 
