@@ -14,10 +14,11 @@ Solo desktop use runs with **no account, no telemetry, no network** — the 88
 client-side tools work entirely offline; the backend modules light up when the Go
 sidecar is present.
 
-MIT licensed. See [`CLAUDE.md`](CLAUDE.md) for the stack rationale and conventions,
-[`InfraKit Studio Specification.md`](docs/plans/InfraKit%20Studio%20Specification.md) for the
-product spec, [`design.md`](docs/plans/design.md) for the UI/architecture rationale, and the
-`*_PLAN.md` files for per-module design history.
+MIT licensed. **Full documentation — architecture diagrams, one doc per module,
+deployment guides, and a porting/contributing guide — lives in
+[`docs/`](docs/README.md).** See [`CLAUDE.md`](CLAUDE.md) for the stack
+rationale and day-to-day conventions, and [`ROADMAP.md`](ROADMAP.md) for
+what's left, parked, or killed.
 
 ## Why one app instead of ten
 
@@ -59,8 +60,10 @@ and `backend/` (Go) are the only active codebases.
 | **AI Hub** — central LLM layer: Ollama / OpenAI-compatible / Anthropic / Gemini; connections registry; grounding "tasks" reused by other modules; MCP tool-calling with read-only auto-run + write-tool approval gate; MCP resources & prompts; opt-in conversation history; token-usage view | `/tools/ai` | **required** | beta |
 
 **Not done:** Windows code signing (installer triggers a SmartScreen warning — see
-below), brand icons, clean-VM install gate, macOS/Linux packaging. Tracked in
-[`PACKAGING_PLAN.md`](docs/plans/PACKAGING_PLAN.md) / [`ROADMAP.md`](ROADMAP.md).
+[Desktop packaging](docs/deployment/desktop-packaging.md)), brand icons, clean-VM
+install gate, macOS/Linux packaging. Tracked in
+[`docs/plans/PACKAGING_PLAN.md`](docs/plans/PACKAGING_PLAN.md) /
+[`ROADMAP.md`](ROADMAP.md).
 
 ## Stack
 
@@ -81,7 +84,8 @@ PATH-detected and user-installed, never shipped. Every bundled binary is recorde
 
 ## Architecture
 
-Strict hexagonal (ports & adapters):
+Full diagrams: [`docs/architecture/`](docs/architecture/overview.md). Short
+version — strict hexagonal (ports & adapters):
 
 - `app/src/core/**` — pure TypeScript domain logic, **zero React imports** (enforced
   by a grep check before every commit).
@@ -125,11 +129,15 @@ cross-compile sidecar), `desktop.yml` (`cargo check` + `cargo test`, Windows +
 Ubuntu), `links.yml` (Knowledge Hub link health), `release.yml` (`v*` tag → draft
 GitHub Release with MSI/NSIS/deb/AppImage + web zip).
 
-## Self-hosting the web build
+## Deploying
 
-`bun run build` produces `dist/`, deployable to any static host. It runs client-only
-by default (the 88 offline tools). To enable the backend modules, run
-`infrakit-backend` somewhere reachable and set `VITE_BACKEND_URL` /
+Three ways to run this, cheapest first: a downloaded desktop installer, a
+`docker compose up` on your own server, or Kubernetes if you already run a
+cluster. Full guides: [`docs/deployment/`](docs/deployment/README.md).
+
+`bun run build` alone produces `dist/`, deployable to any static host, running
+client-only by default (the 88 offline tools). To enable the backend modules,
+run `infrakit-backend` somewhere reachable and set `VITE_BACKEND_URL` /
 `VITE_BACKEND_TOKEN` at build time, or use Settings → Backend → "Endpoint override"
 at runtime.
 
@@ -145,7 +153,10 @@ default**.
    (`ToolDetailScaffold`, `GeneratorScaffold`, `BalancedFlowScaffold`, …).
 3. Register: one entry in `moduleTaxonomy.ts` + one `lazy:` route in `routes.tsx`.
 
-See [`CLAUDE.md`](CLAUDE.md) for the full walkthrough and the layout-archetype guide.
+Full walkthrough + the layout-archetype guide:
+[`docs/development/adding-a-tool.md`](docs/development/adding-a-tool.md).
+Forking or reusing this codebase elsewhere:
+[`docs/development/porting-guide.md`](docs/development/porting-guide.md).
 
 ## License
 
