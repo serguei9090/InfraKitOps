@@ -5,6 +5,22 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>InfraKit Studio</title>
+    <!-- Paint the themed background before the CSS/JS load, so a cold load or a
+         hard refresh doesn't flash white. Mirrors themeStore (default dark) and
+         AppShellScaffold's `html.dark` toggle. -->
+    <style>
+      html { background: oklch(1 0 0); }
+      html.dark { background: oklch(0.145 0 0); }
+    </style>
+    <script>
+      try {
+        var raw = localStorage.getItem('infrakit:theme')
+        var mode = raw ? (JSON.parse(raw).state || {}).mode : 'dark'
+        if (mode !== 'light') document.documentElement.classList.add('dark')
+      } catch (e) {
+        document.documentElement.classList.add('dark')
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

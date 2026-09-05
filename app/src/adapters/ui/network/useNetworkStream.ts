@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { openStream } from '@/adapters/backend/sseClient'
 import { saveRun } from '@/adapters/backend/historyClient'
 import type { RunEnvelope } from '@/core/network/history'
@@ -68,6 +68,17 @@ export function useNetworkStream({ path, onStart, onEvent, save = true }: UseNet
     abortRef.current?.()
     abortRef.current = null
     setStatus((s) => (s === 'streaming' ? 'idle' : s))
+  }, [])
+
+  // Abort any in-flight stream when the tool screen unmounts (navigating away
+  // without pressing Stop). A leaked SSE connection stays open and, a few
+  // navigations later, exhausts the browser's per-host connection limit —
+  // every subsequent backend call, /health included, then stalls.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.()
+      abortRef.current = null
+    }
   }, [])
 
   return {
