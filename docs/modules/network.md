@@ -57,3 +57,5 @@ original phased roadmap (N0–N4).
 [`docs/plans/DISCOVERY_PROTOCOL_PLAN.md`](../plans/DISCOVERY_PROTOCOL_PLAN.md),
 [`docs/plans/TRACEROUTE_PLUS_PLAN.md`](../plans/TRACEROUTE_PLUS_PLAN.md) — later
 additions (LLDP/CDP discovery, enhanced traceroute + route map).
+[`docs/plans/PING_MONITOR_MULTI_TARGET_PLAN.md`](../plans/PING_MONITOR_MULTI_TARGET_PLAN.md) —
+adding/removing a host from an already-running Ping Monitor session.
