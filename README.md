@@ -5,6 +5,10 @@ who touches Ansible, runbooks, network diagnostics, config files, LLM prompts, a
 pile of encode/convert/hash utilities in the same week, and doesn't want to host and
 maintain a separate server for each.
 
+![InfraKit Studio — multi-host ping monitor, traceroute, and the tool rail](docs/assets/demo.gif)
+
+<sub>▶ [full walkthrough (mp4)](docs/assets/demo.mp4) · more stills in [`docs/assets/screenshots/`](docs/assets/screenshots/)</sub>
+
 One React codebase, shipped two ways:
 
 - a **static web app** (`bun run build` → any static host), and
@@ -38,6 +42,19 @@ try to. It's:
 
 If you live in Ansible every day, use AWX. If you live in prompts, use Open WebUI.
 This is for everyone else.
+
+## A look around
+
+| | |
+|---|---|
+| [![All Tools](docs/assets/screenshots/01-all-tools.png)](docs/assets/screenshots/01-all-tools.png) | [![Ping Monitor](docs/assets/screenshots/07-ping-monitor.png)](docs/assets/screenshots/07-ping-monitor.png) |
+| **All Tools** — the module grid | **Ping Monitor** — concurrent multi-host latency, add/remove targets live |
+| [![Traceroute](docs/assets/screenshots/08-traceroute.png)](docs/assets/screenshots/08-traceroute.png) | [![SSH config builder](docs/assets/screenshots/04-ssh-config.png)](docs/assets/screenshots/04-ssh-config.png) |
+| **Traceroute** — mtr-style per-hop stats + route map | **Config builders** — SSH, nginx, sysctl, Fail2ban… |
+| [![Ansible](docs/assets/screenshots/11-ansible.png)](docs/assets/screenshots/11-ansible.png) | [![AI Hub](docs/assets/screenshots/12-ai-hub.png)](docs/assets/screenshots/12-ai-hub.png) |
+| **Ansible Manager** — live play → task → host tree | **AI Hub** — one LLM layer every module reuses |
+
+Regenerate these: [`tools/capture/`](tools/capture/README.md).
 
 ## Status (2026-09-02)
 

@@ -1,0 +1,13 @@
+{
+  "name": "infrakit-capture",
+  "private": true,
+  "type": "module",
+  "description": "Playwright screenshots + demo clip of InfraKit Studio for the README and articles. Isolated from the app so `playwright` never touches app/'s install.",
+  "scripts": {
+    "capture": "node capture.ts",
+    "postinstall": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "1.49.1"
+  }
+}
