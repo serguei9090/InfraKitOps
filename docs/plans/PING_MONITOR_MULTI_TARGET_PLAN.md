@@ -1,6 +1,6 @@
 # Ping Monitor — add/remove targets mid-session
 
-## Status: done (`<pending>`)
+## Status: done (`1dcdb60`)
 
 Shipped as planned — frontend-only, `PingMonitorScreen.tsx`. Implementation
 notes below; the plan/rationale that follows is unchanged. One deviation:
