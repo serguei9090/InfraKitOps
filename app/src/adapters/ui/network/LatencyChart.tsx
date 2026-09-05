@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { cn } from '@/lib/utils'
 
 export interface ChartSeries {
   host: string
@@ -17,22 +18,37 @@ interface LatencyChartProps {
 /**
  * Lightweight multi-series latency chart — inline SVG, no dependency, offline.
  * A faint grid, an area under each line, an emphasised last point. Losses show
- * as gaps. See NETWORK_MODULE_PLAN.md §3 ("give sparklines the same care as type").
+ * as gaps. A legend row lets each host's line be hidden/shown independently —
+ * useful once more than a couple of hosts are being monitored at once.
+ * See NETWORK_MODULE_PLAN.md §3 ("give sparklines the same care as type").
  */
 export function LatencyChart({ series, windowSec = 120, height = 160 }: LatencyChartProps) {
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set())
+  const visible = series.filter((s) => !hidden.has(s.host))
+
+  function toggle(host: string) {
+    setHidden((cur) => {
+      const next = new Set(cur)
+      if (next.has(host)) next.delete(host)
+      else next.add(host)
+      return next
+    })
+  }
+
   const now = Date.now()
   const tMin = now - windowSec * 1000
 
   const model = useMemo(() => {
     let maxMs = 10
-    for (const s of series) {
+    for (const s of visible) {
       for (const p of s.points) {
         if (p.t >= tMin && p.ms != null && p.ms > maxMs) maxMs = p.ms
       }
     }
     maxMs = niceCeil(maxMs)
     return { maxMs }
-  }, [series, tMin])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [series, hidden, tMin])
 
   const W = 600
   const H = height
@@ -52,6 +68,33 @@ export function LatencyChart({ series, windowSec = 120, height = 160 }: LatencyC
 
   return (
     <div className="overflow-hidden rounded-lg border border-border/60 bg-card">
+      {series.length > 1 ? (
+        <div className="flex flex-wrap gap-1.5 border-b border-border/60 px-2.5 py-2">
+          {series.map((s) => {
+            const isHidden = hidden.has(s.host)
+            return (
+              <button
+                key={s.host}
+                type="button"
+                onClick={() => toggle(s.host)}
+                title={isHidden ? `Show ${s.host}` : `Hide ${s.host}`}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[11px] transition-colors',
+                  isHidden
+                    ? 'border-border/60 text-muted-foreground/60 line-through'
+                    : 'border-border/60 text-foreground hover:bg-muted',
+                )}
+              >
+                <span
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: s.color, opacity: isHidden ? 0.3 : 1 }}
+                />
+                {s.host}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" role="img" aria-label="Latency over time">
         {gridLines.map((g) => (
           <g key={g.yy}>
@@ -61,7 +104,7 @@ export function LatencyChart({ series, windowSec = 120, height = 160 }: LatencyC
             </text>
           </g>
         ))}
-        {series.map((s) => {
+        {visible.map((s) => {
           const pts = s.points.filter((p) => p.t >= tMin)
           const segments = splitOnGaps(pts)
           const lastOk = [...pts].reverse().find((p) => p.ms != null)
