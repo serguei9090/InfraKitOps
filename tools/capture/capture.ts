@@ -214,20 +214,23 @@ let webm = ''
   await p.goto(`${BASE}/`, { waitUntil: 'networkidle' })
   await p.waitForTimeout(1500)
 
-  await step(() => p.goto(`${BASE}/`, { waitUntil: 'networkidle' }), 2000)
-  await step(() => p.goto(`${BASE}/tools/ping-monitor`, { waitUntil: 'networkidle' }), 1200)
+  // In-app (SPA) navigation from here on — a hard p.goto reloads the whole
+  // page (skeleton blink); clicking the rail keeps the shell mounted.
+  const rail = (label: string) => p.getByRole('button', { name: label, exact: true }).first().click()
+
+  await step(() => p.goto(`${BASE}/tools/ping-monitor`, { waitUntil: 'networkidle' }), 1400)
   await step(() => type_(p, 'input#pm-hosts', '1.1.1.1; 8.8.8.8; 9.9.9.9'), 400)
   await step(() => p.getByRole('button', { name: 'Start' }).click(), 9000)
   await step(() => type_(p, 'input[placeholder="add a host…"]', 'one.one.one.one'), 300)
   await step(() => p.getByRole('button', { name: 'Add host' }).click(), 5000)
   await step(() => p.getByRole('button', { name: '8.8.8.8', exact: true }).click(), 2500) // legend toggle
-  await step(() => p.goto(`${BASE}/tools/traceroute`, { waitUntil: 'networkidle' }), 900)
+  await step(() => p.goto(`${BASE}/tools/traceroute`, { waitUntil: 'networkidle' }), 1000)
   await step(() => type_(p, 'input#tr-host', '1.1.1.1'), 300)
   await step(() => p.getByRole('button', { name: 'Trace', exact: true }).click(), 6000)
-  await step(() => p.goto(`${BASE}/tools/ai`, { waitUntil: 'networkidle' }), 2600)
-  await step(() => p.goto(`${BASE}/tools/runbook`, { waitUntil: 'networkidle' }), 2600)
-  await step(() => p.goto(`${BASE}/tools/ansible`, { waitUntil: 'networkidle' }), 2600)
-  await step(() => p.goto(`${BASE}/`, { waitUntil: 'networkidle' }), 1600)
+  await step(() => rail('AI Hub'), 2600)
+  await step(() => rail('Runbooks'), 2600)
+  await step(() => rail('Ansible'), 2600)
+  await step(() => p.getByRole('button', { name: 'All Tools' }).first().click().catch(() => p.goto(`${BASE}/`)), 1800)
 
   const v = p.video()
   await ctx.close()
