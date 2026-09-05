@@ -224,9 +224,9 @@ let webm = ''
   await step(() => p.goto(`${BASE}/tools/traceroute`, { waitUntil: 'networkidle' }), 900)
   await step(() => type_(p, 'input#tr-host', '1.1.1.1'), 300)
   await step(() => p.getByRole('button', { name: 'Trace', exact: true }).click(), 6000)
-  await step(() => p.goto(`${BASE}/tools/ai`, { waitUntil: 'networkidle' }), 1800)
-  await step(() => p.goto(`${BASE}/tools/runbook`, { waitUntil: 'networkidle' }), 1800)
-  await step(() => p.goto(`${BASE}/tools/ansible`, { waitUntil: 'networkidle' }), 1800)
+  await step(() => p.goto(`${BASE}/tools/ai`, { waitUntil: 'networkidle' }), 2600)
+  await step(() => p.goto(`${BASE}/tools/runbook`, { waitUntil: 'networkidle' }), 2600)
+  await step(() => p.goto(`${BASE}/tools/ansible`, { waitUntil: 'networkidle' }), 2600)
   await step(() => p.goto(`${BASE}/`, { waitUntil: 'networkidle' }), 1600)
 
   const v = p.video()
