@@ -38,13 +38,33 @@ until T3 lands the new UI.
   (a stopped SSE stream never delivers its `done`, so live traces weren't
   persisted). Capability `modes` list **deferred with T1b** — nothing to
   advertise until UDP/TCP land.
-- **T1b — deferred.** `probeCfg` refactor + `SupportedProtocols()` gate are
-  in (engine dispatches on `cfg.proto`, `Run` rejects unsupported), but
-  `supportedProtos()` returns `["icmp"]` on every platform. UDP/TCP need a
-  raw ICMP listen socket (`CAP_NET_RAW` on Linux; admin + `SIO_RCVALL` on
-  Windows) — worth doing only for a privileged Linux backend deploy, and
-  ICMP already covers the default path on every OS. Unpark when a
-  Linux-hosted backend needs it.
+- **T1b — UDP done, TCP still deferred.** Shipped as a **separate tool**
+  ("UDP Traceroute", `udp-traceroute`), not a mode toggle on the existing
+  Traceroute screen — the two have different privilege/availability
+  profiles and this keeps the common ICMP path simple. `probeUDPHop` in
+  `probe_other.go`/`probe_windows.go`: opens a raw ICMP listen socket
+  (`icmp.ListenPacket("ip4:icmp", ...)`) + a UDP send socket with
+  `SetTTL(ttl)`, reads back `TimeExceeded` (intermediate hop) or
+  `DestinationUnreachable`/port-unreachable from the target itself
+  (`Reached`) — the classic Unix traceroute signal. `udpAvailable()`
+  gates `supportedProtos()`/the `udp-traceroute` capability by actually
+  attempting the raw-socket open, not by OS assumption.
+  **Verified**: Linux (Docker container, `--cap-add=NET_RAW`) — real
+  hop-1 reply with correct jittered RTTs; further hops were hidden by
+  Docker's own bridge NAT, not a code issue. **Known Windows caveat**:
+  the raw ICMP listen socket opens successfully (even unelevated, on the
+  dev machine tested) and the capability reports available, but no
+  replies were observed in practice — almost certainly Windows Firewall
+  silently dropping inbound ICMP error messages that don't correlate to
+  a tracked flow the way ICMP-echo replies do (this is the documented
+  reason Windows' own `tracert.exe` never offers a UDP mode). Not
+  something to code around; the tool degrades safely to 100%-loops shown
+  as timeouts, same as any other unreachable path, and a determined
+  Windows user can add a firewall allow-rule for inbound ICMP if they
+  want it. TCP mode stays deferred — Windows has blocked raw TCP segment
+  construction since XP SP2, so a real per-hop SYN trace needs a
+  packet-crafting driver (Npcap-class), which this project's license
+  policy already excludes; unpark TCP only for a Linux-primary build.
 
 ## Phases
 

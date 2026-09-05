@@ -8,6 +8,7 @@ import (
 	"github.com/infrakit/backend/internal/privilege"
 	"github.com/infrakit/backend/internal/tools/iperf"
 	"github.com/infrakit/backend/internal/tools/lldp"
+	"github.com/infrakit/backend/internal/tools/traceroute"
 )
 
 // Capability describes whether one tool can run in the current environment.
@@ -41,6 +42,7 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		"wake-on-lan":        {Available: true},
 		"ping-monitor":       {Available: true}, // IcmpSendEcho / datagram — unprivileged
 		"traceroute":         {Available: true},
+		"udp-traceroute":     udpTracerouteCap(),
 		"port-scanner":       {Available: true},
 		"network-scanner":    {Available: true}, // ICMP + port probe (ARP discovery needs elevation/Npcap — N4)
 		"neighbor-table":     {Available: true},
@@ -95,6 +97,30 @@ func discoveryCap() Capability {
 		c.NeedsElevation = true
 	}
 	return c
+}
+
+// udpTracerouteCap: UDP path tracing needs a raw ICMP listen socket to catch
+// time-exceeded / port-unreachable replies — root/CAP_NET_RAW on Linux,
+// Administrator on Windows. traceroute.SupportedProtocols() does the actual
+// probe (open + immediately close a raw socket); this just turns that into
+// a Capability with a platform-specific fix-it reason.
+func udpTracerouteCap() Capability {
+	for _, p := range traceroute.SupportedProtocols() {
+		if p == traceroute.ProtoUDP {
+			return Capability{Available: true}
+		}
+	}
+	if runtime.GOOS == "windows" {
+		return Capability{
+			Available:      false,
+			Reason:         "UDP path tracing needs the backend running as administrator (raw ICMP socket)",
+			NeedsElevation: true,
+		}
+	}
+	return Capability{
+		Available: false,
+		Reason:    "UDP path tracing needs root or CAP_NET_RAW (raw ICMP socket) — try sudo, or `setcap cap_net_raw+ep` on the binary",
+	}
 }
 
 // firewallEditCap: write CRUD is Windows-only in this release, and each apply

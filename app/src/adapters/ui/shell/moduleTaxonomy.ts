@@ -423,6 +423,7 @@ export const kModuleTaxonomy: ModuleDef[] = [
 
       { id: 'ping-monitor', name: 'Ping Monitor', description: 'Continuous multi-host latency, loss % & live chart', icon: Activity, route: '/tools/ping-monitor', group: 'Reachability' },
       { id: 'traceroute', name: 'Traceroute', description: 'Per-hop RTT with geolocation and a route map', icon: Route, route: '/tools/traceroute', group: 'Reachability' },
+      { id: 'udp-traceroute', name: 'UDP Traceroute', description: 'UDP-probe path trace — works when a network blocks ICMP', icon: Waypoints, route: '/tools/udp-traceroute', group: 'Reachability' },
 
       { id: 'port-scanner', name: 'Port Scanner', description: 'Concurrent TCP port sweep with service names', icon: ScanSearch, route: '/tools/port-scanner', group: 'Discovery' },
       { id: 'network-scanner', name: 'IP / Network Scanner', description: 'Discover hosts by ICMP, ARP, reverse DNS & port probe', icon: ScanLine, route: '/tools/network-scanner', group: 'Discovery' },

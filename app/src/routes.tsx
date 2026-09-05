@@ -122,6 +122,7 @@ export const router = createBrowserRouter([
       { path: 'tools/port-scanner', lazy: () => import('./adapters/ui/tools/PortScannerScreen').then((m) => ({ Component: m.PortScannerScreen })) },
       { path: 'tools/ping-monitor', lazy: () => import('./adapters/ui/tools/PingMonitorScreen').then((m) => ({ Component: m.PingMonitorScreen })) },
       { path: 'tools/traceroute', lazy: () => import('./adapters/ui/tools/TracerouteScreen').then((m) => ({ Component: m.TracerouteScreen })) },
+      { path: 'tools/udp-traceroute', lazy: () => import('./adapters/ui/tools/TracerouteScreen').then((m) => ({ Component: m.UdpTracerouteScreen })) },
       { path: 'tools/network-scanner', lazy: () => import('./adapters/ui/tools/NetworkScannerScreen').then((m) => ({ Component: m.NetworkScannerScreen })) },
       { path: 'tools/snmp', lazy: () => import('./adapters/ui/tools/SnmpScreen').then((m) => ({ Component: m.SnmpScreen })) },
       { path: 'tools/discovery-protocol', lazy: () => import('./adapters/ui/tools/DiscoveryProtocolScreen').then((m) => ({ Component: m.DiscoveryProtocolScreen })) },

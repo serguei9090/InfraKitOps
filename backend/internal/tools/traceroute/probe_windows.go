@@ -9,6 +9,8 @@ import (
 	"time"
 	"unsafe"
 
+	"golang.org/x/net/icmp"
+	"golang.org/x/net/ipv4"
 	"golang.org/x/sys/windows"
 )
 
@@ -45,13 +47,38 @@ const (
 	ipTTLExpiredReassem = 11014
 )
 
-// supportedProtos: Windows has no unprivileged raw sockets and IcmpSendEcho is
-// ICMP-only, so UDP/TCP path tracing isn't offered here yet.
-func supportedProtos() []string { return []string{ProtoICMP} }
+// udpAvailable reports whether a raw ICMP listen socket can be opened. UDP
+// path tracing needs one to catch time-exceeded / port-unreachable replies;
+// Windows restricts raw sockets to an elevated (Administrator) process —
+// IcmpSendEcho's unprivileged path is ICMP-only and can't be reused for this.
+func udpAvailable() bool {
+	conn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+// supportedProtos: ICMP always (IcmpSendEcho, unprivileged); UDP only when
+// running elevated (raw ICMP listen socket). TCP path tracing (T1b) is not
+// offered — Windows has blocked raw TCP segment construction since XP SP2,
+// so a real per-hop SYN trace needs a packet-crafting driver this project's
+// license policy already excludes (Npcap).
+func supportedProtos() []string {
+	protos := []string{ProtoICMP}
+	if udpAvailable() {
+		protos = append(protos, ProtoUDP)
+	}
+	return protos
+}
 
 // probeHopImpl uses IcmpSendEcho with an explicit TTL — unprivileged on Windows.
 // A TTL-expired reply still returns the responding router's address.
 func probeHopImpl(_ context.Context, cfg probeCfg) []HopProbe {
+	if cfg.proto == ProtoUDP {
+		return probeUDPHop(cfg)
+	}
 	dest, ttl, count, timeout := cfg.dest, cfg.ttl, cfg.count, cfg.timeout
 	out := make([]HopProbe, 0, count)
 
@@ -107,6 +134,74 @@ func probeHopImpl(_ context.Context, cfg probeCfg) []HopProbe {
 			hp.Addr = ""
 		}
 		out = append(out, hp)
+	}
+	return out
+}
+
+// probeUDPHop sends UDP datagrams to a (normally unlistened) high port with
+// an explicit TTL and reads the ICMP error each hop sends back: a
+// time-exceeded from an intermediate router, or a destination-unreachable
+// (port unreachable) from the target itself once the packet actually
+// arrives. Needs a raw ICMP listen socket, i.e. an elevated process; gated
+// by udpAvailable() before Run() ever calls this.
+func probeUDPHop(cfg probeCfg) []HopProbe {
+	dest, ttl, count, timeout, port := cfg.dest, cfg.ttl, cfg.count, cfg.timeout, cfg.port
+	out := make([]HopProbe, 0, count)
+
+	icmpConn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+	if err != nil {
+		for i := 0; i < count; i++ {
+			out = append(out, HopProbe{TimedOut: true})
+		}
+		return out
+	}
+	defer icmpConn.Close()
+
+	udpConn, err := net.ListenUDP("udp4", nil)
+	if err != nil {
+		for i := 0; i < count; i++ {
+			out = append(out, HopProbe{TimedOut: true})
+		}
+		return out
+	}
+	defer udpConn.Close()
+	_ = ipv4.NewPacketConn(udpConn).SetTTL(ttl)
+
+	payload := []byte("infrakit-traceroute")
+	buf := make([]byte, 1500)
+
+	for seq := 0; seq < count; seq++ {
+		start := time.Now()
+		if _, err := udpConn.WriteToUDP(payload, &net.UDPAddr{IP: dest, Port: port}); err != nil {
+			out = append(out, HopProbe{TimedOut: true})
+			continue
+		}
+		_ = icmpConn.SetReadDeadline(time.Now().Add(timeout))
+
+		n, peer, err := icmpConn.ReadFrom(buf)
+		if err != nil {
+			out = append(out, HopProbe{TimedOut: true})
+			continue
+		}
+		rtt := time.Since(start)
+		parsed, perr := icmp.ParseMessage(1, buf[:n])
+		if perr != nil {
+			out = append(out, HopProbe{TimedOut: true})
+			continue
+		}
+		peerIP, _ := peer.(*net.IPAddr)
+		addr := ""
+		if peerIP != nil {
+			addr = peerIP.IP.String()
+		}
+		switch parsed.Type {
+		case ipv4.ICMPTypeTimeExceeded:
+			out = append(out, HopProbe{RTT: rtt, Addr: addr})
+		case ipv4.ICMPTypeDestinationUnreachable:
+			out = append(out, HopProbe{RTT: rtt, Addr: addr, Reached: addr == dest.String()})
+		default:
+			out = append(out, HopProbe{TimedOut: true})
+		}
 	}
 	return out
 }

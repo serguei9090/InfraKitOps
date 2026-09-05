@@ -1,7 +1,8 @@
 # Network Toolkit
 
-The first backend-mandatory module — ping monitor, traceroute + route map,
-DNS, whois, SNMP v1/v2c/v3, SNTP, port/network scan, iperf3, neighbor table,
+The first backend-mandatory module — ping monitor, traceroute + route map
+(ICMP and UDP probe modes, as two separate tools), DNS, whois,
+SNMP v1/v2c/v3, SNTP, port/network scan, iperf3, neighbor table,
 connections, and a firewall viewer with write CRUD (Windows). Backend
 required because these need raw sockets, ICMP, or OS-level tables that a
 browser sandbox cannot reach.

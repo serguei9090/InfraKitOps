@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
+import { ShieldAlert } from 'lucide-react'
 import { saveRun } from '@/adapters/backend/historyClient'
 import type { RunEnvelope } from '@/core/network/history/envelope'
 import {
@@ -15,6 +16,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useBackendStore } from '@/stores/backendStore'
 import type { GeoPoint } from '@/adapters/ui/network/GeoMap'
 import type { TraceHop, TraceHopStat } from '@/core/network/toolResults'
 
@@ -70,7 +72,18 @@ function toCSV(rows: TraceHopStat[]): string {
   return [head.join(','), ...body].join('\n')
 }
 
-export function TracerouteScreen() {
+interface TracerouteScreenProps {
+  /** `undefined`/`'icmp'` = the default ICMP mode. `'udp'` = the UDP Traceroute tool. */
+  protocol?: 'icmp' | 'udp'
+  /** Capability id + history/saved-targets bucket. Keeps UDP Traceroute's data separate. */
+  toolId?: string
+  title?: string
+}
+
+export function TracerouteScreen({ protocol = 'icmp', toolId = 'traceroute', title = 'Traceroute' }: TracerouteScreenProps = {}) {
+  const capability = useBackendStore((s) => s.capabilities?.capabilities[toolId])
+  const unavailable = Boolean(capability && !capability.available)
+
   const [host, setHost] = useState('')
   const [maxHops, setMaxHops] = useState(30)
   const [geo, setGeo] = useState(false)
@@ -141,6 +154,7 @@ export function TracerouteScreen() {
       maxHops: String(maxHops),
       geo: String(geo),
       resolve: 'true',
+      protocol,
     }
     if (asn) params.asn = 'true'
     if (mode === 'live') {
@@ -169,7 +183,7 @@ export function TracerouteScreen() {
     }))
     const reachedAny = stats.some((s) => s.reached)
     const env: RunEnvelope = {
-      tool: 'traceroute',
+      tool: toolId,
       target: host.trim(),
       startedAt: startRef.current || Date.now(),
       finishedAt: Date.now(),
@@ -279,8 +293,8 @@ export function TracerouteScreen() {
 
   return (
     <NetworkToolScaffold
-      title="Traceroute"
-      toolId="traceroute"
+      title={title}
+      toolId={toolId}
       historyTarget={host.trim()}
       historyRefreshKey={completions + savedKey}
       onRestoreRun={(stored) => {
@@ -292,7 +306,7 @@ export function TracerouteScreen() {
       }}
       savedTargets={
         <SavedTargetsPane
-          tool="traceroute"
+          tool={toolId}
           currentParams={host.trim() ? { host: host.trim(), maxHops } : null}
           currentLabel={host.trim()}
           onLoad={(p) => {
@@ -319,7 +333,7 @@ export function TracerouteScreen() {
           onRun={run}
           onStop={stop}
           running={streaming}
-          canRun={host.trim().length > 0}
+          canRun={host.trim().length > 0 && !unavailable}
           runLabel={mode === 'live' ? 'Start' : 'Trace'}
           advanced={
             <>
@@ -390,7 +404,14 @@ export function TracerouteScreen() {
         </QueryBar>
       }
       results={
-        error ? (
+        unavailable ? (
+          <div className="mx-auto max-w-lg rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+            <div className="mb-1 flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400">
+              <ShieldAlert className="size-4" /> {title} unavailable
+            </div>
+            <p className="text-muted-foreground">{capability?.reason}</p>
+          </div>
+        ) : error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : stats.length === 0 && !streaming ? (
           <p className="text-sm text-muted-foreground">Enter a destination and press {mode === 'live' ? 'Start' : 'Trace'}.</p>
@@ -415,4 +436,19 @@ export function TracerouteScreen() {
       }
     />
   )
+}
+
+/**
+ * UDP path tracing — same engine and UI as {@link TracerouteScreen}, a
+ * different probe: UDP datagrams to a high port instead of ICMP echoes.
+ * Useful when a network blocks/rate-limits ICMP but allows UDP/TCP traffic
+ * through — a separate tool (not a mode toggle) because its availability
+ * profile differs: it needs a raw ICMP *listen* socket to catch the
+ * time-exceeded/port-unreachable replies, which needs root/CAP_NET_RAW on
+ * Linux or an elevated process on Windows (where it may also see no
+ * replies at all even when the socket opens, if Windows Firewall drops
+ * unsolicited inbound ICMP errors — see TRACEROUTE_PLUS_PLAN.md T1b).
+ */
+export function UdpTracerouteScreen() {
+  return <TracerouteScreen protocol="udp" toolId="udp-traceroute" title="UDP Traceroute" />
 }
