@@ -1,6 +1,17 @@
-# Ping Monitor — add/remove targets mid-session (plan)
+# Ping Monitor — add/remove targets mid-session
 
-## Status: not started
+## Status: done (`<pending>`)
+
+Shipped as planned — frontend-only, `PingMonitorScreen.tsx`. Implementation
+notes below; the plan/rationale that follows is unchanged. One deviation:
+the `preserveOnStart` ref wasn't needed — `addHost`/`removeHost` compute the
+new host list explicitly and pass it to a `launch(nextHosts, preserve)`
+helper, so there's no stale-closure window and no `onStart` callback at all
+(`tracksMap` setup moved inline into `launch`). Verified in-browser: added a
+3rd host to a running 2-host session (existing lines stayed continuous, new
+host started fresh, backend counters reset as documented), removed one
+(card/line/legend-chip vanished, the rest kept running), removed the last
+one (session stopped cleanly).
 
 Multi-host concurrent ping already exists and works — `internal/tools/ping.Monitor`
 spawns one goroutine per host, the frontend already renders a combined

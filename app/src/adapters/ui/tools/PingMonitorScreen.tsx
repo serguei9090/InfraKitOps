@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { X } from 'lucide-react'
 import { saveRun } from '@/adapters/backend/historyClient'
 import { listRuns } from '@/adapters/backend/historyClient'
 import {
@@ -12,6 +13,7 @@ import {
   useNetworkStream,
   type ChartSeries,
 } from '@/adapters/ui/network'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { seriesOverTime, type RunEnvelope } from '@/core/network/history'
 import type { PingSample, PingStats } from '@/core/network/toolResults'
@@ -38,12 +40,7 @@ export function PingMonitorScreen() {
 
   const [tracksMap, setTracksMap] = useState<Map<string, HostTrack>>(new Map())
   const [priorSeries, setPriorSeries] = useState<number[]>([])
-
-  const onStart = useCallback(() => {
-    const m = new Map<string, HostTrack>()
-    hosts.forEach((h, i) => m.set(h, { host: h, color: COLORS[i % COLORS.length], stats: null, points: [] }))
-    setTracksMap(m)
-  }, [hosts])
+  const [addText, setAddText] = useState('')
 
   const onEvent = useCallback((name: string, data: unknown) => {
     setTracksMap((prev) => {
@@ -66,14 +63,53 @@ export function PingMonitorScreen() {
 
   const { streaming, error, start, stop } = useNetworkStream({
     path: '/ping-monitor/stream',
-    onStart,
     onEvent,
     save: false,
   })
 
+  /**
+   * (Re)open the stream for `nextHosts`. `preserve` keeps each host already in
+   * `tracksMap` — its accumulated points/stats survive the reconnect, so the
+   * chart shows no gap; only the backend's small running counters restart.
+   * See PING_MONITOR_MULTI_TARGET_PLAN.md.
+   */
+  const launch = useCallback(
+    (nextHosts: string[], preserve: boolean) => {
+      if (nextHosts.length === 0) {
+        stop()
+        return
+      }
+      setTracksMap((prev) => {
+        const m = new Map<string, HostTrack>()
+        nextHosts.forEach((h, i) => {
+          const kept = preserve ? prev.get(h) : undefined
+          m.set(h, kept ?? { host: h, color: COLORS[i % COLORS.length], stats: null, points: [] })
+        })
+        return m
+      })
+      start({ hosts: nextHosts.join(';'), intervalMs: String(intervalMs), downThreshold: String(downThreshold) })
+    },
+    [start, stop, intervalMs, downThreshold],
+  )
+
   function run() {
     if (hosts.length === 0) return
-    start({ hosts: hosts.join(';'), intervalMs: String(intervalMs), downThreshold: String(downThreshold) })
+    launch(hosts, false)
+  }
+
+  function addHost(raw: string) {
+    const h = raw.trim()
+    if (!h || hosts.includes(h)) return
+    const next = [...hosts, h]
+    setHostsText(next.join('; '))
+    setAddText('')
+    launch(next, true)
+  }
+
+  function removeHost(h: string) {
+    const next = hosts.filter((x) => x !== h)
+    setHostsText(next.join('; '))
+    launch(next, true)
   }
 
   async function stopAndSave() {
@@ -220,10 +256,24 @@ export function PingMonitorScreen() {
           </div>
         ) : (
           <div className="space-y-4">
+            {streaming ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={addText}
+                  onChange={(e) => setAddText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addHost(addText)}
+                  placeholder="add a host…"
+                  className="h-8 max-w-[16rem] font-mono text-sm"
+                />
+                <Button type="button" size="sm" variant="outline" onClick={() => addHost(addText)} disabled={!addText.trim()}>
+                  Add host
+                </Button>
+              </div>
+            ) : null}
             <LatencyChart series={chartSeries} windowSec={120} />
             <div className="grid gap-3 sm:grid-cols-2">
               {tracks.map((t) => (
-                <HostCard key={t.host} track={t} />
+                <HostCard key={t.host} track={t} onRemove={streaming ? () => removeHost(t.host) : undefined} />
               ))}
             </div>
           </div>
@@ -233,13 +283,14 @@ export function PingMonitorScreen() {
   )
 }
 
-function HostCard({ track }: { track: HostTrack }) {
+function HostCard({ track, onRemove }: { track: HostTrack; onRemove?: () => void }) {
   const s = track.stats
   const recent = track.points.slice(-40).filter((p) => p.ms != null).map((p) => p.ms as number)
   return (
     <div className="rounded-lg border border-border/60 bg-card p-3">
       <div className="flex items-center justify-between">
         <span className="font-mono text-sm">{track.host}</span>
+        <div className="flex items-center gap-1.5">
         <span
           className={cn(
             'rounded-full px-2 py-0.5 text-xs font-medium',
@@ -250,6 +301,17 @@ function HostCard({ track }: { track: HostTrack }) {
         >
           {s?.status ?? 'pending'}
         </span>
+        {onRemove ? (
+          <button
+            type="button"
+            onClick={onRemove}
+            title={`Stop pinging ${track.host}`}
+            className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        ) : null}
+        </div>
       </div>
       {s ? (
         <>
