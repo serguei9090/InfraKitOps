@@ -1,5 +1,6 @@
 import { Loader2, Unplug } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useBackendStore } from '@/stores/backendStore'
 
 interface BackendUnavailableProps {
   onRetry: () => void
@@ -14,6 +15,10 @@ interface BackendUnavailableProps {
  * NETWORK_MODULE_PLAN.md §2.1.
  */
 export function BackendUnavailable({ onRetry, retrying, reason }: BackendUnavailableProps) {
+  // The app-wide auto-connect loop keeps probing; reflect that here so the
+  // button reads "Connecting…" during warm-up rather than an idle "Retry".
+  const autoReconnecting = useBackendStore((s) => s.reconnecting)
+  const busy = retrying || autoReconnecting
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center">
       <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -26,9 +31,9 @@ export function BackendUnavailable({ onRetry, retrying, reason }: BackendUnavail
             'This tool runs against the local infrakit-backend service. The desktop app starts it automatically; the web build needs it configured.'}
         </p>
       </div>
-      <Button variant="outline" size="sm" onClick={onRetry} disabled={retrying} className="gap-1.5">
-        {retrying ? <Loader2 className="size-4 animate-spin" /> : null}
-        {retrying ? 'Connecting…' : 'Retry'}
+      <Button variant="outline" size="sm" onClick={onRetry} disabled={busy} className="gap-1.5">
+        {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+        {busy ? 'Connecting…' : 'Retry'}
       </Button>
       <details className="w-full text-left text-xs text-muted-foreground">
         <summary className="cursor-pointer select-none">Setup</summary>

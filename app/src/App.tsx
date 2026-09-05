@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { router } from './routes'
 import { useAuthStore } from './stores/authStore'
+import { useBackendStore } from './stores/backendStore'
 import { AuthGate, ForcedPasswordChange } from './adapters/ui/auth/AuthGate'
 import { ErrorBoundary } from './adapters/ui/errors/ErrorBoundary'
 
@@ -10,10 +11,17 @@ function App() {
   const mode = useAuthStore((s) => s.mode)
   const me = useAuthStore((s) => s.me)
   const init = useAuthStore((s) => s.init)
+  const startAutoConnect = useBackendStore((s) => s.startAutoConnect)
 
   useEffect(() => {
     void init()
   }, [init])
+
+  // Self-healing backend connect loop: covers the desktop sidecar's warm-up
+  // race and reconnects after a backend restart without a manual Retry click.
+  useEffect(() => {
+    startAutoConnect()
+  }, [startAutoConnect])
 
   // Until the /health probe resolves we don't know whether to gate — a brief
   // blank is fine (the same window the router's HydrateFallback would show).
