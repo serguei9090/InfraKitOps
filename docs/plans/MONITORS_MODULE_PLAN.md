@@ -177,31 +177,30 @@ sweep you do yourself, not a pager.
   everything. Full "launch on login / headless service" is out of scope — if
   you want that, run Model A.
 
-### Missed runs when the backend was offline
+### No backlog. Run-once-on-start instead.
 
-Monitors don't accumulate a backlog — a monitor is "what's true now", so
-run-once-on-resume is the whole story.
+Desktop is explicitly **not** a catch-up system — nobody wants yesterday's
+missed windows replayed when they open the app. Monitors already work this
+way: on resume the engine probes each once and moves on.
 
-**Cron schedules** (runbook R4b, ansible AN4b) do: a daily job due at 09:00
-while the app was closed is a real missed run. Current behaviour is hardcoded
-in each scheduler's `reanchor()` — a run missed by more than one poll interval
-(30 s) is **skipped**, and `NextRunAt` jumps to the next future cron match (it
-picks skip over "storm every missed 30 s window").
+The plan brings **cron schedules** (runbook R4b, ansible AN4b) in line with a
+single opt-in flag:
 
-Plan item (small, symmetric change to both schedulers + the schedule model):
+- `RunSchedule.runOnStart` / `Schedule.runOnStart` — `bool`, default `false`
+  (existing behaviour unchanged).
+- When `true`: the schedule fires **once** whenever the scheduler starts (app
+  open / backend boot / restart), independent of cron timing, then follows its
+  normal cron. At most one fire per boot — never a storm.
+- When `false`: today's behaviour — `reanchor()` skips any window missed by
+  more than one poll interval (30 s) and jumps `NextRunAt` to the next future
+  match. No backlog, no replay.
+- Editor: a "Run once when the app / backend starts" checkbox next to the cron
+  field. For a desktop "morning check" this is the main setting; the cron
+  interval is then just a safety net for a long-open session.
 
-- `RunSchedule.onMiss` / `Schedule.onMiss` — `"skip"` (default, today's
-  behaviour) or `"run"`.
-- On boot, `reanchor()` honours it: with `"run"`, an overdue enabled schedule
-  fires **once** promptly, then advances; with `"skip"`, it just advances.
-- Never a storm: at most one catch-up fire per schedule per boot, regardless
-  of how many windows were missed.
-- Surfaced in the schedule editor as "If a run was missed while offline:
-  [skip / run once]".
-
-This lives with the Monitors work because it's the same "what happens on
-resume" question, but it touches `internal/orchestrator` and
-`internal/ansible`, not `internal/monitor`. Ship it in **M3**.
+Symmetric change to both schedulers + the two schedule models. It touches
+`internal/orchestrator` and `internal/ansible`, not `internal/monitor`, but
+belongs here — same "what happens on start" question. Ship in **M3**.
 
 ## Settings → Monitors panel (M3)
 
@@ -294,9 +293,9 @@ The alert sink stops being a log line.
   updates without waiting for the 10 s poll.
 - **Run all checks now** — board-header button, `POST /monitors/check-all`
   (fan a `CheckNow` across the caller's monitors). The Model-B "morning sweep".
-- **Schedule misfire policy** — `onMiss: skip | run` on `RunSchedule` /
-  ansible `Schedule`; `reanchor()` in both schedulers honours it (see "Missed
-  runs" above). Editor gets a "if a run was missed while offline" choice.
+- **Schedule `runOnStart`** — `bool` on `RunSchedule` / ansible `Schedule`
+  (default false); both schedulers fire it once on start, then normal cron (see
+  "No backlog" above). Editor: "Run once when the app / backend starts".
 - **Desktop: minimise-to-tray** — `src-tauri` tray icon + a
   `close → hide` handler gated on a `keepMonitoringInBackground` preference;
   the sidecar is no longer killed on window close when it's on. Settings toggle
