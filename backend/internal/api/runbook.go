@@ -15,6 +15,7 @@ import (
 	"github.com/infrakit/backend/internal/executor"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/packages"
+	"github.com/infrakit/backend/internal/runstream"
 	"github.com/infrakit/backend/internal/sse"
 	"github.com/infrakit/backend/internal/vault"
 )
@@ -24,6 +25,7 @@ type RunbookHandlers struct {
 	Store  *orchestrator.Store
 	Engine *orchestrator.Engine
 	Vault  *vault.Registry // per-user vault registry; for applying vault-autolock from module settings
+	Hub    *runstream.Hub  // background-run registry; nil → synchronous fallback
 }
 
 // ApplyRunbookSettings pushes the settings that map onto live objects — the
@@ -425,14 +427,71 @@ func (h *RunbookHandlers) RunStream(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+
+	// A dry run has no run row and nothing to persist — always synchronous.
+	// A real run goes through the hub so it survives this connection.
+	if dryRun || h.Hub == nil || !h.Engine.HasHub() {
+		ch := make(chan sse.Message, 128)
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		go func() {
+			h.Engine.Run(ctx, rb, version, args, dryRun, "local", chanEmit(ctx, ch))
+			close(ch)
+		}()
+		sw.Pump(ctx, ch)
+		return
+	}
+
+	runID, err := h.Engine.StartBackground(r.Context(), rb, version, args, "local")
+	if err != nil {
+		streamOneError(sw, r, err)
+		return
+	}
 	ch := make(chan sse.Message, 128)
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-	go func() {
-		h.Engine.Run(ctx, rb, version, args, dryRun, "local", ch)
-		close(ch)
-	}()
-	sw.Pump(ctx, ch)
+	go h.Hub.Subscribe(r.Context(), runstream.Key{Module: "runbook", ID: runID}, ch)
+	sw.Pump(r.Context(), ch)
+}
+
+// StartRun: POST /runbooks/{id}/run  {version?, args?} → {runId}
+// Non-blocking; watch via GET /runs/runbook/{runId}/stream.
+func (h *RunbookHandlers) StartRun(w http.ResponseWriter, r *http.Request) {
+	if !h.ok() {
+		apierr.Write(w, apierr.Unavailable("the runbooks store"))
+		return
+	}
+	id := chi.URLParam(r, "id")
+	rb, err := h.Store.GetRunbook(id)
+	if err != nil {
+		apierr.Write(w, apierr.NotFound("runbook not found"))
+		return
+	}
+	me := owner(r)
+	if !h.Store.CanView(id, me) {
+		apierr.Write(w, apierr.NotFound("runbook not found"))
+		return
+	}
+	sharedView, _ := h.Store.SharedAccess(id, me)
+	var body struct {
+		Version int               `json:"version"`
+		Args    map[string]string `json:"args"`
+		Author  bool              `json:"author"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if !rb.Published && !body.Author && !sharedView {
+		apierr.Write(w, apierr.Permission("this runbook is a draft — publish it before running"))
+		return
+	}
+	if h.Hub == nil || !h.Engine.HasHub() {
+		apierr.Write(w, apierr.Unavailable("background runs"))
+		return
+	}
+	audit(r, "runbook_run", rb.Slug, map[string]any{"version": body.Version})
+	runID, err := h.Engine.StartBackground(r.Context(), rb, body.Version, body.Args, "local")
+	if err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"runId": runID})
 }
 
 // ListRuns: GET /runs?runbookId=&limit=

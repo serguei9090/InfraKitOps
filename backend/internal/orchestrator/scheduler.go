@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"sync"
 	"time"
-
-	"github.com/infrakit/backend/internal/sse"
 )
 
 // Scheduler fires enabled RunSchedules when their cron time comes due (R4b).
@@ -141,16 +139,10 @@ func (s *Scheduler) fire(ctx context.Context, sc RunSchedule) {
 	}
 	_ = s.store.saveScheduleRaw(sc) // persist the advanced NextRunAt / LastRunAt
 
-	// Drain the SSE channel to nothing — a scheduled run has no viewer.
-	ch := make(chan sse.Message, 64)
-	go func() {
-		for range ch {
-		}
-	}()
 	runCtx, cancel := context.WithTimeout(ctx, 6*time.Hour)
 	defer cancel()
-	runID := s.engine.Run(runCtx, rb, sc.Version, cloneArgs(sc.Args), false, "schedule", ch)
-	close(ch)
+	// A scheduled run has no viewer — discard events.
+	runID := s.engine.Run(runCtx, rb, sc.Version, cloneArgs(sc.Args), false, "schedule", func(string, any) {})
 
 	if run, err := s.store.GetRun("", runID); err == nil && run != nil {
 		sc.LastStatus = run.Status

@@ -1026,8 +1026,9 @@ func (h *AnsibleHandlers) streamRunSync(w http.ResponseWriter, r *http.Request, 
 	sw.Pump(ctx, ch)
 }
 
-// chanEmit adapts a message channel to an ansible.Emitter.
-func chanEmit(ctx context.Context, ch chan<- sse.Message) ansible.Emitter {
+// chanEmit adapts a message channel to an engine Emitter (ansible / orchestrator
+// both use func(string, any)). Drops on ctx cancellation.
+func chanEmit(ctx context.Context, ch chan<- sse.Message) func(ev string, data any) {
 	return func(ev string, data any) {
 		select {
 		case ch <- sse.Message{Event: ev, Data: data}:

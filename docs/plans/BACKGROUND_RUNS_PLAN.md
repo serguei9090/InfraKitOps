@@ -1,6 +1,6 @@
 # Background runs — plan
 
-## Status: BR1 done (Ansible backend). BR2–BR4 pending.
+## Status: BR1 + BR2 done (backend). BR3 (frontend) + BR4 pending.
 
 - **BR1 (2026-09-05)** — `internal/runstream` hub + Ansible wired. Playbook,
   job and ad-hoc runs execute under a request-independent context registered
@@ -13,6 +13,18 @@
   cancels in-flight runs. Synchronous fallback kept for when the hub is
   absent (tests / `--ansible-db off`). Frontend still uses the GET stream —
   BR3 switches it.
+- **BR2 (2026-09-05)** — Runbooks wired to the same hub. `orchestrator.Engine`
+  `Run` takes an `orchestrator.Emitter` (not a chan); `redactWriter` too;
+  split `prepareRun` (BuildPreview + validate + secret args + InsertRun +
+  preview/run-start) / `executeRun` (concurrency slot + approval gate + step
+  loop + finish). `StartBackground` buffers the pre-hub preview/run-start
+  events, registers with the hub under a detached user-scoped context, runs
+  in a goroutine. `GET /runbooks/{id}/run/stream` now background+replay-tails
+  for **real** runs (dry runs stay synchronous — nothing to persist); new
+  `POST /runbooks/{id}/run` → `{runId}`. `RunsHandlers` handles module
+  `"runbook"` (owner check + step-by-step DB replay for pre-hub runs).
+  `orchestrator.Store.MarkRunningInterrupted()` + boot recovery in main.go.
+  Scheduler passes a no-op emitter.
 
 ## Problem
 

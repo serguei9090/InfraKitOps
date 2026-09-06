@@ -236,3 +236,7 @@ type Run struct {
 
 // StatusAwaitingApproval marks a run parked for a second operator (U3).
 const StatusAwaitingApproval = "awaiting_approval"
+
+// StatusInterrupted marks a run whose backend process died mid-flight
+// (distinct from a user cancel). Set by boot recovery (BACKGROUND_RUNS_PLAN.md).
+const StatusInterrupted = "interrupted"

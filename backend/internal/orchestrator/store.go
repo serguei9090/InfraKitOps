@@ -543,6 +543,21 @@ func (s *Store) SetRunStatus(id int64, status string) error {
 	return err
 }
 
+// MarkRunningInterrupted flips every still-"running" / "awaiting_approval" run
+// to "interrupted" — any such row was left behind by a previous process. Called
+// once on startup. Returns the number of rows fixed.
+func (s *Store) MarkRunningInterrupted() (int64, error) {
+	res, err := s.db.Exec(
+		`UPDATE run SET status = ?, finished_at = ? WHERE status IN ('running','awaiting_approval')`,
+		StatusInterrupted, time.Now().UnixMilli(),
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 const runCols = `id, runbook_id, runbook_ver, status, dry_run, triggered_by, started_at, finished_at, args_json, steps_json, owner`
 
 // ListRuns returns the caller's run rows newest first (optionally by runbook).

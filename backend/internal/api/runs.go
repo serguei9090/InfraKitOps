@@ -10,6 +10,7 @@ import (
 
 	"github.com/infrakit/backend/internal/ansible"
 	"github.com/infrakit/backend/internal/apierr"
+	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/runstream"
 	"github.com/infrakit/backend/internal/sse"
 )
@@ -19,7 +20,8 @@ import (
 // stream. See BACKGROUND_RUNS_PLAN.md. Nil Hub → every endpoint 503.
 type RunsHandlers struct {
 	Hub     *runstream.Hub
-	Ansible *ansible.Store // owner check + pre-hub history replay for module "ansible"
+	Ansible *ansible.Store      // owner check + pre-hub history replay, module "ansible"
+	Runbook *orchestrator.Store // owner check + pre-hub history replay, module "runbook"
 }
 
 func (h *RunsHandlers) ok() bool { return h != nil && h.Hub != nil }
@@ -32,6 +34,12 @@ func (h *RunsHandlers) authorize(r *http.Request, module string, id int64) bool 
 			return false
 		}
 		_, err := h.Ansible.GetRun(owner(r), id)
+		return err == nil
+	case "runbook":
+		if h.Runbook == nil {
+			return false
+		}
+		_, err := h.Runbook.GetRun(owner(r), id)
 		return err == nil
 	default:
 		return false
@@ -85,29 +93,46 @@ func (h *RunsHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 	sw.Pump(r.Context(), ch)
 }
 
-// replayFromStore rebuilds a finished run's stream from the event blob in the
-// module's own run table — for runs that predate the hub's on-disk log.
+// replayFromStore rebuilds a finished run's stream from the module's own run
+// table — for runs that predate the hub's on-disk log.
 func (h *RunsHandlers) replayFromStore(r *http.Request, module string, id int64, ch chan<- sse.Message) {
-	if module != "ansible" || h.Ansible == nil {
-		return
-	}
-	run, err := h.Ansible.GetRun(owner(r), id)
-	if err != nil || run == nil {
-		return
-	}
-	ch <- sse.Message{Event: "run-start", Data: map[string]any{"runId": id, "argv": run.Argv}}
-	for _, line := range strings.Split(run.Events, "\n") {
-		if line = strings.TrimSpace(line); line == "" {
-			continue
+	switch module {
+	case "ansible":
+		if h.Ansible == nil {
+			return
 		}
-		var obj map[string]any
-		if json.Unmarshal([]byte(line), &obj) != nil {
-			continue
+		run, err := h.Ansible.GetRun(owner(r), id)
+		if err != nil || run == nil {
+			return
 		}
-		ev, _ := obj["e"].(string)
-		ch <- sse.Message{Event: "ansible-" + strings.ReplaceAll(ev, "_", "-"), Data: obj}
+		ch <- sse.Message{Event: "run-start", Data: map[string]any{"runId": id, "argv": run.Argv}}
+		for _, line := range strings.Split(run.Events, "\n") {
+			if line = strings.TrimSpace(line); line == "" {
+				continue
+			}
+			var obj map[string]any
+			if json.Unmarshal([]byte(line), &obj) != nil {
+				continue
+			}
+			ev, _ := obj["e"].(string)
+			ch <- sse.Message{Event: "ansible-" + strings.ReplaceAll(ev, "_", "-"), Data: obj}
+		}
+		ch <- sse.Message{Event: "run-end", Data: map[string]any{"runId": id, "status": run.Status}}
+
+	case "runbook":
+		if h.Runbook == nil {
+			return
+		}
+		run, err := h.Runbook.GetRun(owner(r), id)
+		if err != nil || run == nil {
+			return
+		}
+		ch <- sse.Message{Event: "run-start", Data: map[string]any{"runId": id, "steps": len(run.Steps)}}
+		for _, st := range run.Steps {
+			ch <- sse.Message{Event: "step-end", Data: st}
+		}
+		ch <- sse.Message{Event: "run-end", Data: map[string]any{"runId": id, "status": run.Status}}
 	}
-	ch <- sse.Message{Event: "run-end", Data: map[string]any{"runId": id, "status": run.Status}}
 }
 
 // Cancel: POST /runs/{module}/{id}/cancel

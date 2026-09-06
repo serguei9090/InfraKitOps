@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/infrakit/backend/internal/executor"
-	"github.com/infrakit/backend/internal/sse"
+	"github.com/infrakit/backend/internal/runstream"
 	"github.com/infrakit/backend/internal/userctx"
 )
 
@@ -36,6 +36,10 @@ type Engine struct {
 	// pending run approvals (U3): runID → {ch, requester}.
 	apprMu   sync.Mutex
 	approves map[int64]pendingApproval
+
+	// hub is the background-run registry (BACKGROUND_RUNS_PLAN.md); nil in
+	// tests / when unset → runs stay tied to their request.
+	hub *runstream.Hub
 }
 
 type pendingApproval struct {
@@ -260,28 +264,51 @@ func (e *Engine) BuildPreview(ctx context.Context, rb *Runbook, version int, val
 	return p, spec, ver, nil
 }
 
-// Run executes a runbook, streaming events. Blocks until the run finishes or
-// ctx is cancelled. Returns the run id (0 for a dry run). `triggeredBy` is
-// recorded on the run row ("local" for a user run, "schedule" for a cron fire).
-func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[string]string, dryRun bool, triggeredBy string, out chan<- sse.Message) int64 {
+// Emitter delivers one SSE event from a running runbook. It must not block for
+// long — the runstream hub fans out asynchronously and the scheduler discards.
+type Emitter func(ev string, data any)
+
+// preparedRun is a validated, inserted run row ready to execute.
+type preparedRun struct {
+	run           *Run
+	runID         int64
+	rb            *Runbook
+	spec          *Spec
+	values        map[string]string
+	argSecretVals map[string]string
+	needsApproval bool
+	me            string
+}
+
+// Run executes a runbook synchronously, emitting events via emit. Blocks until
+// the run finishes or ctx is cancelled. Returns the run id (0 for a dry run or
+// a preflight failure). The API layer uses StartBackground; the scheduler and
+// tests call this directly.
+func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[string]string, dryRun bool, triggeredBy string, emit Emitter) int64 {
+	pr, done := e.prepareRun(ctx, rb, version, values, dryRun, triggeredBy, emit)
+	if done || pr == nil {
+		return 0
+	}
+	return e.executeRun(ctx, pr, emit)
+}
+
+// prepareRun validates the runbook, resolves secret args, inserts the run row
+// and emits preview + run-start. `done` is true when the caller should stop
+// (preflight error, or a dry run that has already emitted its run-end).
+func (e *Engine) prepareRun(ctx context.Context, rb *Runbook, version int, values map[string]string, dryRun bool, triggeredBy string, emit Emitter) (pr *preparedRun, done bool) {
 	preview, spec, ver, err := e.BuildPreview(ctx, rb, version, values)
 	if err != nil {
-		out <- sse.Message{Event: "error", Data: map[string]string{"error": err.Error()}}
-		return 0
+		emit("error", map[string]string{"error": err.Error()})
+		return nil, true
 	}
 	if !preview.Valid {
-		out <- sse.Message{Event: "error", Data: map[string]any{"error": "validation failed", "validation": preview.Validation}}
-		return 0
+		emit("error", map[string]any{"error": "validation failed", "validation": preview.Validation})
+		return nil, true
 	}
-	out <- sse.Message{Event: "preview", Data: preview}
-
+	emit("preview", preview)
 	if dryRun {
-		out <- sse.Message{Event: "run-end", Data: map[string]any{"status": "ok", "dryRun": true}}
-		return 0
-	}
-	if !rb.Published {
-		// R0/R1: a draft/unpublished runbook is still runnable by its author.
-		// The published gate is enforced at the API layer per-caller in R1.
+		emit("run-end", map[string]any{"status": "ok", "dryRun": true})
+		return nil, true
 	}
 
 	// Secret-typed args carry a vault secret *name*; resolve to plaintext
@@ -296,22 +323,6 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 				}
 			}
 		}
-	}
-
-	if sem := e.getSem(); sem != nil {
-		select {
-		case sem <- struct{}{}:
-			defer func() { <-sem }()
-		case <-ctx.Done():
-			return 0
-		}
-	}
-
-	resolver := func(name string) (string, error) {
-		if e.Secrets == nil {
-			return "", fmt.Errorf("vault is locked or unavailable")
-		}
-		return e.Secrets.ResolveByName(ctx, name)
 	}
 
 	if triggeredBy == "" {
@@ -329,18 +340,47 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 		Args: redactArgValues(spec, values), Steps: []RunStep{},
 	}
 	runID, _ := e.Store.InsertRun(run)
-	out <- sse.Message{Event: "run-start", Data: map[string]any{"runId": runID, "steps": len(spec.Steps)}}
+	emit("run-start", map[string]any{"runId": runID, "steps": len(spec.Steps)})
+	return &preparedRun{
+		run: run, runID: runID, rb: rb, spec: spec, values: values,
+		argSecretVals: argSecretVals, needsApproval: needsApproval, me: me,
+	}, false
+}
 
-	if needsApproval {
-		out <- sse.Message{Event: "approval-required", Data: map[string]any{"runId": runID, "requestedBy": me}}
-		ok := e.awaitRunApproval(ctx, runID, me)
+// executeRun runs a prepared runbook to completion: concurrency slot → approval
+// gate → step loop → finish.
+func (e *Engine) executeRun(ctx context.Context, pr *preparedRun, emit Emitter) int64 {
+	runID, run, rb, spec := pr.runID, pr.run, pr.rb, pr.spec
+	values, argSecretVals := pr.values, pr.argSecretVals
+
+	if sem := e.getSem(); sem != nil {
+		select {
+		case sem <- struct{}{}:
+			defer func() { <-sem }()
+		case <-ctx.Done():
+			_ = e.Store.FinishRun(runID, StatusFailed, run.Steps)
+			emit("run-end", map[string]any{"runId": runID, "status": "cancelled"})
+			return runID
+		}
+	}
+
+	resolver := func(name string) (string, error) {
+		if e.Secrets == nil {
+			return "", fmt.Errorf("vault is locked or unavailable")
+		}
+		return e.Secrets.ResolveByName(ctx, name)
+	}
+
+	if pr.needsApproval {
+		emit("approval-required", map[string]any{"runId": runID, "requestedBy": pr.me})
+		ok := e.awaitRunApproval(ctx, runID, pr.me)
 		if !ok {
 			_ = e.Store.FinishRun(runID, StatusFailed, run.Steps)
-			out <- sse.Message{Event: "run-end", Data: map[string]any{"runId": runID, "status": "cancelled", "reason": "approval denied or timed out"}}
+			emit("run-end", map[string]any{"runId": runID, "status": "cancelled", "reason": "approval denied or timed out"})
 			return runID
 		}
 		_ = e.Store.SetRunStatus(runID, StatusRunning)
-		out <- sse.Message{Event: "approval-granted", Data: map[string]any{"runId": runID}}
+		emit("approval-granted", map[string]any{"runId": runID})
 	}
 
 	overall := StatusOK
@@ -349,7 +389,7 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 		if !shouldRun(st, prev) {
 			rs := RunStep{Index: i + 1, Name: stepName(st, i), Executor: string(st.Executor), Status: "skipped", StartedAt: time.Now().UnixMilli(), FinishedAt: time.Now().UnixMilli()}
 			run.Steps = append(run.Steps, rs)
-			out <- sse.Message{Event: "step-end", Data: rs}
+			emit("step-end", rs)
 			prev = &run.Steps[len(run.Steps)-1]
 			continue
 		}
@@ -373,7 +413,7 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 		if exStep.HTTP != nil {
 			rs.CommandRedacted = Redact(exStep.HTTP.Method+" "+exStep.HTTP.URL, secretVals)
 		}
-		out <- sse.Message{Event: "step-start", Data: map[string]any{"index": rs.Index, "name": rs.Name, "executor": rs.Executor, "command": rs.CommandRedacted}}
+		emit("step-start", map[string]any{"index": rs.Index, "name": rs.Name, "executor": rs.Executor, "command": rs.CommandRedacted})
 
 		ex := executor.For(st.Executor)
 		switch {
@@ -387,8 +427,8 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 			rs.ExitCode = -1
 		default:
 			stepCtx, cancel := context.WithTimeout(ctx, stepTimeout(st, spec))
-			sw := &redactWriter{out: out, event: "stdout", secrets: secretVals}
-			ew := &redactWriter{out: out, event: "stderr", secrets: secretVals}
+			sw := &redactWriter{emit: emit, event: "stdout", secrets: secretVals}
+			ew := &redactWriter{emit: emit, event: "stderr", secrets: secretVals}
 			res := ex.Run(stepCtx, exStep, sw, ew)
 			cancel()
 			// Persist a host key learned on first SSH connect.
@@ -413,7 +453,7 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 		rs.FinishedAt = time.Now().UnixMilli()
 		run.Steps = append(run.Steps, rs)
 		prev = &run.Steps[len(run.Steps)-1]
-		out <- sse.Message{Event: "step-end", Data: rs}
+		emit("step-end", rs)
 
 		if rs.Status == StatusFailed {
 			if st.ContinueOnError {
@@ -428,21 +468,21 @@ func (e *Engine) Run(ctx context.Context, rb *Runbook, version int, values map[s
 	_ = e.Store.FinishRun(runID, overall, run.Steps)
 	settings := e.Store.GetSettings()
 	e.Store.PruneRuns(rb.ID, atoiOr(settings["historyRetentionDays"], 90), atoiOr(settings["historyMaxPerRunbook"], 20))
-	out <- sse.Message{Event: "run-end", Data: map[string]any{"runId": runID, "status": overall}}
+	emit("run-end", map[string]any{"runId": runID, "status": overall})
 	return runID
 }
 
 // --- helpers ------------------------------------------------------------
 
 type redactWriter struct {
-	out     chan<- sse.Message
+	emit    Emitter
 	event   string
 	secrets map[string]string
 }
 
 func (w *redactWriter) Write(p []byte) (int, error) {
 	text := Redact(string(p), w.secrets)
-	w.out <- sse.Message{Event: w.event, Data: map[string]string{"text": text}}
+	w.emit(w.event, map[string]string{"text": text})
 	return len(p), nil
 }
 

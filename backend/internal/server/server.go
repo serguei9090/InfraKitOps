@@ -103,7 +103,7 @@ func NewRouter(opts Options) http.Handler {
 		AppVersion:    opts.AppVersion,
 		DefaultPolicy: opts.HistoryPolicy,
 	}
-	rbh := &api.RunbookHandlers{Store: opts.Orchestrator, Engine: opts.RunbookEngine, Vault: opts.Vault}
+	rbh := &api.RunbookHandlers{Store: opts.Orchestrator, Engine: opts.RunbookEngine, Vault: opts.Vault, Hub: opts.RunHub}
 	vh := &api.VaultHandlers{Reg: opts.Vault}
 	lh := &api.LLMHandlers{
 		Store: opts.LLM, Engine: opts.LLMEngine, MCP: opts.MCP,
@@ -111,7 +111,7 @@ func NewRouter(opts Options) http.Handler {
 	}
 	mh := &api.MCPHandlers{Manager: opts.MCP}
 	anh := &api.AnsibleHandlers{Store: opts.AnsibleStore, Engine: opts.AnsibleEngine, Runtime: opts.AnsibleRuntime, Vault: opts.Vault, Hub: opts.RunHub}
-	runsH := &api.RunsHandlers{Hub: opts.RunHub, Ansible: opts.AnsibleStore}
+	runsH := &api.RunsHandlers{Hub: opts.RunHub, Ansible: opts.AnsibleStore, Runbook: opts.Orchestrator}
 	ph := &api.PromptHandlers{Store: opts.Prompts}
 	fh := &api.FormHandlers{Store: opts.Forms}
 	adminH := &api.AdminHandlers{Backup: opts.Backup}
@@ -236,6 +236,7 @@ func NewRouter(opts Options) http.Handler {
 			r.Post("/{id}/publish", rbh.Publish)
 			r.Post("/{id}/preview", rbh.Preview)
 			r.Get("/{id}/run/stream", rbh.RunStream)
+			r.Post("/{id}/run", rbh.StartRun)
 			r.Get("/{id}/shares", rbh.ListShares)
 			r.Put("/{id}/shares/{userId}", rbh.PutShare)
 			r.Delete("/{id}/shares/{userId}", rbh.DeleteShare)

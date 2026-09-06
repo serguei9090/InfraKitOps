@@ -267,11 +267,21 @@ func main() {
 		if ansibleEngine != nil {
 			ansibleEngine.SetHub(runHub)
 		}
+		if engine != nil {
+			engine.SetHub(runHub)
+		}
 		if ansibleStore != nil {
 			if n, rerr := ansibleStore.MarkRunningInterrupted(); rerr != nil {
 				obs.Warnf("ansible: boot recovery failed: %v", rerr)
 			} else if n > 0 {
 				obs.Infof("ansible: marked %d interrupted run(s) from a previous process", n)
+			}
+		}
+		if orch != nil {
+			if n, rerr := orch.MarkRunningInterrupted(); rerr != nil {
+				obs.Warnf("runbooks: boot recovery failed: %v", rerr)
+			} else if n > 0 {
+				obs.Infof("runbooks: marked %d interrupted run(s) from a previous process", n)
 			}
 		}
 	}

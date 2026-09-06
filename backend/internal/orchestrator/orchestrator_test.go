@@ -5,11 +5,38 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/infrakit/backend/internal/executor"
-	"github.com/infrakit/backend/internal/sse"
 )
+
+func TestMarkRunningInterrupted(t *testing.T) {
+	s := newStore(t)
+	running, _ := s.InsertRun(&Run{RunbookID: "rb1", Status: StatusRunning, StartedAt: 1})
+	parked, _ := s.InsertRun(&Run{RunbookID: "rb1", Status: StatusAwaitingApproval, StartedAt: 2})
+	ok, _ := s.InsertRun(&Run{RunbookID: "rb1", Status: StatusOK, StartedAt: 3})
+
+	n, err := s.MarkRunningInterrupted()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("fixed %d rows, want 2", n)
+	}
+	for _, id := range []int64{running, parked} {
+		r, _ := s.GetRun("", id)
+		if r.Status != StatusInterrupted || r.FinishedAt == 0 {
+			t.Errorf("run %d = %+v, want interrupted + finished_at", id, r)
+		}
+	}
+	if r, _ := s.GetRun("", ok); r.Status != StatusOK {
+		t.Errorf("finished run touched: %q", r.Status)
+	}
+	if n, _ := s.MarkRunningInterrupted(); n != 0 {
+		t.Errorf("second call fixed %d, want 0", n)
+	}
+}
 
 func TestExtractAndRender(t *testing.T) {
 	script := "deploy {{APP}} to {{ENV}}, token {{secret:TOK}}, prev {{steps.1.stdout}}"
@@ -147,16 +174,28 @@ func TestEngineRunBash(t *testing.T) {
 	rb, _ = s.SaveVersion(rb.ID, "")
 	eng := NewEngine(s, nil, 4)
 
-	ch := make(chan sse.Message, 64)
+	var mu sync.Mutex
+	var events []string
+	emit := func(ev string, _ any) { mu.Lock(); events = append(events, ev); mu.Unlock() }
 	done := make(chan int64, 1)
 	go func() {
-		done <- eng.Run(context.Background(), rb, 0, map[string]string{"MSG": "there"}, false, "local", ch)
+		done <- eng.Run(context.Background(), rb, 0, map[string]string{"MSG": "there"}, false, "local", emit)
 	}()
 	runID := <-done
-	close(ch)
 
 	if runID == 0 {
 		t.Fatal("run id 0")
+	}
+	mu.Lock()
+	sawEnd := false
+	for _, ev := range events {
+		if ev == "run-end" {
+			sawEnd = true
+		}
+	}
+	mu.Unlock()
+	if !sawEnd {
+		t.Fatalf("no run-end event; got %v", events)
 	}
 	run, err := s.GetRun("", runID)
 	if err != nil {
