@@ -78,6 +78,9 @@ func Capabilities(w http.ResponseWriter, _ *http.Request) {
 		// Ansible Manager module (AN0). 503s when ansible.db isn't open; the
 		// runtime detail (system/managed/uv) is in GET /ansible/settings.
 		"ansible": {Available: true},
+		// Monitors module (MONITORS_MODULE_PLAN.md, Tier 2). 503s when
+		// monitor.db isn't open.
+		"monitor": {Available: true},
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{

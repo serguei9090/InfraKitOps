@@ -38,6 +38,7 @@ import (
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/mcp"
+	"github.com/infrakit/backend/internal/monitor"
 	"github.com/infrakit/backend/internal/obs"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/promptstore"
@@ -60,6 +61,7 @@ func main() {
 	runbookDBPath := flag.String("runbook-db", "", `runbooks database path ("" = OS config dir, "off" = disabled)`)
 	llmDBPath := flag.String("llm-db", "", `AI-layer database path ("" = OS config dir, "off" = disabled)`)
 	ansibleDBPath := flag.String("ansible-db", "", `Ansible-module database path ("" = OS config dir, "off" = disabled)`)
+	monitorDBPath := flag.String("monitor-db", "", `Monitors-module database path ("" = OS config dir, "off" = disabled)`)
 	vaultPath := flag.String("vault", "", `vault file path ("" = OS config dir, "off" = disabled)`)
 	vaultAutoLock := flag.Duration("vault-autolock", 15*time.Minute, "lock the vault after this idle time (0 = never)")
 	maxConcurrentRuns := flag.Int("max-concurrent-runs", 4, "cap on runbooks executing at once (0 = unlimited)")
@@ -288,6 +290,13 @@ func main() {
 
 	defer iperf.StopServer() // kill any managed `iperf3 -s` child
 
+	// Monitors module (MONITORS_MODULE_PLAN.md, background-runs Tier 2) —
+	// server-side persistent checks. Engine started once ctx exists, below.
+	monitorStore, monitorEngine := openMonitor(*monitorDBPath)
+	if monitorStore != nil {
+		defer monitorStore.Close()
+	}
+
 	var authSvc *auth.Service
 	if *authMode == "on" {
 		authStore := openAuth(*authDBPath)
@@ -330,10 +339,16 @@ func main() {
 			if ansibleStore != nil {
 				_ = ansibleStore.ClaimOrphans(adminID)
 			}
+			if monitorStore != nil {
+				_ = monitorStore.ClaimOrphans(adminID)
+			}
 		}
 		svc.OnUserDeleted = func(uid string) {
 			if orch != nil {
 				_ = orch.PurgeGranteeShares(uid)
+			}
+			if monitorStore != nil {
+				_ = monitorStore.PurgeOwner(uid)
 			}
 			if promptStore != nil {
 				_ = promptStore.PurgeGranteeShares(uid)
@@ -427,6 +442,8 @@ func main() {
 		AnsibleEngine:  ansibleEngine,
 		AnsibleRuntime: ansibleRuntime,
 		RunHub:         runHub,
+		MonitorStore:   monitorStore,
+		MonitorEngine:  monitorEngine,
 		AppVersion:     api.Version,
 		HistoryPolicy: history.PrunePolicy{
 			RetentionDays: *retentionDays,
@@ -453,6 +470,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if monitorEngine != nil {
+		monitorEngine.SetAlertSink(func(a monitor.AlertEvent) {
+			obs.Infof("monitor %q (%s %s): %s — %s", a.Monitor.Name, a.Monitor.Kind, a.Monitor.Target, a.Event, a.Detail)
+		})
+		monitorEngine.Start(ctx) // resumes every enabled monitor
+	}
+
 	if backupSched != nil {
 		go backupSched.Run(ctx)
 	}
@@ -467,6 +491,9 @@ func main() {
 		<-ctx.Done()
 		if runHub != nil {
 			runHub.CancelAll() // stop in-flight background runs before exit
+		}
+		if monitorEngine != nil {
+			monitorEngine.StopAll()
 		}
 		if backupSched != nil {
 			if p, err := backupSched.Once(); err != nil {
@@ -691,6 +718,29 @@ func openAnsible(path string) (*ansible.Store, *ansible.Engine, *ansible.Runtime
 	}
 	obs.Infof("ansible: %s", path)
 	return s, eng, rt
+}
+
+// openMonitor resolves the Monitors DB path and opens the store + engine. A
+// failure is logged, not fatal — the /monitors endpoints then 503.
+func openMonitor(path string) (*monitor.Store, *monitor.Engine) {
+	if path == "off" {
+		return nil, nil
+	}
+	if path == "" {
+		d, err := appDataDir()
+		if err != nil {
+			obs.Warnf("monitor: config dir: %v (module disabled)", err)
+			return nil, nil
+		}
+		path = filepath.Join(d, "monitor.db")
+	}
+	s, err := monitor.Open("file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	if err != nil {
+		obs.Warnf("monitor: open %s: %v (module disabled)", path, err)
+		return nil, nil
+	}
+	obs.Infof("monitor: %s", path)
+	return s, monitor.NewEngine(s)
 }
 
 // openAuth resolves the auth DB path and opens the store. Fatal on failure —

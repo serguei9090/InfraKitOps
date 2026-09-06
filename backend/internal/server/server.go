@@ -18,6 +18,7 @@ import (
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
 	"github.com/infrakit/backend/internal/mcp"
+	"github.com/infrakit/backend/internal/monitor"
 	"github.com/infrakit/backend/internal/obs"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/promptstore"
@@ -81,6 +82,10 @@ type Options struct {
 	// RunHub is the background-run registry (BACKGROUND_RUNS_PLAN.md). Nil →
 	// the /runs/* endpoints 503 and runs stay tied to their request.
 	RunHub *runstream.Hub
+	// MonitorStore / MonitorEngine back the Monitors module
+	// (MONITORS_MODULE_PLAN.md). Nil → /monitors* endpoints 503.
+	MonitorStore  *monitor.Store
+	MonitorEngine *monitor.Engine
 }
 
 // NewRouter returns the fully wired API handler.
@@ -112,6 +117,7 @@ func NewRouter(opts Options) http.Handler {
 	mh := &api.MCPHandlers{Manager: opts.MCP}
 	anh := &api.AnsibleHandlers{Store: opts.AnsibleStore, Engine: opts.AnsibleEngine, Runtime: opts.AnsibleRuntime, Vault: opts.Vault, Hub: opts.RunHub}
 	runsH := &api.RunsHandlers{Hub: opts.RunHub, Ansible: opts.AnsibleStore, Runbook: opts.Orchestrator}
+	monH := &api.MonitorHandlers{Store: opts.MonitorStore, Engine: opts.MonitorEngine}
 	ph := &api.PromptHandlers{Store: opts.Prompts}
 	fh := &api.FormHandlers{Store: opts.Forms}
 	adminH := &api.AdminHandlers{Backup: opts.Backup}
@@ -254,6 +260,19 @@ func NewRouter(opts Options) http.Handler {
 		r.Get("/runs/active", runsH.Active)
 		r.Get("/runs/{id}/stream", runsH.Stream)
 		r.Post("/runs/{id}/cancel", runsH.Cancel)
+
+		// Monitors module (MONITORS_MODULE_PLAN.md) — server-side persistent checks.
+		r.Route("/monitors", func(r chi.Router) {
+			r.Get("/", monH.List)
+			r.Post("/", monH.Save)
+			r.Get("/{id}", monH.Get)
+			r.Put("/{id}", monH.Save)
+			r.Delete("/{id}", monH.Delete)
+			r.Get("/{id}/samples", monH.Samples)
+			r.Post("/{id}/pause", monH.SetPaused(true))
+			r.Post("/{id}/resume", monH.SetPaused(false))
+			r.Post("/{id}/check", monH.CheckNow)
+		})
 		r.Route("/ssh-nodes", func(r chi.Router) {
 			r.Get("/", rbh.ListNodes)
 			r.Post("/", rbh.PutNode)

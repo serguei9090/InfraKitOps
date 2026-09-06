@@ -152,6 +152,8 @@ func moduleOf(path string) string {
 		return "prompt"
 	case strings.HasPrefix(p, "/ansible"):
 		return "ansible"
+	case strings.HasPrefix(p, "/monitors"):
+		return "monitor"
 	case strings.HasPrefix(p, "/runbooks") || strings.HasPrefix(p, "/runs") ||
 		strings.HasPrefix(p, "/ssh-nodes") || strings.HasPrefix(p, "/runbook-") ||
 		strings.HasPrefix(p, "/packages") || strings.HasPrefix(p, "/library"):
