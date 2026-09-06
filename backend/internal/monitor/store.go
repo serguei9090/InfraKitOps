@@ -53,7 +53,7 @@ func Open(dsn string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema + settingsSchema + rollupSchema); err != nil {
+	if _, err := db.Exec(schema + settingsSchema + rollupSchema + statusBoardSchema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply monitor schema: %w", err)
 	}

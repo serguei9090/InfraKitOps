@@ -191,6 +191,10 @@ func NewRouter(opts Options) http.Handler {
 		r.Get("/capabilities", api.Capabilities)
 		r.Get("/interfaces", api.Interfaces)
 
+		// Public status pages (MONITORS_MODULE_PLAN.md M5) — token is the only
+		// credential; authExempt in middleware.go lets this through.
+		r.Get("/status/{token}", monH.PublicStatus)
+
 		r.Post("/sntp", api.SNTP)
 		r.Post("/whois", api.Whois)
 		r.Post("/dns-lookup", api.DNSLookup)
@@ -272,6 +276,13 @@ func NewRouter(opts Options) http.Handler {
 			r.Get("/stream", monH.Stream)
 			r.Get("/summary", monH.Summary)
 			r.Post("/check-all", monH.CheckAll)
+			r.Route("/status-boards", func(r chi.Router) {
+				r.Get("/", monH.StatusBoards)
+				r.Post("/", monH.SaveBoard)
+				r.Put("/{id}", monH.SaveBoard)
+				r.Post("/{id}/rotate", monH.RotateBoard)
+				r.Delete("/{id}", monH.DeleteBoard)
+			})
 			r.Get("/{id}", monH.Get)
 			r.Put("/{id}", monH.Save)
 			r.Delete("/{id}", monH.Delete)

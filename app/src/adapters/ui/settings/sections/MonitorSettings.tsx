@@ -1,9 +1,20 @@
 import { useEffect, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
+import { Copy, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { keepMonitoringInBackground, setKeepMonitoringInBackground } from '@/adapters/backend/desktopKeepAlive'
+import {
+  deleteStatusBoard,
+  listStatusBoards,
+  rotateStatusBoard,
+  saveStatusBoard,
+} from '@/adapters/backend/monitorClient'
 import { useBackendStore } from '@/stores/backendStore'
 import { useMonitorStore } from '@/stores/monitorStore'
-import { defaultMonitorSettings, type MonitorSettings as Settings } from '@/core/monitor/monitorModel'
+import {
+  defaultMonitorSettings,
+  type MonitorSettings as Settings,
+  type StatusBoard,
+} from '@/core/monitor/monitorModel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -213,6 +224,8 @@ export function MonitorSettings() {
         </SettingsRow>
       </SettingsGroup>
 
+      <StatusPagesGroup />
+
       <SettingsGroup title="Behaviour">
         {isTauri() && (
           <SettingsRow label="Keep monitoring when the window is closed" hint="Minimises to the tray; the backend keeps running">
@@ -231,5 +244,101 @@ export function MonitorSettings() {
         {dirty && <span className="text-xs text-muted-foreground">Unsaved changes</span>}
       </div>
     </>
+  )
+}
+
+/**
+ * Status pages (M5) — token-addressed public read-only boards. Each is a
+ * shareable `/status/<token>` URL scoped to a tag filter.
+ */
+function StatusPagesGroup() {
+  const [boards, setBoards] = useState<StatusBoard[]>([])
+  const [title, setTitle] = useState('')
+  const [tags, setTags] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  const reload = () => listStatusBoards().then(setBoards).catch(() => setBoards([]))
+  useEffect(() => {
+    void reload()
+  }, [])
+
+  const linkFor = (b: StatusBoard) => `${window.location.origin}/status/${b.token}`
+
+  const add = async () => {
+    setBusy(true)
+    try {
+      await saveStatusBoard({ title: title.trim(), tags: tags.trim(), showIncidents: true })
+      setTitle('')
+      setTags('')
+      await reload()
+    } finally {
+      setBusy(false)
+    }
+  }
+  const copy = async (b: StatusBoard) => {
+    try {
+      await navigator.clipboard.writeText(linkFor(b))
+      setCopied(b.id)
+      setTimeout(() => setCopied(null), 1500)
+    } catch {
+      /* clipboard blocked */
+    }
+  }
+
+  return (
+    <SettingsGroup title="Status pages" description="Public read-only pages — name, status and uptime only.">
+      {boards.map((b) => (
+        <div key={b.id} className="space-y-1.5 rounded-md border border-border/50 p-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">{b.title || 'Untitled'}</span>
+            <span className="text-xs text-muted-foreground">{b.tags ? `tags: ${b.tags}` : 'all monitors'}</span>
+            <div className="flex-1" />
+            <Switch
+              checked={b.showIncidents}
+              onCheckedChange={(v) => void saveStatusBoard({ ...b, showIncidents: v }).then(reload)}
+              aria-label="Show incidents"
+            />
+            <span className="text-[11px] text-muted-foreground">incidents</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Input readOnly value={linkFor(b)} className="h-7 flex-1 font-mono text-[11px]" />
+            <Button size="xs" variant="outline" onClick={() => void copy(b)}>
+              <Copy className="size-3" /> {copied === b.id ? 'Copied' : 'Copy'}
+            </Button>
+            <Button
+              size="xs"
+              variant="outline"
+              title="Issue a new token — the old link stops working"
+              onClick={() => void rotateStatusBoard(b.id).then(reload)}
+            >
+              <RefreshCw className="size-3" />
+            </Button>
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() => {
+                if (confirm('Delete this status page?')) void deleteStatusBoard(b.id).then(reload)
+              }}
+            >
+              <Trash2 className="size-3" />
+            </Button>
+          </div>
+        </div>
+      ))}
+      <div className="flex items-end gap-2">
+        <div className="flex-1 space-y-1">
+          <label className="text-xs text-muted-foreground">Title</label>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Acme status" className="h-8" />
+        </div>
+        <div className="flex-1 space-y-1">
+          <label className="text-xs text-muted-foreground">Tags (optional)</label>
+          <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="prod, public" className="h-8" />
+        </div>
+        <Button size="sm" disabled={busy} onClick={() => void add()}>
+          <Plus className="size-4" /> Add
+        </Button>
+      </div>
+    </SettingsGroup>
   )
 }

@@ -153,6 +153,37 @@ export interface SeriesPoint {
   total: number
 }
 
+/** A configured public status page (owner-scoped CRUD). */
+export interface StatusBoard {
+  id: string
+  token: string
+  title: string
+  tags: string // comma list; '' = every monitor
+  showIncidents: boolean
+  createdAt: number
+}
+
+export interface PublicComponent {
+  name: string
+  status: MonitorStatus
+  uptime: UptimeWindows
+}
+
+export interface PublicStatusIncident {
+  name: string
+  startedAt: number
+  endedAt: number
+}
+
+/** The payload of the unauthenticated GET /status/{token}. */
+export interface PublicStatusPage {
+  title: string
+  generatedAt: number
+  ok: boolean
+  components: PublicComponent[]
+  incidents: PublicStatusIncident[]
+}
+
 export const UPTIME_RANGES = ['24h', '7d', '30d'] as const
 export type UptimeRange = (typeof UPTIME_RANGES)[number]
 

@@ -3,6 +3,7 @@
  * the shared `/api/v1` helpers. See MONITORS_MODULE_PLAN.md.
  */
 import { backendGet, backendRequest } from './backendClient'
+import { resolveWebEndpoint } from './endpointOverride'
 import { openStream, type StreamHandlers } from './sseClient'
 import type {
   Monitor,
@@ -11,8 +12,10 @@ import type {
   MonitorSample,
   MonitorSettings,
   MonitorSummary,
+  PublicStatusPage,
   SeriesPeriod,
   SeriesPoint,
+  StatusBoard,
 } from '@/core/monitor/monitorModel'
 
 const arr = <T,>(v: T[] | null | undefined): T[] => v ?? []
@@ -66,6 +69,37 @@ export const monitorSeries = (id: string, opts: { from?: number; to?: number; pe
 
 export const monitorReport = (id: string) =>
   backendGet<{ report: MonitorReport }>(`/monitors/${id}/report`).then((r) => r.report)
+
+// --- M5: public status boards -----------------------------------
+
+export const listStatusBoards = () =>
+  backendGet<{ boards: StatusBoard[] | null }>('/monitors/status-boards').then((r) => arr(r.boards))
+
+export const saveStatusBoard = (b: Partial<StatusBoard>) =>
+  backendRequest<{ board: StatusBoard }>(
+    b.id ? 'PUT' : 'POST',
+    b.id ? `/monitors/status-boards/${b.id}` : '/monitors/status-boards',
+    b,
+  ).then((r) => r.board)
+
+export const rotateStatusBoard = (id: string) =>
+  backendRequest<{ board: StatusBoard }>('POST', `/monitors/status-boards/${id}/rotate`).then((r) => r.board)
+
+export const deleteStatusBoard = (id: string) =>
+  backendRequest<{ status: string }>('DELETE', `/monitors/status-boards/${id}`)
+
+/**
+ * Fetch a public status page — unauthenticated, no bearer token. On a hosted
+ * same-origin deployment `endpoint` is '' so this is a relative fetch.
+ */
+export async function publicStatus(token: string): Promise<PublicStatusPage> {
+  const base = resolveWebEndpoint().endpoint
+  const res = await fetch(`${base}/api/v1/status/${encodeURIComponent(token)}`, {
+    headers: { Accept: 'application/json' },
+  })
+  if (!res.ok) throw new Error(res.status === 404 ? 'Status page not found' : `HTTP ${res.status}`)
+  return res.json() as Promise<PublicStatusPage>
+}
 
 export const pauseMonitor = (id: string, paused: boolean) =>
   backendRequest<{ monitor: Monitor }>('POST', `/monitors/${id}/${paused ? 'pause' : 'resume'}`).then(

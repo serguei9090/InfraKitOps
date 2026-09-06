@@ -72,6 +72,10 @@ func bearerAuth(token string) func(http.Handler) http.Handler {
 	want := []byte(token)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodOptions || publicPath(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			got := ""
 			if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 				got = strings.TrimPrefix(h, "Bearer ")
@@ -109,13 +113,18 @@ func bearerToken(r *http.Request) string {
 	return r.URL.Query().Get("token")
 }
 
-// authExempt is the set of paths reachable without a session.
+// publicPath is reachable with no credential at all, in BOTH auth modes — the
+// token-addressed public status pages (MONITORS_MODULE_PLAN.md M5), which carry
+// nothing beyond monitor name / status / uptime.
+func publicPath(p string) bool { return strings.HasPrefix(p, "/api/v1/status/") }
+
+// authExempt is the set of paths reachable without a session (multi-user mode).
 func authExempt(p string) bool {
 	switch p {
 	case "/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/bootstrap", "/api/v1/auth/setup-status":
 		return true
 	}
-	return false
+	return publicPath(p)
 }
 
 // sessionAuth replaces bearerAuth when --auth on: every request outside

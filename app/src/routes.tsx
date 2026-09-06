@@ -11,6 +11,11 @@ import { RouteFallback } from './adapters/ui/shell/RouteFallback'
 
 export const router = createBrowserRouter([
   {
+    // Public status page (MONITORS_MODULE_PLAN.md M5) — standalone, no shell, no auth.
+    path: '/status/:token',
+    lazy: () => import('./adapters/ui/monitor/StatusPageScreen').then((m) => ({ Component: m.StatusPageScreen })),
+  },
+  {
     path: '/',
     element: <AppShellScaffold />,
     HydrateFallback: RouteFallback,

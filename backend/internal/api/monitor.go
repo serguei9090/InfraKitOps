@@ -228,6 +228,83 @@ func endedCSV(ms int64) string {
 	return time.UnixMilli(ms).UTC().Format(time.RFC3339)
 }
 
+// --- M5: public status boards -----------------------------------
+
+// StatusBoards: GET /monitors/status-boards
+func (h *MonitorHandlers) StatusBoards(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	bs, err := h.Store.ListBoards(owner(r))
+	if err != nil {
+		monitorErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"boards": bs})
+}
+
+// SaveBoard: POST /monitors/status-boards | PUT /monitors/status-boards/{id}
+func (h *MonitorHandlers) SaveBoard(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var b monitor.StatusBoard
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	if id := chi.URLParam(r, "id"); id != "" {
+		b.ID = id
+	}
+	saved, err := h.Store.PutBoard(owner(r), b)
+	if err != nil {
+		monitorErr(w, err)
+		return
+	}
+	audit(r, "monitor_status_board", saved.Title, nil)
+	WriteJSON(w, http.StatusOK, map[string]any{"board": saved})
+}
+
+// RotateBoard: POST /monitors/status-boards/{id}/rotate
+func (h *MonitorHandlers) RotateBoard(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	b, err := h.Store.RotateBoardToken(owner(r), chi.URLParam(r, "id"))
+	if err != nil {
+		monitorErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"board": b})
+}
+
+// DeleteBoard: DELETE /monitors/status-boards/{id}
+func (h *MonitorHandlers) DeleteBoard(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	if err := h.Store.DeleteBoard(owner(r), chi.URLParam(r, "id")); err != nil {
+		monitorErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// PublicStatus: GET /status/{token} — NO auth, stripped read-only payload.
+func (h *MonitorHandlers) PublicStatus(w http.ResponseWriter, r *http.Request) {
+	if !h.ok() {
+		apierr.Write(w, apierr.Unavailable("the Monitors module"))
+		return
+	}
+	ps, err := h.Store.PublicStatus(chi.URLParam(r, "token"), time.Now())
+	if err != nil {
+		apierr.Write(w, apierr.NotFound("status page not found"))
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=30")
+	WriteJSON(w, http.StatusOK, ps)
+}
+
 // SetPaused: POST /monitors/{id}/pause | /resume
 func (h *MonitorHandlers) SetPaused(paused bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
