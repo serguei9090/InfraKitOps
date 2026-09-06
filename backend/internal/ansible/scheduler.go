@@ -48,6 +48,7 @@ func (s *Scheduler) Stop() {
 func (s *Scheduler) loop(ctx context.Context) {
 	defer close(s.done)
 	s.reanchor()
+	s.runOnStart(ctx)
 	t := time.NewTicker(s.interval)
 	defer t.Stop()
 	for {
@@ -82,6 +83,28 @@ func (s *Scheduler) reanchor() {
 				_ = s.store.saveScheduleRaw(s.store.scheduleOwner(sc.ID), sc)
 			}
 		}
+	}
+}
+
+// runOnStart fires every enabled schedule flagged RunOnStart once on start,
+// regardless of cron timing. At most one fire per schedule per boot.
+func (s *Scheduler) runOnStart(ctx context.Context) {
+	list, err := s.store.ListSchedules("")
+	if err != nil {
+		return
+	}
+	for _, sc := range list {
+		if !sc.Enabled || !sc.RunOnStart {
+			continue
+		}
+		s.mu.Lock()
+		if s.running[sc.ID] {
+			s.mu.Unlock()
+			continue
+		}
+		s.running[sc.ID] = true
+		s.mu.Unlock()
+		go s.fire(ctx, sc)
 	}
 }
 

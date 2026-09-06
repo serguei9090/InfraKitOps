@@ -182,10 +182,14 @@ type SSHNode struct {
 // RunSchedule fires a runbook on a cron expression (R4b). Only published
 // runbooks are run on a schedule.
 type RunSchedule struct {
-	ID         string            `json:"id"`
-	RunbookID  string            `json:"runbookId"`
-	Cron       string            `json:"cron"`
-	Enabled    bool              `json:"enabled"`
+	ID        string `json:"id"`
+	RunbookID string `json:"runbookId"`
+	Cron      string `json:"cron"`
+	Enabled   bool   `json:"enabled"`
+	// RunOnStart fires the schedule once whenever the scheduler starts (app
+	// open / backend boot), regardless of cron timing — the desktop "morning
+	// check". No backlog of missed windows is ever replayed.
+	RunOnStart bool              `json:"runOnStart,omitempty"`
 	Version    int               `json:"version"` // 0 = latest published
 	Args       map[string]string `json:"args"`
 	NextRunAt  int64             `json:"nextRunAt"`

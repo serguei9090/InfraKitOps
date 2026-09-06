@@ -116,12 +116,15 @@ type Run struct {
 // Schedule cron-fires a Job. AN4b — self-contained, reuses the orchestrator's
 // cron parser (no new dep).
 type Schedule struct {
-	ID         string `json:"id"`
-	Owner      string `json:"owner,omitempty"`
-	JobID      string `json:"jobId"`
-	Name       string `json:"name"`
-	Cron       string `json:"cron"` // 5-field, or @daily etc
-	Enabled    bool   `json:"enabled"`
+	ID      string `json:"id"`
+	Owner   string `json:"owner,omitempty"`
+	JobID   string `json:"jobId"`
+	Name    string `json:"name"`
+	Cron    string `json:"cron"` // 5-field, or @daily etc
+	Enabled bool   `json:"enabled"`
+	// RunOnStart fires the schedule once on scheduler start regardless of cron
+	// timing (the desktop "morning check"); no missed windows are replayed.
+	RunOnStart bool   `json:"runOnStart,omitempty"`
 	NextRunAt  int64  `json:"nextRunAt"`
 	LastRunAt  int64  `json:"lastRunAt"`
 	LastStatus string `json:"lastStatus,omitempty"`

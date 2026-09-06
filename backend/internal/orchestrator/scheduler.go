@@ -50,6 +50,7 @@ func (s *Scheduler) loop(ctx context.Context) {
 	defer close(s.done)
 	// Re-anchor NextRunAt for enabled schedules on boot (covers downtime).
 	s.reanchor()
+	s.runOnStart(ctx)
 	t := time.NewTicker(s.interval)
 	defer t.Stop()
 	for {
@@ -85,6 +86,29 @@ func (s *Scheduler) reanchor() {
 				_ = s.store.saveScheduleRaw(sc)
 			}
 		}
+	}
+}
+
+// runOnStart fires every enabled schedule flagged RunOnStart once, right after
+// the scheduler starts — regardless of cron timing. At most one fire per
+// schedule per boot; missed cron windows are never replayed.
+func (s *Scheduler) runOnStart(ctx context.Context) {
+	list, err := s.store.ListSchedules("")
+	if err != nil {
+		return
+	}
+	for _, sc := range list {
+		if !sc.Enabled || !sc.RunOnStart {
+			continue
+		}
+		s.mu.Lock()
+		if s.running[sc.ID] {
+			s.mu.Unlock()
+			continue
+		}
+		s.running[sc.ID] = true
+		s.mu.Unlock()
+		go s.fire(ctx, sc)
 	}
 }
 
