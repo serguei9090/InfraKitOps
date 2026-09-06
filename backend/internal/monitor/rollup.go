@@ -142,7 +142,9 @@ func (in Incident) Duration(now int64) int64 {
 }
 
 // OpenIncident starts a down span, unless one is already open for the monitor.
-func (s *Store) OpenIncident(id, owner string, at int64, detail string) error {
+// suppressed marks an outage the engine chose not to notify (a parent
+// dependency was already down).
+func (s *Store) OpenIncident(id, owner string, at int64, detail string, suppressed bool) error {
 	var n int
 	if err := s.db.QueryRow(
 		`SELECT COUNT(*) FROM monitor_incident WHERE monitor_id = ? AND ended_at = 0`, id,
@@ -153,10 +155,19 @@ func (s *Store) OpenIncident(id, owner string, at int64, detail string) error {
 		return nil
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO monitor_incident (monitor_id, owner, started_at, detail) VALUES (?,?,?,?)`,
-		id, owner, at, detail,
+		`INSERT INTO monitor_incident (monitor_id, owner, started_at, detail, suppressed) VALUES (?,?,?,?,?)`,
+		id, owner, at, detail, boolInt(suppressed),
 	)
 	return err
+}
+
+// parentDown reports whether m's dependency (if any) is currently down.
+func (s *Store) parentDown(m Monitor) bool {
+	if m.DependsOn == "" {
+		return false
+	}
+	p, err := s.Get("", m.DependsOn)
+	return err == nil && p != nil && p.Status == StatusDown
 }
 
 // CloseIncident ends the open down span for a monitor (no-op when none open).

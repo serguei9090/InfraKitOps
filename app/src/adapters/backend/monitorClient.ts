@@ -7,6 +7,7 @@ import { resolveWebEndpoint } from './endpointOverride'
 import { openStream, type StreamHandlers } from './sseClient'
 import type {
   Monitor,
+  MonitorBulkError,
   MonitorIncident,
   MonitorReport,
   MonitorSample,
@@ -111,6 +112,16 @@ export const checkMonitor = (id: string) =>
 
 export const checkAllMonitors = () =>
   backendRequest<{ checking: number }>('POST', '/monitors/check-all')
+
+export const bulkImportMonitors = (text: string) =>
+  backendRequest<{ created: Monitor[] | null; errors: MonitorBulkError[] | null }>('POST', '/monitors/bulk', {
+    text,
+  }).then((r) => ({ created: arr(r.created), errors: arr(r.errors) }))
+
+export const createFromTemplate = (template: string, hostname: string, tags = '') =>
+  backendRequest<{ created: Monitor[] | null }>('POST', '/monitors/template', { template, hostname, tags }).then(
+    (r) => arr(r.created),
+  )
 
 export const muteMonitor = (id: string, untilMs: number) =>
   backendRequest<{ monitor: Monitor }>('POST', `/monitors/${id}/mute`, { untilMs }).then((r) => r.monitor)

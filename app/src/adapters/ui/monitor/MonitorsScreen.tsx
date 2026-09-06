@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BellOff, Download, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { BellOff, Download, FileUp, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useBackendStore } from '@/stores/backendStore'
 import { useMonitorStore } from '@/stores/monitorStore'
 import {
@@ -9,6 +9,7 @@ import {
   isMuted,
   KINDS,
   kindMeta,
+  MONITOR_TEMPLATES,
   relTime,
   SSH_PRESETS,
   STATUS_DOT,
@@ -40,6 +41,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
 const NO_SAMPLES: MonitorSample[] = []
@@ -68,6 +71,7 @@ export function MonitorsScreen() {
   const summary = useMonitorStore((s) => s.summary)
 
   const [editing, setEditing] = useState<Partial<Monitor> | 'new' | null>(null)
+  const [importing, setImporting] = useState(false)
   const [sweeping, setSweeping] = useState(false)
   const consumeNew = useMonitorStore((s) => s.consumeNew)
   const pendingNew = useMonitorStore((s) => s.pendingNew)
@@ -115,6 +119,9 @@ export function MonitorsScreen() {
           }}
         >
           <RefreshCw className={cn('size-4', sweeping && 'animate-spin')} /> Run all checks now
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setImporting(true)}>
+          <FileUp className="size-4" /> Import
         </Button>
         <Button size="sm" onClick={() => setEditing('new')}>
           <Plus className="size-4" /> New monitor
@@ -189,7 +196,122 @@ export function MonitorsScreen() {
           onClose={() => setEditing(null)}
         />
       )}
+      {importing && <ImportDialog onClose={() => setImporting(false)} />}
     </div>
+  )
+}
+
+function ImportDialog({ onClose }: { onClose: () => void }) {
+  const bulkImport = useMonitorStore((s) => s.bulkImport)
+  const fromTemplate = useMonitorStore((s) => s.fromTemplate)
+  const [text, setText] = useState('')
+  const [hostname, setHostname] = useState('')
+  const [tmplTags, setTmplTags] = useState('')
+  const [template, setTemplate] = useState<string>(MONITOR_TEMPLATES[0].id)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ created: number; errors: { line: number; text: string; error: string }[] } | null>(null)
+
+  const runPaste = async () => {
+    setBusy(true)
+    const r = await bulkImport(text)
+    setBusy(false)
+    setResult(r)
+    if (r.errors.length === 0 && r.created > 0) setTimeout(onClose, 700)
+  }
+  const runTemplate = async () => {
+    if (!hostname.trim()) return
+    setBusy(true)
+    const n = await fromTemplate(template, hostname.trim(), tmplTags.trim())
+    setBusy(false)
+    if (n > 0) onClose()
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Import monitors</DialogTitle>
+        </DialogHeader>
+        <Tabs defaultValue="paste">
+          <TabsList>
+            <TabsTrigger value="paste">Paste list</TabsTrigger>
+            <TabsTrigger value="template">Template</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="paste" className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              One monitor per line: <code>name,kind,target</code> (optional 4th field = tags). Blank lines and{' '}
+              <code>#</code> comments are skipped.
+            </p>
+            <Textarea
+              rows={7}
+              className="font-mono text-xs"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={'prod gw,icmp,10.0.0.1\napi,http,https://example.com/health,prod\ncert,tls-cert,example.com:443'}
+            />
+            {result && (
+              <div className="rounded border border-border/60 p-2 text-xs">
+                <p className="text-emerald-600 dark:text-emerald-500">{result.created} created</p>
+                {result.errors.map((e) => (
+                  <p key={e.line} className="text-destructive">
+                    line {e.line}: {e.error}
+                  </p>
+                ))}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={onClose}>
+                Close
+              </Button>
+              <Button disabled={busy || !text.trim()} onClick={() => void runPaste()}>
+                {busy ? 'Importing…' : 'Import'}
+              </Button>
+            </DialogFooter>
+          </TabsContent>
+
+          <TabsContent value="template" className="space-y-2">
+            <div className="space-y-1">
+              <Label>Template</Label>
+              <Select value={template} onValueChange={(v) => v && setTemplate(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONITOR_TEMPLATES.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.label} — {t.desc}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="tmpl-host">Hostname</Label>
+              <Input
+                id="tmpl-host"
+                value={hostname}
+                onChange={(e) => setHostname(e.target.value)}
+                placeholder="example.com"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="tmpl-tags">Extra tags</Label>
+              <Input id="tmpl-tags" value={tmplTags} onChange={(e) => setTmplTags(e.target.value)} placeholder="prod" />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button disabled={busy || !hostname.trim()} onClick={() => void runTemplate()}>
+                {busy ? 'Creating…' : 'Create group'}
+              </Button>
+            </DialogFooter>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -609,7 +731,9 @@ function SshConfig({
 function MonitorDialog({ initial, onClose }: { initial: Partial<Monitor> | null; onClose: () => void }) {
   const isEdit = Boolean(initial?.id)
   const save = useMonitorStore((s) => s.save)
+  const allMonitors = useMonitorStore((s) => s.monitors)
   const [name, setName] = useState(initial?.name ?? '')
+  const [dependsOn, setDependsOn] = useState(initial?.dependsOn ?? '')
   const [kind, setKind] = useState<MonitorKind>(initial?.kind ?? 'icmp')
   const [target, setTarget] = useState(initial?.target ?? '')
   const [intervalSec, setIntervalSec] = useState(initial?.intervalSec ?? kindMeta(initial?.kind ?? 'icmp').defaultIntervalSec)
@@ -652,6 +776,7 @@ function MonitorDialog({ initial, onClose }: { initial: Partial<Monitor> | null;
       config,
       tags: tags.trim(),
       channel,
+      dependsOn,
     })
     setBusy(false)
     if (saved) onClose()
@@ -755,6 +880,31 @@ function MonitorDialog({ initial, onClose }: { initial: Partial<Monitor> | null;
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label>Depends on</Label>
+            <Select
+              value={dependsOn || 'none'}
+              onValueChange={(v) => setDependsOn(!v || v === 'none' ? '' : v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nothing</SelectItem>
+                {allMonitors
+                  .filter((m) => m.id !== initial?.id)
+                  .map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground">
+              While the parent is down, this monitor's own outage is recorded but not alerted.
+            </p>
           </div>
         </div>
         <DialogFooter>

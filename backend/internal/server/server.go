@@ -276,6 +276,8 @@ func NewRouter(opts Options) http.Handler {
 			r.Get("/stream", monH.Stream)
 			r.Get("/summary", monH.Summary)
 			r.Post("/check-all", monH.CheckAll)
+			r.Post("/bulk", monH.Bulk)
+			r.Post("/template", monH.Template)
 			r.Route("/status-boards", func(r chi.Router) {
 				r.Get("/", monH.StatusBoards)
 				r.Post("/", monH.SaveBoard)

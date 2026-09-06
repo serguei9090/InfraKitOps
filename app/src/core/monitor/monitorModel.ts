@@ -41,6 +41,9 @@ export interface Monitor {
   renotifyEverySec?: number
   /** unix ms; while now < this the monitor probes but doesn't alert (M3) */
   mutedUntil?: number
+  /** another monitor's id — while it is down, this monitor's own outage is
+   * recorded but not notified (M5) */
+  dependsOn?: string
   status: MonitorStatus
   lastCheckedAt: number
   lastChangeAt: number
@@ -152,6 +155,18 @@ export interface SeriesPoint {
   max: number
   total: number
 }
+
+/** One `name,kind,target` line that failed bulk import. */
+export interface MonitorBulkError {
+  line: number
+  text: string
+  error: string
+}
+
+/** Monitor templates — a tagged group created for one hostname. */
+export const MONITOR_TEMPLATES = [
+  { id: 'web-service', label: 'Web service', desc: 'HTTP + TLS cert + DNS + domain expiry' },
+] as const
 
 /** A configured public status page (owner-scoped CRUD). */
 export interface StatusBoard {

@@ -217,12 +217,20 @@ func (e *Engine) tick(ctx context.Context, id string, st *loopState) (sample Sam
 		obs.Warnf("monitor %s: record failed: %v", id, err)
 	}
 
+	// A down transition whose parent dependency is already down is recorded but
+	// not paged (MONITORS_MODULE_PLAN.md M5).
+	suppressed := newStatus == StatusDown && e.store.parentDown(*m)
+
 	// A real up<->down transition → incident log + the alert sink + live stream.
 	if changed && (newStatus == StatusDown || (newStatus == StatusUp && m.Status == StatusDown)) {
 		ev := "recovered"
 		if newStatus == StatusDown {
 			ev = "down"
-			if err := e.store.OpenIncident(id, m.Owner, s.T, s.Detail); err != nil {
+			detail := s.Detail
+			if suppressed {
+				detail = "suppressed — a dependency is down"
+			}
+			if err := e.store.OpenIncident(id, m.Owner, s.T, detail, suppressed); err != nil {
 				obs.Warnf("monitor %s: open incident: %v", id, err)
 			}
 		} else if err := e.store.CloseIncident(id, s.T); err != nil {
@@ -235,7 +243,7 @@ func (e *Engine) tick(ctx context.Context, id string, st *loopState) (sample Sam
 		e.broadcast(alert)
 	}
 
-	if e.notifier != nil {
+	if e.notifier != nil && !suppressed {
 		e.applyNotifyPolicy(m, newStatus, s, st)
 	}
 	return s, true

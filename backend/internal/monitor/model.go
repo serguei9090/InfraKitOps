@@ -55,6 +55,9 @@ type Monitor struct {
 	// MutedUntil: unix ms; while now < MutedUntil the monitor still probes +
 	// records but sends no alerts. (M3)
 	MutedUntil int64 `json:"mutedUntil,omitempty"`
+	// DependsOn: another monitor's id. While that parent is down, this
+	// monitor's own down transition is recorded but not notified (M5).
+	DependsOn string `json:"dependsOn,omitempty"`
 
 	Status        string `json:"status"`
 	LastCheckedAt int64  `json:"lastCheckedAt"`

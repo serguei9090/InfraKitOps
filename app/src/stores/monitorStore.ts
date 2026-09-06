@@ -10,6 +10,7 @@ import {
   rangeSinceMs,
   type Monitor,
   type MonitorAlert,
+  type MonitorBulkError,
   type MonitorIncident,
   type MonitorSample,
   type MonitorSettings,
@@ -62,6 +63,8 @@ interface MonitorState {
   loadSeries: (id: string) => Promise<void>
   setSeriesRange: (r: UptimeRange) => void
   save: (m: Partial<Monitor>) => Promise<Monitor | null>
+  bulkImport: (text: string) => Promise<{ created: number; errors: MonitorBulkError[] }>
+  fromTemplate: (template: string, hostname: string, tags: string) => Promise<number>
   remove: (id: string) => Promise<void>
   setPaused: (id: string, paused: boolean) => Promise<void>
   checkNow: (id: string) => Promise<void>
@@ -228,6 +231,28 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
     } catch (e) {
       reportError(e, SRC)
       return null
+    }
+  },
+
+  bulkImport: async (text) => {
+    try {
+      const { created, errors } = await api.bulkImportMonitors(text)
+      await get().refresh()
+      return { created: created.length, errors }
+    } catch (e) {
+      reportError(e, SRC)
+      return { created: 0, errors: [] }
+    }
+  },
+
+  fromTemplate: async (template, hostname, tags) => {
+    try {
+      const created = await api.createFromTemplate(template, hostname, tags)
+      await get().refresh()
+      return created.length
+    } catch (e) {
+      reportError(e, SRC)
+      return 0
     }
   },
 

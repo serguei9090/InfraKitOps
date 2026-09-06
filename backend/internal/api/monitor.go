@@ -228,6 +228,66 @@ func endedCSV(ms int64) string {
 	return time.UnixMilli(ms).UTC().Format(time.RFC3339)
 }
 
+// Bulk: POST /monitors/bulk  {text}
+func (h *MonitorHandlers) Bulk(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var body struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	drafts, errs := monitor.ParseBulk(body.Text)
+	created := make([]monitor.Monitor, 0, len(drafts))
+	for i, d := range drafts {
+		saved, err := h.Store.Put(owner(r), d)
+		if err != nil {
+			errs = append(errs, monitor.BulkError{Line: i + 1, Text: d.Name, Err: err.Error()})
+			continue
+		}
+		h.Engine.Reload(*saved)
+		created = append(created, *saved)
+	}
+	audit(r, "monitor_bulk", "", map[string]string{"created": strconv.Itoa(len(created))})
+	WriteJSON(w, http.StatusOK, map[string]any{"created": created, "errors": errs})
+}
+
+// Template: POST /monitors/template  {template, hostname, tags}
+func (h *MonitorHandlers) Template(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var body struct {
+		Template string `json:"template"`
+		Hostname string `json:"hostname"`
+		Tags     string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	drafts, err := monitor.BuildTemplate(body.Template, body.Hostname, body.Tags)
+	if err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	created := make([]monitor.Monitor, 0, len(drafts))
+	for _, d := range drafts {
+		saved, err := h.Store.Put(owner(r), d)
+		if err != nil {
+			monitorErr(w, err)
+			return
+		}
+		h.Engine.Reload(*saved)
+		created = append(created, *saved)
+	}
+	audit(r, "monitor_template", body.Template, map[string]string{"hostname": body.Hostname})
+	WriteJSON(w, http.StatusOK, map[string]any{"created": created})
+}
+
 // --- M5: public status boards -----------------------------------
 
 // StatusBoards: GET /monitors/status-boards

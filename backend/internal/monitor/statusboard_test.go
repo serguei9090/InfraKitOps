@@ -13,7 +13,7 @@ func TestStatusBoardCRUDAndPublic(t *testing.T) {
 	_ = s.recordCheck(up.ID, Sample{T: time.Now().UnixMilli(), OK: true, Value: 12}, StatusUp, true)
 	down, _ := s.Put("alice", Monitor{Name: "worker", Kind: "fake", Target: "y", Enabled: true})
 	_ = s.recordCheck(down.ID, Sample{T: time.Now().UnixMilli(), OK: false}, StatusDown, true)
-	_ = s.OpenIncident(down.ID, "alice", time.Now().UnixMilli(), "boom")
+	_ = s.OpenIncident(down.ID, "alice", time.Now().UnixMilli(), "boom", false)
 
 	board, err := s.PutBoard("alice", StatusBoard{Title: "Acme", Tags: "public", ShowIncidents: true})
 	if err != nil {

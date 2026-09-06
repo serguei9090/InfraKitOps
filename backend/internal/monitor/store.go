@@ -64,6 +64,7 @@ func Open(dsn string) (*Store, error) {
 		`ALTER TABLE monitor ADD COLUMN alert_after_sec INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE monitor ADD COLUMN renotify_every_sec INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE monitor ADD COLUMN muted_until INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE monitor ADD COLUMN depends_on TEXT NOT NULL DEFAULT ''`,
 	} {
 		if _, err := db.Exec(col); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			_ = db.Close()
@@ -115,7 +116,7 @@ func (s *Store) PurgeOwner(owner string) error {
 	return err
 }
 
-const monCols = `id, owner, name, kind, target, interval_sec, timeout_sec, fail_threshold, enabled, config_json, status, last_checked_at, last_change_at, created_at, tags, channel, alert_after_sec, renotify_every_sec, muted_until`
+const monCols = `id, owner, name, kind, target, interval_sec, timeout_sec, fail_threshold, enabled, config_json, status, last_checked_at, last_change_at, created_at, tags, channel, alert_after_sec, renotify_every_sec, muted_until, depends_on`
 
 func scanMonitor(sc interface{ Scan(...any) error }) (Monitor, error) {
 	var m Monitor
@@ -123,7 +124,7 @@ func scanMonitor(sc interface{ Scan(...any) error }) (Monitor, error) {
 	var enabled int
 	if err := sc.Scan(&m.ID, &m.Owner, &m.Name, &m.Kind, &m.Target, &m.IntervalSec, &m.TimeoutSec,
 		&m.FailThreshold, &enabled, &cfg, &m.Status, &m.LastCheckedAt, &m.LastChangeAt, &m.CreatedAt,
-		&m.Tags, &m.Channel, &m.AlertAfterSec, &m.RenotifyEverySec, &m.MutedUntil); err != nil {
+		&m.Tags, &m.Channel, &m.AlertAfterSec, &m.RenotifyEverySec, &m.MutedUntil, &m.DependsOn); err != nil {
 		return Monitor{}, err
 	}
 	m.Enabled = enabled != 0
@@ -231,15 +232,16 @@ func (s *Store) Put(owner string, m Monitor) (*Monitor, error) {
 		enabled = 1
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO monitor (`+monCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		`INSERT INTO monitor (`+monCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		 ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, target=excluded.target,
 		   interval_sec=excluded.interval_sec, timeout_sec=excluded.timeout_sec,
 		   fail_threshold=excluded.fail_threshold, enabled=excluded.enabled, config_json=excluded.config_json,
 		   tags=excluded.tags, channel=excluded.channel, alert_after_sec=excluded.alert_after_sec,
-		   renotify_every_sec=excluded.renotify_every_sec`,
+		   renotify_every_sec=excluded.renotify_every_sec, depends_on=excluded.depends_on`,
 		m.ID, m.Owner, m.Name, m.Kind, m.Target, m.IntervalSec, m.TimeoutSec, m.FailThreshold, enabled,
 		string(cfg), m.Status, m.LastCheckedAt, m.LastChangeAt, m.CreatedAt,
 		strings.TrimSpace(m.Tags), m.Channel, m.AlertAfterSec, m.RenotifyEverySec, m.MutedUntil,
+		strings.TrimSpace(m.DependsOn),
 	)
 	if err != nil {
 		return nil, err
