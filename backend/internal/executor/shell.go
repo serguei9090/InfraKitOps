@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"time"
 )
 
 // shellExecutor runs powershell / cmd / bash. The user's script is passed on
@@ -54,6 +55,12 @@ func (shellExecutor) Run(ctx context.Context, step Step, stdout, stderr io.Write
 	default:
 		return Result{ExitCode: -1, Err: "unsupported shell kind: " + string(step.Kind)}
 	}
+
+	// On ctx cancel / timeout Go kills the direct child, but a grandchild
+	// (e.g. `sleep` under bash) can keep a stdout pipe open and block Wait.
+	// WaitDelay force-closes the pipes shortly after the kill so a cancelled
+	// run actually returns. See BACKGROUND_RUNS_PLAN.md (cancel is a BR feature).
+	cmd.WaitDelay = 3 * time.Second
 
 	if len(step.Env) > 0 {
 		env := os.Environ()
