@@ -1,6 +1,6 @@
 # Monitors module — plan (BR Tier 2)
 
-## Status: M0 + M1 done (icmp/tcp probes + status board). M2–M6 planned — see "Day-to-day needs → roadmap".
+## Status: M0 + M1 done (icmp/tcp probes + status board). M2 in progress. See the Build checklist at the bottom.
 
 - **M0 (2026-09-05)** — `internal/monitor`: `monitor.db` (`--monitor-db`),
   `Probe` iface + `icmp`/`tcp`, `Engine` (ticker per monitor, fail-threshold
@@ -39,7 +39,7 @@ stream, and needs a rolling window, not replay-all.
 | `tcp` | `net.DialTimeout` | connect ms | connection accepted | stdlib |
 | `http` | GET, follow redirects | TTFB ms | 2xx/3xx (+ optional expected status / body substring) | stdlib |
 | `dns` | `LookupHost` | 0/1 | resolves (+ optional expected address) | `internal/tools/dnslookup` |
-| `tls-cert` | `tls.Dial` + parse chain | days to `notAfter` | days > `warnDays` (default 14) | `internal/tools/x509fetch` |
+| `tls-cert` | `tls.Dial` + parse chain | days to `notAfter` | days > `warnDays` (default 21) + trusted + host-match | `internal/tools/x509fetch` |
 
 Plus `domain` (whois expiry) and `redis` / `runbook` / `statuspage` — see the
 roadmap. `ssh` (M4) is the one that matters most day-to-day: it reuses the
@@ -76,9 +76,9 @@ shared infra, unified view, tool integration.
     emit `alert{event:"down"}`
   - first ok after down → `status=up`, emit `alert{event:"recovered"}`
   - `SetEnabled(id,bool)` starts/stops a goroutine; `Reload(id)` on edit.
-- **Retention**: `PruneSamples` every ~5 min — keep the last `maxSamples`
-  (default 5000) per monitor. Downsampling / rollups for long retention is
-  **M4**, not v1.
+- **Retention**: `prune()` every ~5 min — keep the last `maxSamples`
+  (default 5000) per monitor (window function, per `monitor_id`). Downsampling /
+  rollups for long retention is **M5**, not v1.
 - **Boot**: **resume** every `enabled=1` monitor (the opposite of `runstream`'s
   mark-interrupted — persistence is the point); `status=unknown` until the
   first probe lands.
@@ -357,6 +357,93 @@ One probe kind that subsumes a dozen "is X on the box OK" needs.
   own connectivity). A native `pgx` / `go-sql-driver` probe only if a
   connection from the InfraKit host itself is specifically wanted — it's the
   first runtime dep the module would take, so it needs a real ask.
+
+## Build checklist
+
+`[x]` done · `[ ]` to build. Backend items are Go in `backend/`, frontend TS
+in `app/`.
+
+### M0 — done
+- [x] `internal/monitor/{model,store,probe,engine}.go` + `probe_icmp.go` + `probe_tcp.go`
+- [x] `monitor.db` schema, `prune()`, boot-resume, `seedFailStreak`, `StopAll`
+- [x] `internal/api/monitor.go` — CRUD + `/samples` + `/{pause,resume,check}`
+- [x] `main.go` `openMonitor` + engine `Start(ctx)` + alert-sink log
+- [x] `server.go` routes, `middleware.moduleOf`→`monitor`, `capabilities.monitor`
+- [x] `monitor_test.go`
+
+### M1 — done
+- [x] `core/monitor/monitorModel.ts` — types, `KINDS`, status helpers
+- [x] `adapters/backend/monitorClient.ts`
+- [x] `stores/monitorStore.ts` — 10s poll, down-toast
+- [x] `moduleTaxonomy` `monitor` entry + `routes.tsx` + `tools/MonitorsScreen.tsx`
+- [x] `adapters/ui/monitor/MonitorsScreen.tsx` — board + detail + New/Edit dialog
+
+### M2 — probe kinds (backend)
+- [ ] `probe_tls.go` — `x509fetch.Fetch` + parse `notAfter`; value = days; ok = `>warnDays` (21) & trusted & host-match; `detail` = fail reason; default interval 3600
+- [ ] `probe_domain.go` — `whois.Query`; parse `Parsed.ExpirationDate` (try RFC3339 + a couple layouts); value = days; ok = `>warnDays` (30); default interval 43200
+- [ ] `probe_http.go` — `net/http` (method, headers w/ `{{secret:}}`, redirects toggle, timeout); value = TTFB ms; ok = status in set (default 200–399) & `<maxLatencyMs` & content assert; reuse `executor.EvalDotPath` for JSON assert
+- [ ] `probe_dns.go` — `dnslookup.Query` (type, resolver); ok = resolves & value(s) match expected; value = resolve ms
+- [ ] `model.go` — per-kind default interval/timeout in `normalize()`; `config_json` shape validation per kind (in `Store.Put` or handler)
+- [ ] tests: one per probe (httptest server for `http`; a live/skip for `tls`/`dns`; fixture for `domain`)
+
+### M2 — frontend
+- [ ] `monitorModel.ts` — per-kind `config` field schema + defaults
+- [ ] `MonitorDialog` — per-kind field group (switch on `kind`)
+- [ ] detail view — render the config/assertion summary line
+
+### M3 — notifications (backend)
+- [ ] `internal/monitor/notify/{notify,webhook,smtp,desktop}.go`
+- [ ] `monitor_settings` table + `GET/PUT /monitors/settings` + `POST /monitors/settings/test`
+- [ ] schema migration: `monitor.channel`, `alert_after_sec`, `renotify_every_sec`, `notify_on_recovery`, `tags`
+- [ ] `monitor_mute` table + engine mute check (skip `notify`, keep probing)
+- [ ] engine: policy — track `downSince`, notify at `alertAfterSec` wall-clock, re-notify loop, recovery notify; wire the sink to `notify.Dispatch`
+- [ ] `GET /monitors?tag=` filter
+- [ ] `GET /monitors/stream` SSE — status-change fan-out (add a subscriber list to `Engine`)
+- [ ] `POST /monitors/check-all`
+- [ ] `--monitor-webhook` / `--monitor-smtp-*` flags + `INFRAKIT_*` env
+- [ ] Vault wiring for SMTP pass + webhook signing key
+
+### M3 — schedules (backend, `internal/orchestrator` + `internal/ansible`)
+- [ ] `RunSchedule.runOnStart` + `Schedule.runOnStart` bool + `ALTER TABLE` migrations
+- [ ] both schedulers: on `Start()`, fire each enabled `runOnStart` schedule once (≤1/boot), then normal loop
+- [ ] schedule API: accept/return the flag
+
+### M3 — Tauri (`app/src-tauri/`)
+- [ ] tray icon + menu (Show / Quit)
+- [ ] window `close` → `hide` when `keepMonitoringInBackground` pref set
+- [ ] `lib.rs` — don't kill the sidecar on window close when the pref is on
+
+### M3 — frontend
+- [ ] `monitorStore` — subscribe `/monitors/stream` when board open; tag-filter state
+- [ ] `monitorClient` — settings CRUD, test, check-all
+- [ ] `adapters/ui/settings/sections/MonitorSettings.tsx` + `registry.tsx` entry (full panel spec above)
+- [ ] `MonitorsScreen` — tag filter bar + per-tag summary; "Run all checks now"; per-monitor channel/policy/mute in editor; "muted" pill
+- [ ] runbook + ansible schedule editors — "Run once when the app/backend starts" checkbox
+- [ ] "Save as monitor" — `PingMonitorScreen`, `X509InspectorScreen`, `DnsLookupScreen`, `WhoisScreen`
+- [ ] desktop — Tauri notification on `monitor-alert` SSE
+
+### M4 — `ssh` probe
+- [ ] `probe_ssh.go` — `executor.SSHRun` + node resolver + Vault; assert `exitZero` / `stdoutMatches` / `stdoutNumber op n`; value = number or 0/1
+- [ ] `Engine.SetNodeResolver` + `main.go` wiring (mirror ansible's)
+- [ ] preset command list
+- [ ] FE: ssh field group (node picker + command + assertion builder + preset dropdown)
+- [ ] FE: `SshNodesView` "monitor this node" → icmp + ssh monitor tagged `node:<name>`; board `node:` group view
+
+### M5 — reporting & scale
+- [ ] `monitor_rollup` table + fold sweep (1-min @24h, 1-hour @7d) + raw prune at 24h
+- [ ] `GET /monitors/{id}/incidents` (fold down→up)
+- [ ] uptime % per window (24h/7d/30d) per-monitor + per-tag; `GET /monitors/{id}/report` + CSV/JSON
+- [ ] `status_board` table (token) + `GET /status/{token}` (no auth, stripped)
+- [ ] `POST /monitors/bulk` + `POST /monitors/template`
+- [ ] `monitor.depends_on` + engine suppression
+- [ ] FE: chart resolution picker; incident timeline; report view + export; `/status/:token` route; bulk-import + template dialogs; dependency field
+
+### M6 — app-layer (on request)
+- [ ] `probe_redis.go` (TCP + RESP PING/AUTH)
+- [ ] `probe_runbook.go` (`orchestrator.Engine`, ok = all steps ok)
+- [ ] `probe_statuspage.go` (`…/api/v2/status.json`)
+- [ ] FE: redis / runbook / statuspage field groups
+- [ ] *(only if asked)* native Postgres/MySQL probe — first runtime dep
 
 ## Not doing
 
