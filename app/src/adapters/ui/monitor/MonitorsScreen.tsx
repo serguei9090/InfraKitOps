@@ -3,11 +3,13 @@ import { Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useBackendStore } from '@/stores/backendStore'
 import { useMonitorStore } from '@/stores/monitorStore'
 import {
+  configSummary,
   KINDS,
   kindMeta,
   relTime,
   STATUS_DOT,
   uptimePct,
+  type ConfigField,
   type Monitor,
   type MonitorKind,
   type MonitorSample,
@@ -17,6 +19,7 @@ import { BackendUnavailable } from '@/adapters/ui/network/BackendUnavailable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -178,6 +181,9 @@ function MonitorDetail({ m, onEdit }: { m: Monitor; onEdit: () => void }) {
             {meta.label} · <span className="font-mono">{m.target}</span> · every {m.intervalSec}s ·{' '}
             down after {m.failThreshold} fails
           </p>
+          {configSummary(m.kind, m.config) ? (
+            <p className="text-[11px] text-muted-foreground/80">{configSummary(m.kind, m.config)}</p>
+          ) : null}
         </div>
         <div className="flex shrink-0 gap-1.5">
           <Button size="sm" variant="outline" onClick={() => void checkNow(m.id)}>
@@ -245,15 +251,90 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
+function ConfigInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: ConfigField
+  value: unknown
+  onChange: (v: unknown) => void
+}) {
+  const id = `cfg-${field.key}`
+  if (field.type === 'bool') {
+    const checked = typeof value === 'boolean' ? value : (field.default ?? false)
+    return (
+      <div className="col-span-2 flex items-center justify-between">
+        <Label htmlFor={id}>{field.label}</Label>
+        <Switch id={id} checked={checked} onCheckedChange={onChange} />
+      </div>
+    )
+  }
+  if (field.type === 'select') {
+    return (
+      <div className="space-y-1">
+        <Label>{field.label}</Label>
+        <Select value={(value as string) || field.default} onValueChange={onChange}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options.map((o) => (
+              <SelectItem key={o} value={o}>
+                {o}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id}>{field.label}</Label>
+      <Input
+        id={id}
+        type={field.type === 'number' ? 'number' : 'text'}
+        value={value == null ? '' : String(value)}
+        placeholder={'placeholder' in field ? field.placeholder : undefined}
+        onChange={(e) =>
+          onChange(field.type === 'number' ? (e.target.value === '' ? undefined : Number(e.target.value)) : e.target.value)
+        }
+      />
+      {'hint' in field && field.hint ? <p className="text-[10px] text-muted-foreground">{field.hint}</p> : null}
+    </div>
+  )
+}
+
 function MonitorDialog({ initial, onClose }: { initial: Monitor | null; onClose: () => void }) {
   const save = useMonitorStore((s) => s.save)
   const [name, setName] = useState(initial?.name ?? '')
   const [kind, setKind] = useState<MonitorKind>(initial?.kind ?? 'icmp')
   const [target, setTarget] = useState(initial?.target ?? '')
-  const [intervalSec, setIntervalSec] = useState(initial?.intervalSec ?? 60)
+  const [intervalSec, setIntervalSec] = useState(initial?.intervalSec ?? kindMeta(initial?.kind ?? 'icmp').defaultIntervalSec)
   const [failThreshold, setFailThreshold] = useState(initial?.failThreshold ?? 3)
+  const [config, setConfig] = useState<Record<string, unknown>>(initial?.config ?? {})
+  const [intervalTouched, setIntervalTouched] = useState(false)
   const [busy, setBusy] = useState(false)
   const meta = kindMeta(kind)
+
+  // Switching kind on a *new* monitor pulls in that kind's sane interval + drops
+  // stale config (an edit keeps whatever the user had).
+  function pickKind(k: MonitorKind) {
+    setKind(k)
+    if (!initial) {
+      setConfig({})
+      if (!intervalTouched) setIntervalSec(kindMeta(k).defaultIntervalSec)
+    }
+  }
+
+  const setCfg = (key: string, val: unknown) =>
+    setConfig((c) => {
+      const next = { ...c }
+      if (val === '' || val === undefined || val === null) delete next[key]
+      else next[key] = val
+      return next
+    })
 
   const submit = async () => {
     if (!name.trim() || !target.trim()) return
@@ -265,6 +346,7 @@ function MonitorDialog({ initial, onClose }: { initial: Monitor | null; onClose:
       target: target.trim(),
       intervalSec,
       failThreshold,
+      config,
     })
     setBusy(false)
     if (saved) onClose()
@@ -283,7 +365,7 @@ function MonitorDialog({ initial, onClose }: { initial: Monitor | null; onClose:
           </div>
           <div className="space-y-1">
             <Label>Check</Label>
-            <Select value={kind} onValueChange={(v) => setKind(v as MonitorKind)}>
+            <Select value={kind} onValueChange={(v) => pickKind(v as MonitorKind)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -306,6 +388,15 @@ function MonitorDialog({ initial, onClose }: { initial: Monitor | null; onClose:
               className="font-mono"
             />
           </div>
+
+          {meta.configFields.length > 0 && (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-md border border-border/50 p-3">
+              {meta.configFields.map((f) => (
+                <ConfigInput key={f.key} field={f} value={config[f.key]} onChange={(v) => setCfg(f.key, v)} />
+              ))}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="mon-interval">Interval (s)</Label>
@@ -314,7 +405,10 @@ function MonitorDialog({ initial, onClose }: { initial: Monitor | null; onClose:
                 type="number"
                 min={5}
                 value={intervalSec}
-                onChange={(e) => setIntervalSec(Math.max(5, Number(e.target.value) || 60))}
+                onChange={(e) => {
+                  setIntervalTouched(true)
+                  setIntervalSec(Math.max(5, Number(e.target.value) || 60))
+                }}
               />
             </div>
             <div className="space-y-1">
