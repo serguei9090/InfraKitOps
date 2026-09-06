@@ -6,7 +6,44 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+/**
+ * Walk a `<Select>`'s children for `<SelectItem value="…">Text</SelectItem>`
+ * pairs and build the `items` map Base UI needs so `<SelectValue>` shows the
+ * option's label instead of its raw value. Only plain-string item bodies are
+ * collected — items with icon/element children keep Base UI's raw-value
+ * fallback (no regression). Runs during render, so the label is right on the
+ * first paint without the popup ever opening.
+ */
+function collectSelectItems(
+  node: React.ReactNode,
+  acc: Record<string, React.ReactNode> = {},
+): Record<string, React.ReactNode> {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return
+    const props = child.props as { value?: unknown; children?: React.ReactNode }
+    if (child.type === SelectItem && props.value != null && typeof props.children === "string") {
+      acc[String(props.value)] = props.children
+    } else if (props.children != null) {
+      collectSelectItems(props.children, acc)
+    }
+  })
+  return acc
+}
+
+function Select<Value, Multiple extends boolean | undefined = false>({
+  children,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const items = React.useMemo(() => {
+    const found = collectSelectItems(children)
+    return Object.keys(found).length > 0 ? found : undefined
+  }, [children])
+  return (
+    <SelectPrimitive.Root items={items} {...props}>
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
