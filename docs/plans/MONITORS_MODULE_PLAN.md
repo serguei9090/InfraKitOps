@@ -141,6 +141,103 @@ is a phase from here.
 | "Run my existing health-check runbook on a schedule and chart pass/fail" | `runbook` probe — run a published runbook per interval, pass = all steps ok (adds the timeseries + alert layer over cron schedules) | **M6** |
 | "Is one of my cloud dependencies having an incident" | `statuspage` — poll an Atlassian Statuspage `/api/v2/status.json` | **M6** |
 
+## Runtime models & missed-run handling
+
+The module behaves differently depending on how the backend runs. Both are
+first-class; the user picks per situation.
+
+### Model A — hosted / always-on (`docker compose`, DEPLOY_PLAN)
+
+The backend container runs 24/7. Monitors and cron schedules run continuously.
+This is the model for anything you *rely* on — cert expiry, production uptime,
+domain renewal. A restart is covered by M0 boot-resume. Alerts go out by email
+(M3 SMTP) and/or webhook (M3); no desktop notification (it's a browser).
+
+### Model B — desktop, "morning check" (Tauri sidecar)
+
+The sidecar lives only while the app window is open. The mental model: open the
+app, glance at the board / hit **Run all checks now**, confirm your dev + prod
+hosts and sites are healthy, close it. Ping / TCP / HTTP here are a manual
+sweep you do yourself, not a pager.
+
+- **On app open** the engine resumes every enabled monitor **and probes each
+  once immediately** (M0 already does this — `tick` fires on `Reload`, not at
+  the next interval). So the board is current within a couple of seconds of
+  opening.
+- **Run all checks now** — one button in the board header, `POST /monitors/check-all`,
+  fans a `CheckNow` across every monitor. The explicit "sweep" action. (M3.)
+- **Alerts are optional here** — you're watching the screen. SMTP / webhook
+  still work while the app is open (useful for a "send myself the morning
+  digest" flow); desktop-notification channel only makes sense with the tray
+  option below.
+- **"Keep monitoring in the background"** (desktop build only, M3) — a Settings
+  toggle. When on, closing the window **hides to a tray icon** instead of
+  quitting; the sidecar and monitors keep running, and the desktop channel can
+  raise real OS notifications. Off (default) = closing the app stops
+  everything. Full "launch on login / headless service" is out of scope — if
+  you want that, run Model A.
+
+### Missed runs when the backend was offline
+
+Monitors don't accumulate a backlog — a monitor is "what's true now", so
+run-once-on-resume is the whole story.
+
+**Cron schedules** (runbook R4b, ansible AN4b) do: a daily job due at 09:00
+while the app was closed is a real missed run. Current behaviour is hardcoded
+in each scheduler's `reanchor()` — a run missed by more than one poll interval
+(30 s) is **skipped**, and `NextRunAt` jumps to the next future cron match (it
+picks skip over "storm every missed 30 s window").
+
+Plan item (small, symmetric change to both schedulers + the schedule model):
+
+- `RunSchedule.onMiss` / `Schedule.onMiss` — `"skip"` (default, today's
+  behaviour) or `"run"`.
+- On boot, `reanchor()` honours it: with `"run"`, an overdue enabled schedule
+  fires **once** promptly, then advances; with `"skip"`, it just advances.
+- Never a storm: at most one catch-up fire per schedule per boot, regardless
+  of how many windows were missed.
+- Surfaced in the schedule editor as "If a run was missed while offline:
+  [skip / run once]".
+
+This lives with the Monitors work because it's the same "what happens on
+resume" question, but it touches `internal/orchestrator` and
+`internal/ansible`, not `internal/monitor`. Ship it in **M3**.
+
+## Settings → Monitors panel (M3)
+
+One section in the existing Settings registry (`registry.tsx`), same pattern
+as Runbooks / Network. Shared config lives in a `monitor_settings` blob
+(backend, `GET/PUT /monitors/settings`); the desktop-only tray toggle is a
+client preference.
+
+- **Alerting**
+  - *Default channel*: `none` · `webhook` · `email` · `desktop` (per-monitor
+    override still wins).
+  - *Webhook*: URL, `format` (`slack` · `discord` · `generic`), optional
+    signing header value (a `{{secret:NAME}}` Vault ref, never plaintext).
+    **Send test** button → posts a sample alert.
+  - *Email (SMTP)*: host, port, `security` (`none` · `starttls` · `tls`),
+    username, password (Vault secret ref), `from`, `to` (comma list).
+    **Send test** button.
+  - *Policy defaults*: "alert after down ≥ N seconds", "re-notify every N
+    minutes", "notify on recovery" (toggle). Per-monitor override in the
+    monitor editor.
+- **Behaviour**
+  - *Pause all monitors* — master kill switch (engine `StopAll`, rows keep
+    their `enabled` flag so a later un-pause restores exactly).
+  - *Run all checks when the backend starts* — toggle, default on (this is the
+    M0 run-on-resume; the toggle lets a large deployment opt out of a probe
+    storm at boot).
+  - *(desktop build)* **Keep monitoring when the window is closed** — the tray
+    option above.
+- **Retention**
+  - Raw sample cap per monitor (default 5000). Rollup windows appear here once
+    **M5** lands.
+
+Secrets (SMTP password, webhook signing key) go through the existing Vault —
+same as runbook / ansible auth — so `--auth on` gets per-user isolation for
+free and nothing sensitive sits in `monitor.db`.
+
 ## Phases
 
 ### Done
@@ -179,13 +276,15 @@ The alert sink stops being a log line.
 - **Channels** — `internal/monitor/notify/`: `webhook` (generic JSON, works for
   Slack / Discord / Teams incoming webhooks — a `format` hint picks the body
   shape), `smtp` (stdlib `net/smtp`), `desktop` (a `monitor-alert` SSE the
-  desktop app turns into an OS notification). Config via `--monitor-webhook` /
-  `--monitor-smtp-*` flags + `INFRAKIT_*` env + a Settings → Monitors panel.
-  Per-monitor channel override; a global default otherwise.
+  desktop app turns into an OS notification, only meaningful with the tray
+  option). Config via the **Settings → Monitors panel** (spec above) backed by
+  `monitor_settings` + `GET/PUT /monitors/settings`; `--monitor-*` flags +
+  `INFRAKIT_*` env for headless deploys. Per-monitor channel override; a global
+  default otherwise. Secrets via Vault.
 - **Notification policy** (per monitor, defaults global): notify once the
   monitor has been `down` for ≥ `alertAfterSec` (wall-clock, so a flappy target
   with a low `failThreshold` doesn't spam); `renotifyEverySec` while still down;
-  a recovery notification. "Business hours only" window is a stretch goal here.
+  a recovery notification.
 - **Maintenance windows** — `monitor_mute(monitor_id | tag, from, to, repeat?)`.
   A muted monitor keeps probing and recording; the engine just skips `notify()`.
   Board shows a "muted" pill.
@@ -193,6 +292,15 @@ The alert sink stops being a log line.
   per-tag `up/down` summary. `GET /monitors?tag=`.
 - **`/monitors/stream`** SSE — live status-change events for the board, so it
   updates without waiting for the 10 s poll.
+- **Run all checks now** — board-header button, `POST /monitors/check-all`
+  (fan a `CheckNow` across the caller's monitors). The Model-B "morning sweep".
+- **Schedule misfire policy** — `onMiss: skip | run` on `RunSchedule` /
+  ansible `Schedule`; `reanchor()` in both schedulers honours it (see "Missed
+  runs" above). Editor gets a "if a run was missed while offline" choice.
+- **Desktop: minimise-to-tray** — `src-tauri` tray icon + a
+  `close → hide` handler gated on a `keepMonitoringInBackground` preference;
+  the sidecar is no longer killed on window close when it's on. Settings toggle
+  (desktop build only).
 - **"Save as monitor"** buttons: Ping Monitor (one `icmp` per host), X.509
   Inspector (`tls-cert`), DNS Lookup (`dns`), Whois (`domain`). Each prefills
   the New-monitor dialog from the tool's current input.
