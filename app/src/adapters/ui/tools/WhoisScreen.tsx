@@ -55,7 +55,7 @@ export function WhoisScreen() {
       statusStrip={<StatusStrip running={running} items={[p?.registrar ? `Registrar: ${p.registrar}` : '']} />}
       queryBar={
         <QueryBar onRun={start} onStop={stop} running={running} canRun={query.trim().length > 0} runLabel="Query">
-          <QueryField label="Domain or IP" htmlFor="whois-q" className="min-w-[22rem] flex-1">
+          <QueryField label="Domain or IP" htmlFor="whois-q" className="min-w-0 flex-1 basis-[22rem]">
             <Input
               id="whois-q"
               value={query}

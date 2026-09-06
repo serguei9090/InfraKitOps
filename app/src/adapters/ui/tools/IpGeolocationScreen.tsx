@@ -60,7 +60,7 @@ export function IpGeolocationScreen() {
       }
       queryBar={
         <QueryBar onRun={start} onStop={stop} running={running} canRun={query.trim().length > 0} runLabel="Locate">
-          <QueryField label="IP address or hostname" htmlFor="geo-q" className="min-w-[22rem] flex-1">
+          <QueryField label="IP address or hostname" htmlFor="geo-q" className="min-w-0 flex-1 basis-[22rem]">
             <Input
               id="geo-q"
               value={query}

@@ -87,7 +87,7 @@ export function WakeOnLanScreen() {
             </>
           }
         >
-          <QueryField label="Target MAC address" htmlFor="wol-mac" className="min-w-[18rem] flex-1">
+          <QueryField label="Target MAC address" htmlFor="wol-mac" className="min-w-0 flex-1 basis-[18rem]">
             <Input
               id="wol-mac"
               value={mac}

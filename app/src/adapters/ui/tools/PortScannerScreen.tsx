@@ -121,7 +121,7 @@ export function PortScannerScreen() {
           runLabel="Scan"
           advanced={
             <>
-              <QueryField label="Ports" htmlFor="ps-ports" className="min-w-[24rem] flex-1">
+              <QueryField label="Ports" htmlFor="ps-ports" className="min-w-0 flex-1 basis-[24rem]">
                 <Input
                   id="ps-ports"
                   value={portsText}
@@ -148,7 +148,7 @@ export function PortScannerScreen() {
             </>
           }
         >
-          <QueryField label="Host(s) / CIDR / range" htmlFor="ps-hosts" className="min-w-[22rem] flex-1">
+          <QueryField label="Host(s) / CIDR / range" htmlFor="ps-hosts" className="min-w-0 flex-1 basis-[22rem]">
             <Input
               id="ps-hosts"
               value={hostsText}

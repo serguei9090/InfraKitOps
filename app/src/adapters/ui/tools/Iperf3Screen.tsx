@@ -166,7 +166,7 @@ export function Iperf3Screen() {
                   ) : null}
                 </>
               ) : null}
-              <QueryField label="Extra iperf3 args" htmlFor="ip-extra" className="min-w-[18rem] flex-1">
+              <QueryField label="Extra iperf3 args" htmlFor="ip-extra" className="min-w-0 flex-1 basis-[18rem]">
                 <Input
                   id="ip-extra"
                   value={extraArgs}
@@ -178,7 +178,7 @@ export function Iperf3Screen() {
             </>
           }
         >
-          <QueryField label="iperf3 server host" htmlFor="ip-host" className="min-w-[22rem] flex-1">
+          <QueryField label="iperf3 server host" htmlFor="ip-host" className="min-w-0 flex-1 basis-[22rem]">
             <Input id="ip-host" value={host} onChange={(e) => setHost(e.target.value)} placeholder="10.0.0.5  (run `iperf3 -s` there)" className="font-mono" />
           </QueryField>
         </QueryBar>

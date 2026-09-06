@@ -136,7 +136,7 @@ export function NetworkScannerScreen() {
             </>
           }
         >
-          <QueryField label="Range / CIDR / hosts" htmlFor="ns-hosts" className="min-w-[24rem] flex-1">
+          <QueryField label="Range / CIDR / hosts" htmlFor="ns-hosts" className="min-w-0 flex-1 basis-[24rem]">
             <Input
               id="ns-hosts"
               value={hostsText}

@@ -189,7 +189,7 @@ export function PingMonitorScreen() {
             </>
           }
         >
-          <QueryField label="Host(s)" htmlFor="pm-hosts" className="min-w-[22rem] flex-1">
+          <QueryField label="Host(s)" htmlFor="pm-hosts" className="min-w-0 flex-1 basis-[22rem]">
             <Input
               id="pm-hosts"
               value={hostsText}

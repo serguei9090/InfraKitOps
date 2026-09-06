@@ -76,7 +76,7 @@ export function SntpLookupScreen() {
       }
       queryBar={
         <QueryBar onRun={start} onStop={stop} running={running} canRun={servers.length > 0} runLabel="Query">
-          <QueryField label="NTP server(s)" htmlFor="sntp-servers" className="min-w-[22rem] flex-1">
+          <QueryField label="NTP server(s)" htmlFor="sntp-servers" className="min-w-0 flex-1 basis-[22rem]">
             <Input
               id="sntp-servers"
               value={serversText}

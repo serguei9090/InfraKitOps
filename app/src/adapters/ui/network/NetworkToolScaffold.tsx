@@ -85,9 +85,9 @@ export function NetworkToolScaffold({
         ) : null}
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex-1 space-y-4 overflow-auto p-5">
+          <div className="flex-1 space-y-4 overflow-auto p-4 sm:p-5">
             {backendDown ? (
               <BackendUnavailable onRetry={() => void handleRetry()} retrying={retrying} />
             ) : notImplemented ? (
@@ -105,7 +105,15 @@ export function NetworkToolScaffold({
         </div>
 
         {savedTargets ? (
-          <aside className={cn('w-60 shrink-0 overflow-auto border-l border-border/60 bg-card')}>{savedTargets}</aside>
+          <aside
+            className={cn(
+              'shrink-0 overflow-auto border-border/60 bg-card',
+              'max-h-52 w-full border-t',
+              'lg:max-h-none lg:w-64 lg:border-t-0 lg:border-l',
+            )}
+          >
+            {savedTargets}
+          </aside>
         ) : null}
       </div>
     </div>

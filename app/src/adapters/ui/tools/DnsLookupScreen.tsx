@@ -126,7 +126,7 @@ export function DnsLookupScreen() {
             </>
           }
         >
-          <QueryField label="Name" htmlFor="dns-name" className="min-w-[18rem] flex-1">
+          <QueryField label="Name" htmlFor="dns-name" className="min-w-0 flex-1 basis-[18rem]">
             <Input
               id="dns-name"
               value={name}

@@ -391,7 +391,7 @@ export function TracerouteScreen({ protocol = 'icmp', toolId = 'traceroute', tit
             </>
           }
         >
-          <QueryField label="Destination" htmlFor="tr-host" className="min-w-[22rem] flex-1">
+          <QueryField label="Destination" htmlFor="tr-host" className="min-w-0 flex-1 basis-[22rem]">
             <Input
               id="tr-host"
               value={host}

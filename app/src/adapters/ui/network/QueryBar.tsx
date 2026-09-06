@@ -36,7 +36,7 @@ export function QueryBar({
   return (
     <div className="rounded-lg border border-border/60 bg-background p-4">
       <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-1 flex-wrap items-end gap-3">{children}</div>
+        <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">{children}</div>
         {showStop ? (
           <Button variant="outline" onClick={onStop} className="gap-1.5">
             <Square className="size-4" />

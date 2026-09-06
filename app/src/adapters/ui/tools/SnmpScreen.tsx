@@ -164,7 +164,7 @@ export function SnmpScreen() {
             )
           }
         >
-          <QueryField label="Host" htmlFor="snmp-host" className="min-w-[16rem] flex-1">
+          <QueryField label="Host" htmlFor="snmp-host" className="min-w-0 flex-1 basis-[16rem]">
             <Input id="snmp-host" value={host} onChange={(e) => setHost(e.target.value)} placeholder="switch.example.net" className="font-mono" />
           </QueryField>
           <QueryField label="Version">
@@ -186,7 +186,7 @@ export function SnmpScreen() {
               </SelectContent>
             </Select>
           </QueryField>
-          <QueryField label="OID(s)" htmlFor="snmp-oid" className="min-w-[16rem] flex-1">
+          <QueryField label="OID(s)" htmlFor="snmp-oid" className="min-w-0 flex-1 basis-[16rem]">
             <Input id="snmp-oid" value={oid} onChange={(e) => setOid(e.target.value)} className="font-mono" />
           </QueryField>
           <QueryField label="OID profile">
