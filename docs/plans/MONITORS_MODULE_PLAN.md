@@ -1,6 +1,6 @@
 # Monitors module — plan (BR Tier 2)
 
-## Status: M0 + M1 done (icmp/tcp probes + status board). M2–M4 pending.
+## Status: M0 + M1 done (icmp/tcp probes + status board). M2–M6 planned — see "Day-to-day needs → roadmap".
 
 - **M0 (2026-09-05)** — `internal/monitor`: `monitor.db` (`--monitor-db`),
   `Probe` iface + `icmp`/`tcp`, `Engine` (ticker per monitor, fail-threshold
@@ -41,17 +41,10 @@ stream, and needs a rolling window, not replay-all.
 | `dns` | `LookupHost` | 0/1 | resolves (+ optional expected address) | `internal/tools/dnslookup` |
 | `tls-cert` | `tls.Dial` + parse chain | days to `notAfter` | days > `warnDays` (default 14) | `internal/tools/x509fetch` |
 
-**Indirect / later:**
-
-- **SSH nodes** (Runbooks + Ansible already share `ssh_node`) — "are my
-  registered control targets reachable" — icmp or an ssh-handshake probe per
-  node. The targets are already registered; a Node-health board is the most
-  natural infra-uptime view. → **M3**
-- **Runbook / Ansible health checks** — run a runbook/playbook on an interval
-  and track pass/fail as a timeseries + alert on N consecutive fails. Overlaps
-  the existing cron schedules (R4b / AN4b), which already fire on a schedule —
-  Tier 2 would add *result history as a series* + *alerting* ("mark this
-  schedule as a health check"). → **M4, optional**
+Plus `domain` (whois expiry) and `redis` / `runbook` / `statuspage` — see the
+roadmap. `ssh` (M4) is the one that matters most day-to-day: it reuses the
+`ssh_node` registry and covers disk / service / process / load / cert-file in
+a single kind.
 
 **Modules that do NOT need Tier 2:** AI Hub, config builders, formatters,
 Prompt Library, FormFlow, Knowledge Hub, most utilities. And every *finite*
@@ -89,10 +82,11 @@ shared infra, unified view, tool integration.
 - **Boot**: **resume** every `enabled=1` monitor (the opposite of `runstream`'s
   mark-interrupted — persistence is the point); `status=unknown` until the
   first probe lands.
-- **Alerts**: **v1 in-app only** — the row's `status` + `last_change_at`, the
-  frontend surfaces a badge + one error-toaster line on transition. **M2**:
-  `--monitor-webhook` (POST `{monitor,event,at,detail}`, reuses `obs`'s webhook
-  plumbing).
+- **Alerts**: **M1 = in-app only** — the frontend polls, notices a `down`
+  transition, and raises one error-toaster line. **M3** adds real channels
+  (webhook / SMTP / desktop) + a notification policy (alert-after-N-seconds,
+  re-notify, recovery) + maintenance-window muting. The engine's alert sink is
+  already a pluggable `func(AlertEvent)`.
 - **Endpoints**: `/monitors` (GET/POST), `/monitors/{id}` (GET/PUT/DELETE),
   `/monitors/{id}/samples?since=&limit=`, `/monitors/{id}/{pause,resume}`,
   `/monitors/{id}/check` (run one probe now), `/monitors/stream` (SSE, live
@@ -112,25 +106,150 @@ shared infra, unified view, tool integration.
   mini-sparkline · last check · interval); right = detail (timeseries chart via
   the existing `LatencyChart`, up/down event log, edit form). Header "New
   monitor" dialog (kind → target → interval → alert threshold).
-- **Tool hooks**: Ping Monitor → "Save as monitor" (one `icmp` monitor per
-  host); X.509 Inspector → "Watch expiry" (`tls-cert` monitor).
+- **Tool hooks** (M3): "Save as monitor" from Ping Monitor · X.509 Inspector ·
+  DNS Lookup · Whois — each prefills the New-monitor dialog.
 
-New deps: none.
+New deps: none through M5 (icmp/tcp/http/dns/tls/domain/ssh/redis all use
+stdlib or code already vendored). A native Postgres/MySQL probe (M6) would be
+the first — gated on an explicit ask.
+
+## Day-to-day needs → roadmap
+
+What an infra/ops person actually sets up, in the order they hit it, and which
+phase delivers it. M0/M1 (done) cover ping + TCP + the board. Everything below
+is a phase from here.
+
+| Need (real words) | Probe / feature | Phase |
+|---|---|---|
+| "Is the site up and returning 200 fast enough" | `http` — status set, max-latency, follow-redirects | **M2** |
+| "Is the health endpoint actually healthy" (`{"status":"ok"}`) | `http` — JSON dot-path assert / body keyword present‑absent | **M2** |
+| "Warn me before the TLS cert expires" | `tls-cert` — days-left, default warn 21d, also flags expired / untrusted / host-mismatch | **M2** |
+| "Warn me before the domain registration lapses" | `domain` — whois expiry, default warn 30d | **M2** |
+| "Did someone change my DNS / is the A record still right" | `dns` — record type + expected value match, custom resolver | **M2** |
+| "Tell me on Slack / email, not just a toast I'll miss" | notification channels: webhook (Slack/Discord/Teams JSON), SMTP, desktop notification | **M3** |
+| "Don't page me for the 2am deploy" | maintenance windows / snooze (still probes + records, doesn't notify) | **M3** |
+| "Alert after it's been down 2 min, not after 2 samples; re-ping me every 15" | notification policy: down-for ≥ N seconds, re-notify interval, recovery notice | **M3** |
+| "Group prod / staging / customer-x and filter the board" | tags + board filter + per-tag "N down" | **M3** |
+| "I already have this host in a Ping tab / X.509 / DNS tool" | "Save as monitor" from Ping · X.509 · DNS Lookup · Whois | **M3** |
+| "Is disk > 90% / is nginx active / is the worker process alive" | `ssh` — run a command, assert exit 0 / regex / numeric compare; ships presets (disk %, service active, process running, load, mem free, cert-file expiry) | **M4** |
+| "One screen for every SSH node I've registered" | node-health board — auto icmp+ssh monitor per `ssh_node`, live overview SSE | **M4** |
+| "What was our uptime last month / how long was that outage" | sample rollups (raw 24h → 1‑min 7d → 1‑hour 90d), uptime %, MTTR, incident list + export | **M5** |
+| "Give the team / a customer a read-only status page" | public `/status/{token}` board, per-tag | **M5** |
+| "Import 40 hosts from a list; spin up a standard web-service bundle" | bulk import (CSV / newline) + templates (`http`+`tls`+`dns` created together) | **M5** |
+| "Don't alert on the app if its host is already down" | monitor dependencies (parent down → suppress child) | **M5** |
+| "Is Postgres / Redis actually answering" | `redis` (tcp + `PING`/`AUTH`, no dep); Postgres/MySQL via an `ssh` `psql -c 'select 1'` preset, native driver only if asked | **M6** |
+| "Run my existing health-check runbook on a schedule and chart pass/fail" | `runbook` probe — run a published runbook per interval, pass = all steps ok (adds the timeseries + alert layer over cron schedules) | **M6** |
+| "Is one of my cloud dependencies having an incident" | `statuspage` — poll an Atlassian Statuspage `/api/v2/status.json` | **M6** |
 
 ## Phases
 
-- **M0** — `internal/monitor`: db, `Monitor` model, `Probe` iface + `icmp` +
-  `tcp`, `Engine` (ticker + state machine + boot-resume + prune), `/monitors`
-  CRUD + `/samples` + `/check`. `go test ./...`.
-- **M1** — Frontend module: taxonomy + route + `monitorStore` + status-board
-  scaffold + New-monitor dialog + detail chart. In-app status surfacing +
-  error-toaster on transition.
-- **M2** — `http` + `dns` + `tls-cert` probes; `--monitor-webhook`; Ping "Save
-  as monitor" + X.509 "Watch expiry".
-- **M3** — SSH-node health board (probe the shared `ssh_node` registry);
-  `/monitors/stream` live overview.
-- **M4** *(optional)* — sample downsampling / rollups for 90-day retention;
-  runbook/playbook health-check monitors; maintenance windows (mute).
+### Done
+- **M0** — `internal/monitor` backend: db, `Probe` iface + `icmp`/`tcp`,
+  `Engine` (ticker + state machine + boot-resume + prune), `/monitors` CRUD +
+  `/samples` + `/check`.
+- **M1** — Frontend module: taxonomy + route + `monitorStore` + status board +
+  New-monitor dialog + detail chart + in-app down-toast.
+
+### M2 — the first-hour checks (probe kinds every setup needs)
+
+Four new probe files, no `Engine` change (the M0 design already dispatches by
+kind). Each reads its kind-specific settings from the monitor's `config_json`;
+the New/Edit dialog grows a per-kind field group.
+
+- **`http`** — method, headers (with `{{secret:NAME}}` → Vault for auth),
+  expected status set (default 200–399), `maxLatencyMs` threshold, follow-
+  redirects toggle, and **one** content assertion: body substring
+  present / absent, or a JSON dot-path equals (`data.status == "ok"`). `value`
+  = TTFB ms. Reuses `internal/executor`'s HTTP client shape + `internal/templating`.
+- **`dns`** — record type (A/AAAA/CNAME/MX/TXT/NS), expected value(s), optional
+  custom resolver `host:53`. `ok` = resolves **and** matches. `value` = resolve
+  ms. Reuses `internal/tools/dnslookup`.
+- **`tls-cert`** — `tls.Dial` + parse chain (reuse `internal/tools/x509fetch`).
+  `value` = days to `notAfter`; `ok` = `value > warnDays` (default 21) **and**
+  chain trusted **and** hostname matches. `detail` carries the reason on fail.
+  Default `intervalSec` 3600.
+- **`domain`** — whois registration expiry (reuse `internal/tools/whois`).
+  `value` = days to expiry; `ok` = `> warnDays` (default 30). Default
+  `intervalSec` 43200 (twice a day — registrars rate-limit whois).
+
+### M3 — it reaches you (notifications + daily-use polish)
+
+The alert sink stops being a log line.
+
+- **Channels** — `internal/monitor/notify/`: `webhook` (generic JSON, works for
+  Slack / Discord / Teams incoming webhooks — a `format` hint picks the body
+  shape), `smtp` (stdlib `net/smtp`), `desktop` (a `monitor-alert` SSE the
+  desktop app turns into an OS notification). Config via `--monitor-webhook` /
+  `--monitor-smtp-*` flags + `INFRAKIT_*` env + a Settings → Monitors panel.
+  Per-monitor channel override; a global default otherwise.
+- **Notification policy** (per monitor, defaults global): notify once the
+  monitor has been `down` for ≥ `alertAfterSec` (wall-clock, so a flappy target
+  with a low `failThreshold` doesn't spam); `renotifyEverySec` while still down;
+  a recovery notification. "Business hours only" window is a stretch goal here.
+- **Maintenance windows** — `monitor_mute(monitor_id | tag, from, to, repeat?)`.
+  A muted monitor keeps probing and recording; the engine just skips `notify()`.
+  Board shows a "muted" pill.
+- **Tags** — `monitor.tags TEXT` (comma list). Board: a tag filter bar + a
+  per-tag `up/down` summary. `GET /monitors?tag=`.
+- **`/monitors/stream`** SSE — live status-change events for the board, so it
+  updates without waiting for the 10 s poll.
+- **"Save as monitor"** buttons: Ping Monitor (one `icmp` per host), X.509
+  Inspector (`tls-cert`), DNS Lookup (`dns`), Whois (`domain`). Each prefills
+  the New-monitor dialog from the tool's current input.
+
+### M4 — host-level checks (the `ssh` probe)
+
+One probe kind that subsumes a dozen "is X on the box OK" needs.
+
+- **`ssh`** — reuses the R2 SSH executor (`executor.SSHRun`) + the shared
+  `ssh_node` registry (`orchestrator.Store.GetNode`) + Vault for the key/pass.
+  Config: `nodeId` (or inline host), `command`, and an assertion —
+  `exitZero` | `stdoutMatches: <regex>` | `stdoutNumber: <op> <n>` (parse the
+  first number out of stdout, compare). `value` = that number, or 0/1.
+- **Presets** in the dialog (fill `command` + assertion): disk % used
+  (`df --output=pcent <path> | tail -1`, `< 90`), service active
+  (`systemctl is-active <svc>`), process running (`pgrep -x <name>`), load-1
+  (`cut -d' ' -f1 /proc/loadavg`), memory free MB, cert-file days-left
+  (`openssl x509 -enddate -noout -in <file>`).
+- **Node-health board** — for every registered `ssh_node`, offer a one-click
+  "monitor this node" that creates an `icmp` + an `ssh` "uptime" monitor tagged
+  `node:<name>`; a filtered board view groups them.
+
+### M5 — reporting & scale (once a deployment has many monitors)
+
+- **Rollups** — `monitor_rollup(monitor_id, bucket, period, ok_count, total,
+  min, avg, max)`. A sweep folds raw samples into 1‑min buckets after 24 h and
+  1‑hour buckets after 7 d; raw pruned at 24 h (was 5000-cap). Detail chart
+  picks the resolution from the zoom range.
+- **Uptime / incident view** — group consecutive `down`→`up` events into
+  incidents (start, end, duration); a per-monitor and per-tag uptime % for
+  24h / 7d / 30d; CSV / JSON export.
+- **Public status page** — `GET /status/{token}` (token per board, generated in
+  Settings), a stripped read-only render: per-tag component list, current
+  status, 90-day uptime bar, open incidents. No auth, no data beyond
+  name/status/uptime.
+- **Bulk + templates** — paste newline / CSV `name,kind,target` → many monitors;
+  a "standard web service" template creates `http` + `tls-cert` + `domain` +
+  `dns` for one hostname in a tagged group.
+- **Dependencies** — `monitor.dependsOn` (monitor id). When the parent is
+  `down`, a child transition to `down` is recorded but **not** notified
+  (`detail: "suppressed — <parent> is down"`).
+
+### M6 — app-layer probes (specialized, on request)
+
+- **`redis`** — TCP + RESP `PING` (+ `AUTH` with a `{{secret:}}`). ~20 lines, no
+  dep. `value` = round-trip ms.
+- **`runbook`** — run a published runbook (`orchestrator.Engine`) on the
+  interval; `ok` = every step `ok`; `value` = total duration. Owner must own
+  the runbook. This is the "mark a schedule as a health check" idea, delivered
+  as a probe kind so it shares the board / alerting / history.
+- **`statuspage`** — GET an Atlassian Statuspage `…/api/v2/status.json`;
+  `ok` = `status.indicator == "none"`; `detail` = the indicator + description.
+- **Postgres / MySQL** — recommended path is an `ssh` preset running
+  `psql -c 'select 1'` / `mysqladmin ping` (no dep, and it tests the box's
+  own connectivity). A native `pgx` / `go-sql-driver` probe only if a
+  connection from the InfraKit host itself is specifically wanted — it's the
+  first runtime dep the module would take, so it needs a real ask.
 
 ## Not doing
 
