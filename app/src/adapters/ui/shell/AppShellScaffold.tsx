@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { canSeeModule } from '@/core/auth/authModel'
 import { ErrorToaster } from '@/adapters/ui/errors/ErrorToaster'
 import { ErrorHistoryButton } from '@/adapters/ui/errors/ErrorHistoryDrawer'
+import { RunsButton } from '@/adapters/ui/runs/RunsDrawer'
 import { ErrorBoundary } from '@/adapters/ui/errors/ErrorBoundary'
 import { UserMenu } from '@/adapters/ui/auth/UserMenu'
 import { AppSidebar } from './AppSidebar'
@@ -58,6 +59,7 @@ export function AppShellScaffold() {
               className="h-9 pl-9"
             />
           </div>
+          <RunsButton />
           <ErrorHistoryButton />
           <button
             type="button"

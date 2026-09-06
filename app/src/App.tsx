@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from './routes'
 import { useAuthStore } from './stores/authStore'
 import { useBackendStore } from './stores/backendStore'
+import { useRunsStore } from './stores/runsStore'
 import { AuthGate, ForcedPasswordChange } from './adapters/ui/auth/AuthGate'
 import { ErrorBoundary } from './adapters/ui/errors/ErrorBoundary'
 
@@ -12,6 +13,7 @@ function App() {
   const me = useAuthStore((s) => s.me)
   const init = useAuthStore((s) => s.init)
   const startAutoConnect = useBackendStore((s) => s.startAutoConnect)
+  const startRunsPolling = useRunsStore((s) => s.startPolling)
 
   useEffect(() => {
     void init()
@@ -22,6 +24,12 @@ function App() {
   useEffect(() => {
     startAutoConnect()
   }, [startAutoConnect])
+
+  // Track server-side background runs so the global Runs drawer stays current
+  // even when no run screen is mounted (BACKGROUND_RUNS_PLAN.md).
+  useEffect(() => {
+    startRunsPolling()
+  }, [startRunsPolling])
 
   // Until the /health probe resolves we don't know whether to gate — a brief
   // blank is fine (the same window the router's HydrateFallback would show).
