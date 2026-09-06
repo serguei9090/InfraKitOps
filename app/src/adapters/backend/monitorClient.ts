@@ -3,12 +3,15 @@
  * the shared `/api/v1` helpers. See MONITORS_MODULE_PLAN.md.
  */
 import { backendGet, backendRequest } from './backendClient'
-import type { Monitor, MonitorSample } from '@/core/monitor/monitorModel'
+import { openStream, type StreamHandlers } from './sseClient'
+import type { Monitor, MonitorSample, MonitorSettings } from '@/core/monitor/monitorModel'
 
 const arr = <T,>(v: T[] | null | undefined): T[] => v ?? []
 
-export const listMonitors = () =>
-  backendGet<{ monitors: Monitor[] | null }>('/monitors').then((r) => arr(r.monitors))
+export const listMonitors = (tag?: string) =>
+  backendGet<{ monitors: Monitor[] | null }>(`/monitors${tag ? `?tag=${encodeURIComponent(tag)}` : ''}`).then(
+    (r) => arr(r.monitors),
+  )
 
 export const getMonitor = (id: string) =>
   backendGet<{ monitor: Monitor }>(`/monitors/${id}`).then((r) => r.monitor)
@@ -35,3 +38,28 @@ export const pauseMonitor = (id: string, paused: boolean) =>
 
 export const checkMonitor = (id: string) =>
   backendRequest<{ sample: MonitorSample; monitor: Monitor }>('POST', `/monitors/${id}/check`)
+
+export const checkAllMonitors = () =>
+  backendRequest<{ checking: number }>('POST', '/monitors/check-all')
+
+export const muteMonitor = (id: string, untilMs: number) =>
+  backendRequest<{ monitor: Monitor }>('POST', `/monitors/${id}/mute`, { untilMs }).then((r) => r.monitor)
+
+export const unmuteMonitor = (id: string) =>
+  backendRequest<{ monitor: Monitor }>('POST', `/monitors/${id}/unmute`).then((r) => r.monitor)
+
+// --- alert settings ------------------------------------------------
+
+export const getMonitorSettings = () =>
+  backendGet<{ settings: MonitorSettings }>('/monitors/settings').then((r) => r.settings)
+
+export const putMonitorSettings = (s: MonitorSettings) =>
+  backendRequest<{ settings: MonitorSettings }>('PUT', '/monitors/settings', s).then((r) => r.settings)
+
+export const testMonitorChannel = (channel?: string) =>
+  backendRequest<{ status: string }>('POST', '/monitors/settings/test', { channel: channel ?? '' })
+
+/** Live status-change events. Returns an abort function. */
+export function openMonitorStream(handlers: StreamHandlers): () => void {
+  return openStream('/monitors/stream', {}, handlers)
+}

@@ -46,7 +46,12 @@ type SMTPSettings struct {
 
 // DefaultSettings is what a fresh install / an owner with no row gets.
 func DefaultSettings() Settings {
-	return Settings{NotifyOnRecovery: true, RunAllOnStart: true}
+	return Settings{
+		NotifyOnRecovery: true,
+		RunAllOnStart:    true,
+		Webhook:          WebhookSettings{Format: "slack"},
+		SMTP:             SMTPSettings{Port: 587, Security: "starttls"},
+	}
 }
 
 const settingsSchema = `

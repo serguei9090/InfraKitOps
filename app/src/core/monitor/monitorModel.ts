@@ -24,10 +24,72 @@ export interface Monitor {
   failThreshold: number
   enabled: boolean
   config?: Record<string, unknown>
+  /** comma-separated group tags (M3) */
+  tags?: string
+  /** per-monitor alert channel override; '' = use the default (M3) */
+  channel?: string
+  alertAfterSec?: number
+  renotifyEverySec?: number
+  /** unix ms; while now < this the monitor probes but doesn't alert (M3) */
+  mutedUntil?: number
   status: MonitorStatus
   lastCheckedAt: number
   lastChangeAt: number
   createdAt: number
+}
+
+export type AlertChannel = '' | 'none' | 'webhook' | 'email' | 'desktop'
+
+export interface MonitorSettings {
+  defaultChannel: AlertChannel
+  webhook: { url: string; format: 'slack' | 'discord' | 'generic'; secret: string }
+  smtp: {
+    host: string
+    port: number
+    security: 'none' | 'starttls' | 'tls'
+    username: string
+    password: string
+    from: string
+    to: string
+  }
+  alertAfterSec: number
+  renotifyEverySec: number
+  notifyOnRecovery: boolean
+  runAllOnStart: boolean
+}
+
+export function defaultMonitorSettings(): MonitorSettings {
+  return {
+    defaultChannel: '',
+    webhook: { url: '', format: 'slack', secret: '' },
+    smtp: { host: '', port: 587, security: 'starttls', username: '', password: '', from: '', to: '' },
+    alertAfterSec: 0,
+    renotifyEverySec: 0,
+    notifyOnRecovery: true,
+    runAllOnStart: true,
+  }
+}
+
+/** A live status-change event from GET /monitors/stream. */
+export interface MonitorAlert {
+  id: string
+  name: string
+  kind: string
+  target: string
+  event: 'down' | 'recovered'
+  detail?: string
+  at: number
+}
+
+export function tagList(tags: string | undefined): string[] {
+  return (tags ?? '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+}
+
+export function isMuted(m: Monitor): boolean {
+  return (m.mutedUntil ?? 0) > Date.now()
 }
 
 export interface MonitorSample {

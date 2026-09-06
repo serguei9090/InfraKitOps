@@ -1,11 +1,17 @@
 /**
  * Monitors module store. Polls `GET /monitors` while the board is open, holds
- * the samples for the monitor in the detail pane, and raises an in-app toast on
- * a down / recovered transition (M1 alerting — a webhook is M2).
+ * the detail-pane samples, mirrors the alert settings, and consumes the
+ * `/monitors/stream` SSE for live status changes + an in-app toast.
  */
 import { create } from 'zustand'
 import * as api from '@/adapters/backend/monitorClient'
-import type { Monitor, MonitorSample } from '@/core/monitor/monitorModel'
+import {
+  defaultMonitorSettings,
+  type Monitor,
+  type MonitorAlert,
+  type MonitorSample,
+  type MonitorSettings,
+} from '@/core/monitor/monitorModel'
 import { useBackendStore } from './backendStore'
 import { reportError } from './errorStore'
 
@@ -19,41 +25,45 @@ interface MonitorState {
   selectedId: string | null
   samples: MonitorSample[]
   samplesFor: string | null
+  tagFilter: string | null
+  settings: MonitorSettings
 
   refresh: () => Promise<void>
   startPolling: () => void
   stopPolling: () => void
+  setTagFilter: (tag: string | null) => void
   select: (id: string | null) => Promise<void>
   loadSamples: (id: string) => Promise<void>
   save: (m: Partial<Monitor>) => Promise<Monitor | null>
   remove: (id: string) => Promise<void>
   setPaused: (id: string, paused: boolean) => Promise<void>
   checkNow: (id: string) => Promise<void>
+  checkAll: () => Promise<void>
+  mute: (id: string, untilMs: number) => Promise<void>
+  unmute: (id: string) => Promise<void>
+  loadSettings: () => Promise<void>
+  saveSettings: (s: MonitorSettings) => Promise<boolean>
+  testChannel: (channel?: string) => Promise<boolean>
 }
 
 let timer: ReturnType<typeof setInterval> | null = null
+let stopStream: (() => void) | null = null
 /** last-seen lastChangeAt per monitor, to fire a toast once per transition */
 const seenChange = new Map<string, number>()
+
+function toastDown(m: { name: string; kind: string; target: string }) {
+  reportError(
+    { code: 'unreachable', title: `Monitor down — ${m.name}`, detail: `${m.kind} · ${m.target}`, retryable: false },
+    SRC,
+  )
+}
 
 function announce(next: Monitor[]) {
   for (const m of next) {
     const known = seenChange.get(m.id)
     seenChange.set(m.id, m.lastChangeAt)
-    if (known === undefined) continue // first sighting — don't alert on load
-    if (m.lastChangeAt <= known) continue
-    // Only "down" is an alert. Recovery shows on the board + event log; M2's
-    // webhook covers both directions for real notification.
-    if (m.status === 'down') {
-      reportError(
-        {
-          code: 'unreachable',
-          title: `Monitor down — ${m.name}`,
-          detail: `${m.kind} · ${m.target}`,
-          retryable: false,
-        },
-        SRC,
-      )
-    }
+    if (known === undefined || m.lastChangeAt <= known) continue
+    if (m.status === 'down' && (m.mutedUntil ?? 0) <= Date.now()) toastDown(m)
   }
 }
 
@@ -64,6 +74,8 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   selectedId: null,
   samples: [],
   samplesFor: null,
+  tagFilter: null,
+  settings: defaultMonitorSettings(),
 
   refresh: async () => {
     if (useBackendStore.getState().status !== 'available') return
@@ -81,7 +93,19 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   startPolling: () => {
     if (timer) return
     void get().refresh()
+    void get().loadSettings()
     timer = setInterval(() => void get().refresh(), POLL_MS)
+    stopStream = api.openMonitorStream({
+      onEvent: (name, data) => {
+        if (name !== 'monitor-alert') return
+        const a = data as MonitorAlert
+        if (a.event === 'down') toastDown(a)
+        void get().refresh()
+      },
+      onError: () => {
+        /* the poll keeps the board fresh; the stream reconnects on its own */
+      },
+    })
   },
 
   stopPolling: () => {
@@ -89,7 +113,11 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
       clearInterval(timer)
       timer = null
     }
+    stopStream?.()
+    stopStream = null
   },
+
+  setTagFilter: (tag) => set({ tagFilter: tag }),
 
   select: async (id) => {
     set({ selectedId: id, samples: id === get().samplesFor ? get().samples : [] })
@@ -143,6 +171,61 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
       await get().loadSamples(id)
     } catch (e) {
       reportError(e, SRC)
+    }
+  },
+
+  checkAll: async () => {
+    try {
+      await api.checkAllMonitors()
+      setTimeout(() => void get().refresh(), 1500)
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
+  mute: async (id, untilMs) => {
+    try {
+      await api.muteMonitor(id, untilMs)
+      await get().refresh()
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
+  unmute: async (id) => {
+    try {
+      await api.unmuteMonitor(id)
+      await get().refresh()
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
+  loadSettings: async () => {
+    try {
+      set({ settings: await api.getMonitorSettings() })
+    } catch {
+      /* keep defaults */
+    }
+  },
+
+  saveSettings: async (s) => {
+    try {
+      set({ settings: await api.putMonitorSettings(s) })
+      return true
+    } catch (e) {
+      reportError(e, SRC)
+      return false
+    }
+  },
+
+  testChannel: async (channel) => {
+    try {
+      await api.testMonitorChannel(channel)
+      return true
+    } catch (e) {
+      reportError(e, SRC)
+      return false
     }
   },
 }))

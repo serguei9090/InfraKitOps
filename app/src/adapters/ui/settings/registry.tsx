@@ -1,10 +1,11 @@
-import { Info, Network, ScrollText, Server, SlidersHorizontal, Sparkles, SquareTerminal, Users } from 'lucide-react'
+import { Info, Network, RadioTower, ScrollText, Server, SlidersHorizontal, Sparkles, SquareTerminal, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { GeneralSettings } from './sections/GeneralSettings'
 import { AiSettings } from './sections/AiSettings'
 import { RunbookSettings } from './sections/RunbookSettings'
 import { NetworkSettings } from './sections/NetworkSettings'
+import { MonitorSettings } from './sections/MonitorSettings'
 import { BackendSettings } from './sections/BackendSettings'
 import { UsersSettings } from './sections/UsersSettings'
 import { AuditSettings } from './sections/AuditSettings'
@@ -60,6 +61,14 @@ export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     scope: 'local',
     keywords: ['proxy', 'dns', 'interface', 'timeout', 'retry', 'geo', 'maxmind', 'ipv4', 'ipv6'],
     element: <NetworkSettings />,
+  },
+  {
+    id: 'monitors',
+    label: 'Monitors',
+    icon: RadioTower,
+    scope: 'global',
+    keywords: ['alert', 'notify', 'webhook', 'slack', 'discord', 'smtp', 'email', 'mail', 'uptime', 'down', 'recovery', 'snooze', 'mute', 'channel'],
+    element: <MonitorSettings />,
   },
   {
     id: 'backend',
