@@ -29,6 +29,9 @@ func SupportedKinds() []string {
 	return out
 }
 
+// KnownKind reports whether a probe is registered for kind.
+func KnownKind(kind string) bool { return probes[kind] != nil }
+
 // runProbe executes m's probe under its timeout and stamps the sample time.
 func runProbe(ctx context.Context, m Monitor) Sample {
 	p := probeFor(m.Kind)

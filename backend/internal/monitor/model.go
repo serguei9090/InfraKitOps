@@ -8,6 +8,8 @@
 // never ends and keeps only a rolling window of samples.
 package monitor
 
+import "strings"
+
 // Status values for a Monitor.
 const (
 	StatusUp      = "up"
@@ -18,11 +20,12 @@ const (
 
 // Kind values — one Probe implementation each.
 const (
-	KindICMP = "icmp"
-	KindTCP  = "tcp"
-	KindHTTP = "http"
-	KindDNS  = "dns"
-	KindTLS  = "tls-cert"
+	KindICMP   = "icmp"
+	KindTCP    = "tcp"
+	KindHTTP   = "http"
+	KindDNS    = "dns"
+	KindTLS    = "tls-cert"
+	KindDomain = "domain"
 )
 
 // Monitor is one configured check.
@@ -71,10 +74,23 @@ const (
 	maxSamplesPerMonitor = 5000
 )
 
+// kindDefaultInterval is the sensible check cadence per kind when the caller
+// didn't pick one — cert / domain expiry move slowly and whois is rate-limited.
+func kindDefaultInterval(kind string) int {
+	switch kind {
+	case KindTLS:
+		return 3600 // hourly
+	case KindDomain:
+		return 43200 // twice a day
+	default:
+		return defaultIntervalSec // 60s
+	}
+}
+
 // normalize clamps a Monitor's numeric fields to sane values.
 func (m *Monitor) normalize() {
 	if m.IntervalSec <= 0 {
-		m.IntervalSec = defaultIntervalSec
+		m.IntervalSec = kindDefaultInterval(m.Kind)
 	}
 	if m.IntervalSec < minIntervalSec {
 		m.IntervalSec = minIntervalSec
@@ -107,4 +123,52 @@ func (m *Monitor) cfgString(key string) string {
 		}
 	}
 	return ""
+}
+
+func (m *Monitor) cfgBool(key string) bool { return m.cfgBoolDefault(key, false) }
+
+func (m *Monitor) cfgBoolDefault(key string, def bool) bool {
+	if v, ok := m.Config[key]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return def
+}
+
+func (m *Monitor) cfgFloat(key string, def float64) float64 {
+	if v, ok := m.Config[key]; ok {
+		if f, ok := v.(float64); ok {
+			return f
+		}
+	}
+	return def
+}
+
+// cfgStrings reads a []string from Config — accepts a JSON array or a single
+// string or a comma/space/newline-separated string.
+func (m *Monitor) cfgStrings(key string) []string {
+	v, ok := m.Config[key]
+	if !ok {
+		return nil
+	}
+	switch t := v.(type) {
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			if s, ok := e.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+		return out
+	case string:
+		var out []string
+		for _, s := range strings.FieldsFunc(t, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\t' }) {
+			if s = strings.TrimSpace(s); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }

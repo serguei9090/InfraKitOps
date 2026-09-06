@@ -83,6 +83,10 @@ func (h *MonitorHandlers) Save(w http.ResponseWriter, r *http.Request) {
 		apierr.Write(w, apierr.Validation("name, kind and target are required"))
 		return
 	}
+	if !monitor.KnownKind(m.Kind) {
+		apierr.Write(w, apierr.Validation("unknown monitor kind: "+m.Kind))
+		return
+	}
 	// A new monitor is enabled unless the caller explicitly said otherwise —
 	// you create one to run it.
 	if m.ID == "" && !bytes.Contains(raw, []byte(`"enabled"`)) {
