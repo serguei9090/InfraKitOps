@@ -1,6 +1,6 @@
 # Monitors module — plan (BR Tier 2)
 
-## Status: M0–M3 done — probes (icmp/tcp/http/dns/tls-cert/domain), board, alerts (webhook/SMTP/desktop-SSE), policy, mute, tags, schedule runOnStart, tray. M4 next. See the Build checklist at the bottom.
+## Status: M0–M4 done — probes (icmp/tcp/http/dns/tls-cert/domain/ssh), board, alerts, policy, mute, tags, schedule runOnStart, tray, "Save as monitor". M5 (rollups + status page) next. See the Build checklist at the bottom.
 
 - **M0 (2026-09-05)** — `internal/monitor`: `monitor.db` (`--monitor-db`),
   `Probe` iface + `icmp`/`tcp`, `Engine` (ticker per monitor, fail-threshold
@@ -417,12 +417,12 @@ in `app/`.
 - [x] `SaveAsMonitorButton` — X.509 "Watch expiry" + Ping "Save as monitor" (DNS / Whois: same one-liner, deferred)
 - [x] `desktopKeepAlive.ts` — localStorage pref + `invoke('set_keep_alive')`, re-synced on boot; the `monitor-alert` SSE toast already covers desktop notification wiring for now
 
-### M4 — `ssh` probe
-- [ ] `probe_ssh.go` — `executor.SSHRun` + node resolver + Vault; assert `exitZero` / `stdoutMatches` / `stdoutNumber op n`; value = number or 0/1
-- [ ] `Engine.SetNodeResolver` + `main.go` wiring (mirror ansible's)
-- [ ] preset command list
-- [ ] FE: ssh field group (node picker + command + assertion builder + preset dropdown)
-- [ ] FE: `SshNodesView` "monitor this node" → icmp + ssh monitor tagged `node:<name>`; board `node:` group view
+### M4 — `ssh` probe — done
+- [x] `probe_ssh.go` — `executor.SSHRun` + `monitor.SetNodeResolver` (main.go, from the orchestrator `ssh_node` registry + Vault) or inline host+user; `evalSSHAssert` grammar `exit0 | contains: | matches: | num:<op><n>`; value = parsed number or latency ms; unit tests
+- [x] api: `target` optional for `ssh` when `config.nodeId` set
+- [x] FE: `ssh` kind + `SSH_PRESETS`; bespoke `<SshConfig>` in the dialog (node picker via `listNodes`, preset dropdown, command, assert)
+- [x] FE: Runbooks → Nodes row "Monitor" button → an ssh `true` check tagged `node: <name>`
+- [ ] *(deferred)* a dedicated `node:` board group view — tag filter already covers it
 
 ### M5 — reporting & scale
 - [ ] `monitor_rollup` table + fold sweep (1-min @24h, 1-hour @7d) + raw prune at 24h
