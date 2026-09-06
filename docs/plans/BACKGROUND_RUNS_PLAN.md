@@ -1,6 +1,6 @@
 # Background runs — plan
 
-## Status: BR1–BR3 done. BR4 (continuous monitors) not started.
+## Status: BR1–BR3 + Ping Tier 1 done. BR4 (server-side monitors) not started.
 
 - **BR1 (2026-09-05)** — `internal/runstream` hub + Ansible wired. Playbook,
   job and ad-hoc runs execute under a request-independent context registered
@@ -175,7 +175,8 @@ the engine.
 | **BR1** | `internal/runstream` + wire **Ansible** (`Run`, `RunAdhoc`, job runs). POST-to-start, `/runs/ansible/{id}/stream`, cancel, `/runs/active`, boot recovery, shutdown handling. Ansible is the smaller lift — it already accumulates the full event blob; mostly a matter of writing it incrementally through the hub instead of once at the end, and moving `ctx` off the request. |
 | **BR2** | Wire **Runbooks** (`orchestrator.Engine.Run`) to the same hub. The engine emits `sse.Message`s already; route them through `emit`. |
 | **BR3** | Frontend — `runsStore`, the global Runs drawer, the shared run-view, rewire the Ansible + Runbook screens. Merge the history-replay path into the run-view. |
-| **BR4** *(optional, later)* | Continuous **monitors** (Ping Monitor) as background monitors. Different shape — indefinite, a sample stream not a finite run — so its own phase and probably its own lightweight registry rather than `runstream`. |
+| **BR-T1** *(done 2026-09-05)* | **Ping Monitor Tier 1** — run state (hosts, tracks, SSE) hoisted from the screen into `pingMonitorStore`; no unmount teardown, so a session survives *in-app* navigation with a gap-free chart. `PING` sample stream stays one SSE. Not server-side. |
+| **BR4** *(not started — different product)* | Server-side continuous **monitors** surviving a full reload / other device: rolling-window storage (not replay-all), multiple named monitors, thresholds/alerts. This is uptime monitoring for production hosts, not troubleshooting — its own plan, own lifecycle, own registry (not `runstream`). Only if there's demand. |
 
 Network Toolkit one-shot / short tools (traceroute, scans, DNS, whois, iperf)
 stay foreground — they finish in seconds and a leaked stream is already
