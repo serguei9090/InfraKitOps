@@ -62,6 +62,7 @@ func main() {
 	llmDBPath := flag.String("llm-db", "", `AI-layer database path ("" = OS config dir, "off" = disabled)`)
 	ansibleDBPath := flag.String("ansible-db", "", `Ansible-module database path ("" = OS config dir, "off" = disabled)`)
 	monitorDBPath := flag.String("monitor-db", "", `Monitors-module database path ("" = OS config dir, "off" = disabled)`)
+	monitorWebhook := flag.String("monitor-webhook", "", "fallback alert webhook for the Monitors module when none is set in Settings (Slack/Discord/generic)")
 	vaultPath := flag.String("vault", "", `vault file path ("" = OS config dir, "off" = disabled)`)
 	vaultAutoLock := flag.Duration("vault-autolock", 15*time.Minute, "lock the vault after this idle time (0 = never)")
 	maxConcurrentRuns := flag.Int("max-concurrent-runs", 4, "cap on runbooks executing at once (0 = unlimited)")
@@ -293,8 +294,25 @@ func main() {
 	// Monitors module (MONITORS_MODULE_PLAN.md, background-runs Tier 2) —
 	// server-side persistent checks. Engine started once ctx exists, below.
 	monitorStore, monitorEngine := openMonitor(*monitorDBPath)
+	var monitorNotifier *monitor.Notifier
 	if monitorStore != nil {
 		defer monitorStore.Close()
+		var secrets monitor.SecretResolver
+		if vlt != nil {
+			secrets = vlt.Resolver()
+		}
+		fallbackHook := envOr(*monitorWebhook, "INFRAKIT_MONITOR_WEBHOOK")
+		monitorNotifier = monitor.NewNotifier(func(o string) monitor.Settings {
+			s, _ := monitorStore.GetSettings(o)
+			if s.Webhook.URL == "" && fallbackHook != "" {
+				s.Webhook.URL = fallbackHook
+				if s.DefaultChannel == "" {
+					s.DefaultChannel = "webhook"
+				}
+			}
+			return s
+		}, secrets)
+		monitorEngine.SetNotifier(monitorNotifier)
 	}
 
 	var authSvc *auth.Service
@@ -421,30 +439,31 @@ func main() {
 
 	wd := server.NewWatchdog(*idleTimeout, *parentPID)
 	handler := server.NewRouter(server.Options{
-		Token:          tok,
-		Auth:           authSvc,
-		Backup:         backupSched,
-		CORSOrigins:    corsOrigins,
-		TrustProxy:     *behindProxy,
-		OnActivity:     wd.Touch,
-		History:        store,
-		Orchestrator:   orch,
-		RunbookEngine:  engine,
-		Vault:          vlt,
-		LLM:            llmStore,
-		LLMEngine:      llmEngine,
-		MCP:            mcpManager,
-		LLMHistory:     llmHistory,
-		LLMUsage:       llmUsage,
-		Prompts:        promptStore,
-		Forms:          formStore,
-		AnsibleStore:   ansibleStore,
-		AnsibleEngine:  ansibleEngine,
-		AnsibleRuntime: ansibleRuntime,
-		RunHub:         runHub,
-		MonitorStore:   monitorStore,
-		MonitorEngine:  monitorEngine,
-		AppVersion:     api.Version,
+		Token:           tok,
+		Auth:            authSvc,
+		Backup:          backupSched,
+		CORSOrigins:     corsOrigins,
+		TrustProxy:      *behindProxy,
+		OnActivity:      wd.Touch,
+		History:         store,
+		Orchestrator:    orch,
+		RunbookEngine:   engine,
+		Vault:           vlt,
+		LLM:             llmStore,
+		LLMEngine:       llmEngine,
+		MCP:             mcpManager,
+		LLMHistory:      llmHistory,
+		LLMUsage:        llmUsage,
+		Prompts:         promptStore,
+		Forms:           formStore,
+		AnsibleStore:    ansibleStore,
+		AnsibleEngine:   ansibleEngine,
+		AnsibleRuntime:  ansibleRuntime,
+		RunHub:          runHub,
+		MonitorStore:    monitorStore,
+		MonitorEngine:   monitorEngine,
+		MonitorNotifier: monitorNotifier,
+		AppVersion:      api.Version,
 		HistoryPolicy: history.PrunePolicy{
 			RetentionDays: *retentionDays,
 			MaxPerTarget:  *maxPerTarget,
@@ -538,6 +557,14 @@ func flagPassed(name string) bool {
 }
 
 // envTruthy reports whether an env var holds an affirmative value.
+// envOr returns v when non-empty, else the named env var.
+func envOr(v, env string) string {
+	if strings.TrimSpace(v) != "" {
+		return v
+	}
+	return strings.TrimSpace(os.Getenv(env))
+}
+
 func envTruthy(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
 	case "1", "true", "yes", "on":

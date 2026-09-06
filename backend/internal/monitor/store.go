@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -52,9 +53,21 @@ func Open(dsn string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.Exec(schema + settingsSchema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply monitor schema: %w", err)
+	}
+	// M3 columns — added to a DB created by M0. Ignore "duplicate column".
+	for _, col := range []string{
+		`ALTER TABLE monitor ADD COLUMN tags TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE monitor ADD COLUMN channel TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE monitor ADD COLUMN alert_after_sec INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE monitor ADD COLUMN renotify_every_sec INTEGER NOT NULL DEFAULT 0`,
+	} {
+		if _, err := db.Exec(col); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			_ = db.Close()
+			return nil, fmt.Errorf("migrate monitor: %w", err)
+		}
 	}
 	return &Store{db: db}, nil
 }
@@ -97,14 +110,15 @@ func (s *Store) PurgeOwner(owner string) error {
 	return err
 }
 
-const monCols = `id, owner, name, kind, target, interval_sec, timeout_sec, fail_threshold, enabled, config_json, status, last_checked_at, last_change_at, created_at`
+const monCols = `id, owner, name, kind, target, interval_sec, timeout_sec, fail_threshold, enabled, config_json, status, last_checked_at, last_change_at, created_at, tags, channel, alert_after_sec, renotify_every_sec`
 
 func scanMonitor(sc interface{ Scan(...any) error }) (Monitor, error) {
 	var m Monitor
 	var cfg string
 	var enabled int
 	if err := sc.Scan(&m.ID, &m.Owner, &m.Name, &m.Kind, &m.Target, &m.IntervalSec, &m.TimeoutSec,
-		&m.FailThreshold, &enabled, &cfg, &m.Status, &m.LastCheckedAt, &m.LastChangeAt, &m.CreatedAt); err != nil {
+		&m.FailThreshold, &enabled, &cfg, &m.Status, &m.LastCheckedAt, &m.LastChangeAt, &m.CreatedAt,
+		&m.Tags, &m.Channel, &m.AlertAfterSec, &m.RenotifyEverySec); err != nil {
 		return Monitor{}, err
 	}
 	m.Enabled = enabled != 0
@@ -194,12 +208,15 @@ func (s *Store) Put(owner string, m Monitor) (*Monitor, error) {
 		enabled = 1
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO monitor (`+monCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		`INSERT INTO monitor (`+monCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		 ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, target=excluded.target,
 		   interval_sec=excluded.interval_sec, timeout_sec=excluded.timeout_sec,
-		   fail_threshold=excluded.fail_threshold, enabled=excluded.enabled, config_json=excluded.config_json`,
+		   fail_threshold=excluded.fail_threshold, enabled=excluded.enabled, config_json=excluded.config_json,
+		   tags=excluded.tags, channel=excluded.channel, alert_after_sec=excluded.alert_after_sec,
+		   renotify_every_sec=excluded.renotify_every_sec`,
 		m.ID, m.Owner, m.Name, m.Kind, m.Target, m.IntervalSec, m.TimeoutSec, m.FailThreshold, enabled,
 		string(cfg), m.Status, m.LastCheckedAt, m.LastChangeAt, m.CreatedAt,
+		strings.TrimSpace(m.Tags), m.Channel, m.AlertAfterSec, m.RenotifyEverySec,
 	)
 	if err != nil {
 		return nil, err

@@ -100,26 +100,26 @@ func TestEngineStateMachine(t *testing.T) {
 	m, _ := s.Put("alice", Monitor{Name: "svc", Kind: "fake", Target: "x", Enabled: true, FailThreshold: 2, IntervalSec: 60, TimeoutSec: 5})
 
 	// 1 ok  → up
-	fails := 0
-	e.tick(context.Background(), m.ID, &fails)
+	st := &loopState{}
+	e.tick(context.Background(), m.ID, st)
 	if g, _ := s.Get("alice", m.ID); g.Status != StatusUp {
 		t.Fatalf("after ok: %s", g.Status)
 	}
 
 	// 2 fails → down (threshold 2), one "down" alert
 	f.ok.Store(false)
-	e.tick(context.Background(), m.ID, &fails) // fail 1 — still up
+	e.tick(context.Background(), m.ID, st) // fail 1 — still up
 	if g, _ := s.Get("alice", m.ID); g.Status != StatusUp {
 		t.Fatalf("after 1 fail: %s (should hold up until threshold)", g.Status)
 	}
-	e.tick(context.Background(), m.ID, &fails) // fail 2 — down
+	e.tick(context.Background(), m.ID, st) // fail 2 — down
 	if g, _ := s.Get("alice", m.ID); g.Status != StatusDown {
 		t.Fatalf("after 2 fails: %s", g.Status)
 	}
 
 	// recover
 	f.ok.Store(true)
-	e.tick(context.Background(), m.ID, &fails)
+	e.tick(context.Background(), m.ID, st)
 	if g, _ := s.Get("alice", m.ID); g.Status != StatusUp {
 		t.Fatalf("after recover: %s", g.Status)
 	}

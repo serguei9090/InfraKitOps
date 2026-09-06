@@ -16,7 +16,8 @@ type Engine struct {
 	loops map[string]context.CancelFunc // monitor id → stop
 	root  context.Context               // process lifetime, set by Start
 
-	alerts func(AlertEvent) // optional, set by SetAlertSink
+	alerts   func(AlertEvent) // optional, set by SetAlertSink (a log line)
+	notifier *Notifier        // optional, set by SetNotifier (webhook / email)
 }
 
 // NewEngine wires the engine to its store.
@@ -26,6 +27,18 @@ func NewEngine(store *Store) *Engine {
 
 // SetAlertSink registers a callback fired on a down / recovered transition.
 func (e *Engine) SetAlertSink(fn func(AlertEvent)) { e.alerts = fn }
+
+// SetNotifier wires the alert delivery path (M3). The notification *policy*
+// (alert-after-N-seconds, re-notify) is applied per monitor loop.
+func (e *Engine) SetNotifier(n *Notifier) { e.notifier = n }
+
+// loopState is a monitor loop's running state — kept out of the DB.
+type loopState struct {
+	fails      int
+	downSince  time.Time
+	alerted    bool
+	lastNotify time.Time
+}
 
 // Start resumes every enabled monitor and runs the retention sweep until ctx
 // ends. Call once from main.go.
@@ -103,7 +116,7 @@ func (e *Engine) StopAll() {
 // CheckNow runs a single probe for m, records it + any transition, and returns
 // the sample. Used by POST /monitors/{id}/check.
 func (e *Engine) CheckNow(ctx context.Context, m Monitor) Sample {
-	s, _ := e.tick(ctx, m.ID, nil)
+	s, _ := e.tick(ctx, m.ID, &loopState{})
 	return s
 }
 
@@ -113,52 +126,52 @@ func (e *Engine) runLoop(ctx context.Context, id string) {
 		return
 	}
 	interval := time.Duration(cur.IntervalSec) * time.Second
-	fails := seedFailStreak(e.store, id, cur.FailThreshold)
+
+	st := &loopState{fails: seedFailStreak(e.store, id, cur.FailThreshold)}
+	// Don't re-alert on a monitor that was already down before this restart.
+	if cur.Status == StatusDown {
+		st.alerted = true
+		st.downSince = time.UnixMilli(cur.LastChangeAt)
+		st.lastNotify = time.Now()
+	}
 
 	t := time.NewTicker(interval)
 	defer t.Stop()
 
-	e.tick(ctx, id, &fails) // probe immediately on (re)start
+	e.tick(ctx, id, st) // probe immediately on (re)start
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			if _, keep := e.tick(ctx, id, &fails); !keep {
+			if _, keep := e.tick(ctx, id, st); !keep {
 				return // monitor gone / disabled
 			}
 		}
 	}
 }
 
-// tick runs one probe + state machine for monitor id. `fails` is the loop's
-// running consecutive-failure count (nil for a one-off CheckNow, which reseeds).
-// keep is false when the loop should stop (monitor deleted / disabled).
-func (e *Engine) tick(ctx context.Context, id string, fails *int) (sample Sample, keep bool) {
+// tick runs one probe + state machine for monitor id. keep is false when the
+// loop should stop (monitor deleted / disabled).
+func (e *Engine) tick(ctx context.Context, id string, st *loopState) (sample Sample, keep bool) {
 	m, err := e.store.Get("", id)
 	if err != nil || m == nil || !m.Enabled {
 		e.Stop(id)
 		return Sample{}, false
 	}
 
-	local := 0
-	if fails == nil {
-		local = seedFailStreak(e.store, id, m.FailThreshold)
-		fails = &local
-	}
-
 	s := runProbe(ctx, *m)
 	if s.OK {
-		*fails = 0
+		st.fails = 0
 	} else {
-		*fails++
+		st.fails++
 	}
 
 	newStatus := m.Status
 	switch {
 	case s.OK:
 		newStatus = StatusUp
-	case *fails >= m.FailThreshold:
+	case st.fails >= m.FailThreshold:
 		newStatus = StatusDown
 	}
 
@@ -167,18 +180,68 @@ func (e *Engine) tick(ctx context.Context, id string, fails *int) (sample Sample
 		obs.Warnf("monitor %s: record failed: %v", id, err)
 	}
 
-	if changed && e.alerts != nil {
-		if newStatus == StatusDown || (newStatus == StatusUp && m.Status == StatusDown) {
-			ev := "recovered"
-			if newStatus == StatusDown {
-				ev = "down"
-			}
-			m.Status = newStatus
-			m.LastChangeAt = s.T
-			e.alerts(AlertEvent{Monitor: *m, Event: ev, At: s.T, Detail: s.Detail})
+	// A real up<->down transition → the log sink.
+	if changed && e.alerts != nil &&
+		(newStatus == StatusDown || (newStatus == StatusUp && m.Status == StatusDown)) {
+		ev := "recovered"
+		if newStatus == StatusDown {
+			ev = "down"
 		}
+		e.alerts(AlertEvent{Monitor: *m, Event: ev, At: s.T, Detail: s.Detail})
+	}
+
+	if e.notifier != nil {
+		e.applyNotifyPolicy(m, newStatus, s, st)
 	}
 	return s, true
+}
+
+// applyNotifyPolicy fires webhook / email alerts subject to the alert-after and
+// re-notify settings (per monitor, falling back to the owner's global).
+func (e *Engine) applyNotifyPolicy(m *Monitor, newStatus string, s Sample, st *loopState) {
+	set, _ := e.store.GetSettings(m.Owner)
+	after := m.AlertAfterSec
+	if after == 0 {
+		after = set.AlertAfterSec
+	}
+	renotify := m.RenotifyEverySec
+	if renotify == 0 {
+		renotify = set.RenotifyEverySec
+	}
+	now := time.UnixMilli(s.T)
+
+	switch newStatus {
+	case StatusDown:
+		if st.downSince.IsZero() {
+			st.downSince = now
+		}
+		switch {
+		case !st.alerted && now.Sub(st.downSince) >= time.Duration(after)*time.Second:
+			e.fire(m, "down", s.Detail)
+			st.alerted, st.lastNotify = true, now
+		case st.alerted && renotify > 0 && now.Sub(st.lastNotify) >= time.Duration(renotify)*time.Second:
+			e.fire(m, "down", s.Detail)
+			st.lastNotify = now
+		}
+	case StatusUp:
+		if st.alerted && set.NotifyOnRecovery {
+			e.fire(m, "recovered", s.Detail)
+		}
+		st.downSince, st.alerted, st.lastNotify = time.Time{}, false, time.Time{}
+	}
+}
+
+// fire delivers one alert asynchronously so a slow SMTP server can't stall the
+// probe loop.
+func (e *Engine) fire(m *Monitor, event, detail string) {
+	mon := *m
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		if err := e.notifier.Send(ctx, mon, event, detail); err != nil {
+			obs.Warnf("monitor %q: alert (%s) failed: %v", mon.Name, event, err)
+		}
+	}()
 }
 
 // seedFailStreak counts trailing failures in a monitor's recent history so a

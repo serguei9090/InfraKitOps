@@ -84,8 +84,9 @@ type Options struct {
 	RunHub *runstream.Hub
 	// MonitorStore / MonitorEngine back the Monitors module
 	// (MONITORS_MODULE_PLAN.md). Nil → /monitors* endpoints 503.
-	MonitorStore  *monitor.Store
-	MonitorEngine *monitor.Engine
+	MonitorStore    *monitor.Store
+	MonitorEngine   *monitor.Engine
+	MonitorNotifier *monitor.Notifier // M3 alert delivery; nil → /settings/test 503
 }
 
 // NewRouter returns the fully wired API handler.
@@ -117,7 +118,7 @@ func NewRouter(opts Options) http.Handler {
 	mh := &api.MCPHandlers{Manager: opts.MCP}
 	anh := &api.AnsibleHandlers{Store: opts.AnsibleStore, Engine: opts.AnsibleEngine, Runtime: opts.AnsibleRuntime, Vault: opts.Vault, Hub: opts.RunHub}
 	runsH := &api.RunsHandlers{Hub: opts.RunHub, Ansible: opts.AnsibleStore, Runbook: opts.Orchestrator}
-	monH := &api.MonitorHandlers{Store: opts.MonitorStore, Engine: opts.MonitorEngine}
+	monH := &api.MonitorHandlers{Store: opts.MonitorStore, Engine: opts.MonitorEngine, Notifier: opts.MonitorNotifier}
 	ph := &api.PromptHandlers{Store: opts.Prompts}
 	fh := &api.FormHandlers{Store: opts.Forms}
 	adminH := &api.AdminHandlers{Backup: opts.Backup}
@@ -265,6 +266,9 @@ func NewRouter(opts Options) http.Handler {
 		r.Route("/monitors", func(r chi.Router) {
 			r.Get("/", monH.List)
 			r.Post("/", monH.Save)
+			r.Get("/settings", monH.GetSettings)
+			r.Put("/settings", monH.PutSettings)
+			r.Post("/settings/test", monH.TestChannel)
 			r.Get("/{id}", monH.Get)
 			r.Put("/{id}", monH.Save)
 			r.Delete("/{id}", monH.Delete)

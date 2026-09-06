@@ -43,6 +43,15 @@ type Monitor struct {
 	// dns {expectAddr}, tls-cert {warnDays}.
 	Config map[string]any `json:"config,omitempty"`
 
+	// Tags is a comma-separated list for grouping / filtering (M3).
+	Tags string `json:"tags,omitempty"`
+	// Channel overrides Settings.DefaultChannel for this monitor's alerts
+	// ("" = use the default). (M3)
+	Channel string `json:"channel,omitempty"`
+	// AlertAfterSec / RenotifyEverySec override Settings when > 0. (M3)
+	AlertAfterSec    int `json:"alertAfterSec,omitempty"`
+	RenotifyEverySec int `json:"renotifyEverySec,omitempty"`
+
 	Status        string `json:"status"`
 	LastCheckedAt int64  `json:"lastCheckedAt"`
 	LastChangeAt  int64  `json:"lastChangeAt"`
@@ -143,6 +152,17 @@ func (m *Monitor) cfgFloat(key string, def float64) float64 {
 		}
 	}
 	return def
+}
+
+// TagList splits Tags on commas, trimmed, empties dropped.
+func (m *Monitor) TagList() []string {
+	var out []string
+	for _, t := range strings.Split(m.Tags, ",") {
+		if t = strings.TrimSpace(t); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // cfgStrings reads a []string from Config — accepts a JSON array or a single
