@@ -104,6 +104,9 @@ export const router = createBrowserRouter([
 
       // Ansible Manager
       { path: 'tools/ansible', lazy: () => import('./adapters/ui/tools/AnsibleScreen').then((m) => ({ Component: m.AnsibleScreen })) },
+
+      // Monitors (background-runs Tier 2)
+      { path: 'tools/monitors', lazy: () => import('./adapters/ui/tools/MonitorsScreen').then((m) => ({ Component: m.MonitorsScreen })) },
       { path: 'settings', lazy: () => import('./adapters/ui/settings/SettingsScreen').then((m) => ({ Component: m.SettingsScreen })) },
       { path: 'settings/:section', lazy: () => import('./adapters/ui/settings/SettingsScreen').then((m) => ({ Component: m.SettingsScreen })) },
 

@@ -691,4 +691,21 @@ export const kModuleTaxonomy: ModuleDef[] = [
       },
     ],
   },
+  {
+    id: 'monitor',
+    title: 'Monitors',
+    icon: RadioTower,
+    // Single-tool shell module — a status board of server-side persistent
+    // checks. Backend-mandatory. See MONITORS_MODULE_PLAN.md.
+    hideToolPane: true,
+    tools: [
+      {
+        id: 'monitor',
+        name: 'Monitors',
+        description: 'Ping / TCP / HTTP / cert checks that run on the backend and alert on down',
+        icon: RadioTower,
+        route: '/tools/monitors',
+      },
+    ],
+  },
 ]

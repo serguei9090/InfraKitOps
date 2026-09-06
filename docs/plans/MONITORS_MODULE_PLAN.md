@@ -1,6 +1,20 @@
 # Monitors module — plan (BR Tier 2)
 
-## Status: not started
+## Status: M0 + M1 done (icmp/tcp probes + status board). M2–M4 pending.
+
+- **M0 (2026-09-05)** — `internal/monitor`: `monitor.db` (`--monitor-db`),
+  `Probe` iface + `icmp`/`tcp`, `Engine` (ticker per monitor, fail-threshold
+  state machine, `seedFailStreak` across restarts, 5-min prune, boot-resume of
+  enabled monitors, `StopAll` on shutdown), `MonitorHandlers` (CRUD + samples +
+  pause/resume/check), owner-scoped, `moduleOf`→`monitor`, `capabilities.monitor`,
+  alert sink → `obs` log. `go test` green.
+- **M1 (2026-09-05)** — `core/monitor/**` model + kind metadata, `monitorClient`,
+  `monitorStore` (10 s poll, in-app toast on a *down* transition — recovery just
+  flips the dot, M2's webhook does real notification both ways), `monitor` rail
+  module (`hideToolPane`, RadioTower), `MonitorsScreen` status board (list +
+  detail chart reusing `LatencyChart` + recent-checks log + New/Edit dialog).
+  Verified in-browser: create → up/down cycle → detail history → alert lands in
+  the error drawer.
 
 ## Why
 
