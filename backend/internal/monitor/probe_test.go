@@ -33,6 +33,34 @@ func TestStatusAllowed(t *testing.T) {
 	}
 }
 
+func TestEvalSSHAssert(t *testing.T) {
+	cases := []struct {
+		spec, stdout string
+		exit         int
+		wantOK       bool
+		wantVal      float64
+	}{
+		{"exit0", "", 0, true, 0},
+		{"exit0", "", 1, false, 0},
+		{"contains:active", "active\n", 0, true, 0},
+		{"contains:active", "failed", 0, false, 0},
+		{"matches:^[0-9]+$", "42", 3, true, 0},
+		{"num:<90", "73%", 0, true, 73},
+		{"num:<90", "95", 0, false, 95},
+		{"num:>=1", "load 0.4 0.2", 0, false, 0.4},
+		{"num:>200", "free 512", 0, true, 512},
+	}
+	for _, c := range cases {
+		ok, val, _ := evalSSHAssert(c.spec, c.exit, c.stdout, 12)
+		if ok != c.wantOK {
+			t.Errorf("%q / %q exit=%d: ok=%v want %v", c.spec, c.stdout, c.exit, ok, c.wantOK)
+		}
+		if c.spec[:3] == "num" && val != c.wantVal {
+			t.Errorf("%q / %q: value=%v want %v", c.spec, c.stdout, val, c.wantVal)
+		}
+	}
+}
+
 func TestParseExpiry(t *testing.T) {
 	for _, s := range []string{"2027-01-02T15:04:05Z", "2027-01-02", "02-Jan-2027", "2027.01.02"} {
 		if _, err := parseExpiry(s); err != nil {

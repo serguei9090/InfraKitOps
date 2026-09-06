@@ -34,6 +34,7 @@ import (
 	"github.com/infrakit/backend/internal/api"
 	"github.com/infrakit/backend/internal/auth"
 	"github.com/infrakit/backend/internal/backup"
+	"github.com/infrakit/backend/internal/executor"
 	"github.com/infrakit/backend/internal/formstore"
 	"github.com/infrakit/backend/internal/history"
 	"github.com/infrakit/backend/internal/llm"
@@ -313,6 +314,29 @@ func main() {
 			return s
 		}, secrets)
 		monitorEngine.SetNotifier(monitorNotifier)
+
+		// The `ssh` probe kind reuses the Runbooks ssh_node registry + Vault.
+		if orch != nil {
+			monitor.SetNodeResolver(func(ctx context.Context, nodeID string) (executor.SSHTarget, error) {
+				n, err := orch.GetNode(userctx.From(ctx), nodeID)
+				if err != nil {
+					return executor.SSHTarget{}, err
+				}
+				t := executor.SSHTarget{Host: n.Host, Port: n.Port, User: n.User, HostKeyFP: n.HostKeyFP}
+				if n.AuthSecret != "" && vlt != nil {
+					v, serr := vlt.Resolver().Resolve(ctx, n.AuthSecret)
+					if serr != nil {
+						return t, fmt.Errorf("can't read the node's auth secret — vault locked?")
+					}
+					if n.AuthKind == "key" {
+						t.PrivateKey = v
+					} else {
+						t.Password = v
+					}
+				}
+				return t, nil
+			})
+		}
 	}
 
 	var authSvc *auth.Service

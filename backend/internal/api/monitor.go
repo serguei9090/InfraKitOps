@@ -83,12 +83,14 @@ func (h *MonitorHandlers) Save(w http.ResponseWriter, r *http.Request) {
 	if id := chi.URLParam(r, "id"); id != "" {
 		m.ID = id
 	}
-	if m.Name == "" || m.Kind == "" || m.Target == "" {
-		apierr.Write(w, apierr.Validation("name, kind and target are required"))
-		return
-	}
 	if !monitor.KnownKind(m.Kind) {
 		apierr.Write(w, apierr.Validation("unknown monitor kind: "+m.Kind))
+		return
+	}
+	// an ssh monitor can carry its target in config.nodeId instead
+	targetOptional := m.Kind == monitor.KindSSH && m.Config["nodeId"] != nil && m.Config["nodeId"] != ""
+	if m.Name == "" || (m.Target == "" && !targetOptional) {
+		apierr.Write(w, apierr.Validation("name and target are required"))
 		return
 	}
 	// A new monitor is enabled unless the caller explicitly said otherwise —

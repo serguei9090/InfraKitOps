@@ -6,6 +6,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { testNode, type NodeTestResult } from '@/adapters/backend/runbookClient'
+import { SaveAsMonitorButton } from '@/adapters/ui/monitor/SaveAsMonitorButton'
 import { useRunbookStore } from '@/stores/runbookStore'
 import type { SshNode } from '@/core/runbook/runbookModel'
 import { SecretPicker } from './SecretPicker'
@@ -82,6 +83,14 @@ export function SshNodesView() {
                 <Button size="xs" variant="outline" onClick={() => void runTest(n.id)}>
                   Test
                 </Button>
+                <SaveAsMonitorButton
+                  kind="ssh"
+                  target=""
+                  name={`node: ${n.name}`}
+                  config={{ nodeId: n.id, command: 'true', assert: 'exit0' }}
+                  label="Monitor"
+                  size="xs"
+                />
                 <Button size="xs" variant="ghost" onClick={() => setEditing(n)}>
                   Edit
                 </Button>

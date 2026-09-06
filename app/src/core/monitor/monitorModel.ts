@@ -3,7 +3,16 @@
  * free model shared by the client and the status board.
  */
 
-export type MonitorKind = 'icmp' | 'tcp' | 'http' | 'dns' | 'tls-cert' | 'domain'
+export type MonitorKind = 'icmp' | 'tcp' | 'http' | 'dns' | 'tls-cert' | 'domain' | 'ssh'
+
+/** ssh-probe presets — a label that fills `command` + `assert`. */
+export const SSH_PRESETS: { label: string; command: string; assert: string }[] = [
+  { label: 'Disk space % used (/)', command: "df --output=pcent / | tr -dc '0-9'", assert: 'num:<90' },
+  { label: 'Service active (systemd)', command: 'systemctl is-active SERVICE', assert: 'exit0' },
+  { label: 'Process running', command: 'pgrep -x NAME', assert: 'exit0' },
+  { label: 'Load average (1 min)', command: "cut -d' ' -f1 /proc/loadavg", assert: 'num:<4' },
+  { label: 'Free memory (MB)', command: "free -m | awk 'NR==2{print $7}'", assert: 'num:>200' },
+]
 export type MonitorStatus = 'up' | 'down' | 'unknown' | 'paused'
 
 /** A config_json field the New/Edit dialog renders for a given kind. */
@@ -193,6 +202,18 @@ export const KINDS: KindMeta[] = [
     defaultIntervalSec: 43200,
     configFields: [{ key: 'warnDays', label: 'Warn when days left ≤', type: 'number', default: 30 }],
   },
+  {
+    kind: 'ssh',
+    label: 'SSH command check',
+    targetLabel: 'Host (or use a node)',
+    targetPlaceholder: 'db.internal — leave blank if picking a node',
+    unit: '',
+    higherIsWorse: true,
+    defaultIntervalSec: 300,
+    // ssh fields (node picker + preset + command + assert) are rendered
+    // bespoke in the dialog, not through configFields.
+    configFields: [],
+  },
 ]
 
 export const kindMeta = (k: MonitorKind): KindMeta => KINDS.find((m) => m.kind === k) ?? KINDS[0]
@@ -237,6 +258,9 @@ export function configSummary(kind: MonitorKind, config: Record<string, unknown>
     if (s('resolver')) parts.push(`via ${s('resolver')}`)
   } else if (kind === 'tls-cert' || kind === 'domain') {
     parts.push(`warn ≤ ${n('warnDays') ?? (kind === 'domain' ? 30 : 21)} days`)
+  } else if (kind === 'ssh') {
+    if (s('command')) parts.push(`\`${s('command')}\``)
+    if (s('assert') && s('assert') !== 'exit0') parts.push(s('assert'))
   }
   return parts.join(' · ')
 }

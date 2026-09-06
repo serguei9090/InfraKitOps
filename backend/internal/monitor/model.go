@@ -26,6 +26,7 @@ const (
 	KindDNS    = "dns"
 	KindTLS    = "tls-cert"
 	KindDomain = "domain"
+	KindSSH    = "ssh"
 )
 
 // Monitor is one configured check.

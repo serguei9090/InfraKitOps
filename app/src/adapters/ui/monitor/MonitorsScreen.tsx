@@ -8,6 +8,7 @@ import {
   KINDS,
   kindMeta,
   relTime,
+  SSH_PRESETS,
   STATUS_DOT,
   tagList,
   uptimePct,
@@ -16,6 +17,7 @@ import {
   type MonitorKind,
   type MonitorSample,
 } from '@/core/monitor/monitorModel'
+import { listNodes } from '@/adapters/backend/runbookClient'
 import { LatencyChart } from '@/adapters/ui/network'
 import { BackendUnavailable } from '@/adapters/ui/network/BackendUnavailable'
 import { Button } from '@/components/ui/button'
@@ -386,6 +388,95 @@ function ConfigInput({
   )
 }
 
+function SshConfig({
+  config,
+  setCfg,
+}: {
+  config: Record<string, unknown>
+  setCfg: (key: string, val: unknown) => void
+}) {
+  const [nodes, setNodes] = useState<{ id: string; name: string; host: string }[]>([])
+  useEffect(() => {
+    void listNodes()
+      .then((ns) => setNodes(ns.map((n) => ({ id: n.id, name: n.name, host: n.host }))))
+      .catch(() => setNodes([]))
+  }, [])
+
+  const nodeId = (config.nodeId as string) ?? ''
+
+  return (
+    <div className="space-y-2 rounded-md border border-border/50 p-3">
+      <div className="space-y-1">
+        <Label>SSH node</Label>
+        <Select value={nodeId || 'inline'} onValueChange={(v) => setCfg('nodeId', !v || v === 'inline' ? '' : v)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="inline">Inline host (agent auth)</SelectItem>
+            {nodes.map((n) => (
+              <SelectItem key={n.id} value={n.id}>
+                {n.name} — {n.host}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!nodeId && (
+          <Input
+            placeholder="user (with the Host field above)"
+            value={(config.user as string) ?? ''}
+            onChange={(e) => setCfg('user', e.target.value)}
+          />
+        )}
+      </div>
+      <div className="space-y-1">
+        <Label>Preset</Label>
+        <Select
+          value=""
+          onValueChange={(v) => {
+            const p = SSH_PRESETS.find((x) => x.label === v)
+            if (p) {
+              setCfg('command', p.command)
+              setCfg('assert', p.assert)
+            }
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Pick a common check…" />
+          </SelectTrigger>
+          <SelectContent>
+            {SSH_PRESETS.map((p) => (
+              <SelectItem key={p.label} value={p.label}>
+                {p.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="ssh-cmd">Command</Label>
+        <Input
+          id="ssh-cmd"
+          className="font-mono text-xs"
+          value={(config.command as string) ?? ''}
+          onChange={(e) => setCfg('command', e.target.value)}
+          placeholder="df --output=pcent / | tr -dc '0-9'"
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="ssh-assert">Assert</Label>
+        <Input
+          id="ssh-assert"
+          className="font-mono text-xs"
+          value={(config.assert as string) ?? ''}
+          onChange={(e) => setCfg('assert', e.target.value)}
+          placeholder="exit0  ·  contains:active  ·  matches:^ok$  ·  num:<90"
+        />
+      </div>
+    </div>
+  )
+}
+
 function MonitorDialog({ initial, onClose }: { initial: Partial<Monitor> | null; onClose: () => void }) {
   const isEdit = Boolean(initial?.id)
   const save = useMonitorStore((s) => s.save)
@@ -481,6 +572,8 @@ function MonitorDialog({ initial, onClose }: { initial: Partial<Monitor> | null;
               ))}
             </div>
           )}
+
+          {kind === 'ssh' && <SshConfig config={config} setCfg={setCfg} />}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">

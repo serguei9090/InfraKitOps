@@ -16,26 +16,33 @@ export function SaveAsMonitorButton({
   name,
   config,
   label = 'Save as monitor',
+  size = 'sm',
 }: {
   kind: MonitorKind
   target: string
   name?: string
   config?: Record<string, unknown>
   label?: string
+  size?: 'sm' | 'xs'
 }) {
   const navigate = useNavigate()
   const requestNew = useMonitorStore((s) => s.requestNew)
   const backendUp = useBackendStore((s) => s.status === 'available')
 
-  if (!backendUp || !target.trim()) return null
+  const haveTarget = target.trim() !== '' || Boolean(config?.nodeId)
+  if (!backendUp || !haveTarget) return null
 
   return (
     <Button
       type="button"
-      size="sm"
+      size={size}
       variant="outline"
       onClick={() => {
-        const spec: Partial<Monitor> = { kind, target: target.trim(), name: (name ?? target).trim() }
+        const spec: Partial<Monitor> = {
+          kind,
+          target: target.trim(),
+          name: (name ?? target).trim() || String(config?.nodeId ?? 'monitor'),
+        }
         if (config) spec.config = config
         requestNew(spec)
         navigate('/tools/monitors')
