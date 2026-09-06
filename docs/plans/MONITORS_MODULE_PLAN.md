@@ -1,6 +1,6 @@
 # Monitors module — plan (BR Tier 2)
 
-## Status: M0 + M1 done (icmp/tcp probes + status board). M2 in progress. See the Build checklist at the bottom.
+## Status: M0 + M1 + M2 done (icmp/tcp/http/dns/tls-cert/domain probes + board + per-kind dialog). M3 next. See the Build checklist at the bottom.
 
 - **M0 (2026-09-05)** — `internal/monitor`: `monitor.db` (`--monitor-db`),
   `Probe` iface + `icmp`/`tcp`, `Engine` (ticker per monitor, fail-threshold
@@ -378,18 +378,17 @@ in `app/`.
 - [x] `moduleTaxonomy` `monitor` entry + `routes.tsx` + `tools/MonitorsScreen.tsx`
 - [x] `adapters/ui/monitor/MonitorsScreen.tsx` — board + detail + New/Edit dialog
 
-### M2 — probe kinds (backend)
-- [ ] `probe_tls.go` — `x509fetch.Fetch` + parse `notAfter`; value = days; ok = `>warnDays` (21) & trusted & host-match; `detail` = fail reason; default interval 3600
-- [ ] `probe_domain.go` — `whois.Query`; parse `Parsed.ExpirationDate` (try RFC3339 + a couple layouts); value = days; ok = `>warnDays` (30); default interval 43200
-- [ ] `probe_http.go` — `net/http` (method, headers w/ `{{secret:}}`, redirects toggle, timeout); value = TTFB ms; ok = status in set (default 200–399) & `<maxLatencyMs` & content assert; reuse `executor.EvalDotPath` for JSON assert
-- [ ] `probe_dns.go` — `dnslookup.Query` (type, resolver); ok = resolves & value(s) match expected; value = resolve ms
-- [ ] `model.go` — per-kind default interval/timeout in `normalize()`; `config_json` shape validation per kind (in `Store.Put` or handler)
-- [ ] tests: one per probe (httptest server for `http`; a live/skip for `tls`/`dns`; fixture for `domain`)
+### M2 — probe kinds (backend) — done
+- [x] `probe_tls.go` — `x509fetch.Fetch` + parse `notAfter`; value = days; ok = `>warnDays` (21) & trusted & host-match; default interval 3600
+- [x] `probe_domain.go` — `whois.Query`; parse `ExpirationDate` across registrar layouts; value = days; ok = `>warnDays` (30); default interval 43200; ctx-guarded
+- [x] `probe_http.go` — `net/http` (method, headers, redirects toggle, timeout); value = response ms; status set / `maxLatencyMs` / body-contains / body-absent / `executor.EvalDotPath` JSON assert. *(headers `{{secret:}}` → M3 with Vault wiring)*
+- [x] `probe_dns.go` — `dnslookup.Query` (type, resolver); ok = resolves & every `expected` present; value = resolve ms
+- [x] `model.go` — `kindDefaultInterval`; `cfgBool/cfgFloat/cfgStrings`; `KnownKind` + handler rejects unknown kind
+- [x] `probe_test.go` — hermetic http (httptest), tls (httptest self-signed), pure `statusAllowed`/`parseExpiry`; dns skips w/o network
 
-### M2 — frontend
-- [ ] `monitorModel.ts` — per-kind `config` field schema + defaults
-- [ ] `MonitorDialog` — per-kind field group (switch on `kind`)
-- [ ] detail view — render the config/assertion summary line
+### M2 — frontend — done
+- [x] `monitorModel.ts` — `domain` kind; `KindMeta.defaultIntervalSec` + `configFields` (ConfigField descriptors); `configSummary()`
+- [x] `MonitorsScreen` `<ConfigInput>` — generic per-kind field group; kind switch pulls default interval + clears stale config; detail shows the summary line
 
 ### M3 — notifications (backend)
 - [ ] `internal/monitor/notify/{notify,webhook,smtp,desktop}.go`
