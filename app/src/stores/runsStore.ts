@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { listActiveRuns, type ActiveRun } from '@/adapters/backend/runsClient'
+import { listActiveRuns, type ActiveRun, type RunModule } from '@/adapters/backend/runsClient'
 import { useBackendStore } from './backendStore'
 
 /**
@@ -13,9 +13,14 @@ interface RunsState {
   /** timestamp the Runs drawer was last opened — badge counts newer runs */
   seenIds: number[]
   drawerOpen: boolean
+  /** a run id a module console should re-attach its live view to on mount */
+  attachRequest: { module: RunModule; id: number } | null
   refresh: () => Promise<void>
   startPolling: () => void
   setDrawerOpen: (open: boolean) => void
+  requestAttach: (module: RunModule, id: number) => void
+  /** module console calls this on mount; returns the pending run id for it, once */
+  consumeAttach: (module: RunModule) => number | null
 }
 
 const FAST_MS = 4_000
@@ -26,6 +31,7 @@ export const useRunsStore = create<RunsState>((set, get) => ({
   active: [],
   seenIds: [],
   drawerOpen: false,
+  attachRequest: null,
 
   refresh: async () => {
     if (useBackendStore.getState().status !== 'available') {
@@ -55,4 +61,13 @@ export const useRunsStore = create<RunsState>((set, get) => ({
       drawerOpen: open,
       seenIds: open ? s.active.map((r) => r.id) : s.seenIds,
     })),
+
+  requestAttach: (module, id) => set({ attachRequest: { module, id } }),
+
+  consumeAttach: (module) => {
+    const req = get().attachRequest
+    if (!req || req.module !== module) return null
+    set({ attachRequest: null })
+    return req.id
+  },
 }))

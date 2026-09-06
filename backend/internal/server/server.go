@@ -246,6 +246,14 @@ func NewRouter(opts Options) http.Handler {
 		r.Get("/runs/pending-approvals", rbh.PendingApprovals)
 		r.Post("/runs/{id}/approve", rbh.ApproveRun)
 		r.Get("/runs/{id}", rbh.GetRun)
+
+		// Background runs (BACKGROUND_RUNS_PLAN.md) — module-agnostic. Flat
+		// routes sharing the {id} param name with the runbook /runs/{id} above
+		// (chi requires matching param names at a tree position); the module is
+		// a ?module= query param, not a path segment.
+		r.Get("/runs/active", runsH.Active)
+		r.Get("/runs/{id}/stream", runsH.Stream)
+		r.Post("/runs/{id}/cancel", runsH.Cancel)
 		r.Route("/ssh-nodes", func(r chi.Router) {
 			r.Get("/", rbh.ListNodes)
 			r.Post("/", rbh.PutNode)
@@ -353,13 +361,6 @@ func NewRouter(opts Options) http.Handler {
 			})
 			r.Get("/runs", anh.ListRuns)
 			r.Get("/runs/{id}", anh.GetRun)
-		})
-
-		// Background runs (BACKGROUND_RUNS_PLAN.md) — module-agnostic.
-		r.Route("/runs", func(r chi.Router) {
-			r.Get("/active", runsH.Active)
-			r.Get("/{module}/{id}/stream", runsH.Stream)
-			r.Post("/{module}/{id}/cancel", runsH.Cancel)
 		})
 
 		r.Route("/vault", func(r chi.Router) {

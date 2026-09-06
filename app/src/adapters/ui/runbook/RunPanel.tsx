@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 export function RunPanel() {
   const live = useRunbookStore((s) => s.live)
   const clearLive = useRunbookStore((s) => s.clearLive)
+  const cancelLiveRun = useRunbookStore((s) => s.cancelLiveRun)
   const approveRun = useRunbookStore((s) => s.approveRun)
   if (!live) return null
 
@@ -54,7 +55,7 @@ export function RunPanel() {
           </>
         )}
         {!done && (
-          <Button size="xs" variant="outline" onClick={() => live.abort()}>
+          <Button size="xs" variant="outline" onClick={() => void cancelLiveRun()}>
             Stop
           </Button>
         )}

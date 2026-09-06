@@ -5,6 +5,7 @@
  */
 import { create } from 'zustand'
 import * as api from '@/adapters/backend/runbookClient'
+import { openRunStream, cancelRun as apiCancelRun } from '@/adapters/backend/runsClient'
 import {
   emptySpec,
   type Run,
@@ -63,6 +64,10 @@ interface RunbookStore {
     runbookId: string,
     opts: { args: Record<string, string>; dryRun?: boolean; asAuthor?: boolean },
   ) => void
+  /** Re-attach the live view to a server-side run still executing (BR3b). */
+  attachRun: (runId: number) => Promise<void>
+  /** Ask the backend to cancel the run being viewed (not just close the view). */
+  cancelLiveRun: () => Promise<void>
   clearLive: () => void
 }
 
@@ -203,97 +208,44 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
       log: [],
       abort: () => {},
     }
-    const abort = api.openRunStream(runbookId, opts, {
-      onEvent: (name, data) => {
-        const d = data as Record<string, unknown>
-        set((s) => {
-          if (!s.live || s.live.runbookId !== runbookId) return s
-          const next = { ...s.live, steps: [...s.live.steps], log: [...s.live.log] }
-          switch (name) {
-            case 'run-start':
-              next.runId = (d.runId as number) ?? null
-              next.status = 'running'
-              break
-            case 'approval-required':
-              next.runId = (d.runId as number) ?? next.runId
-              next.status = 'awaiting_approval'
-              break
-            case 'approval-granted':
-              next.status = 'running'
-              break
-            case 'step-start':
-              // placeholder row so the UI shows the step immediately
-              next.steps.push({
-                index: d.index as number,
-                name: (d.name as string) ?? `Step ${d.index}`,
-                executor: (d.executor as string) ?? '',
-                commandRedacted: (d.command as string) ?? '',
-                stdout: '',
-                stderr: '',
-                exitCode: 0,
-                status: 'running',
-                startedAt: Date.now(),
-                finishedAt: 0,
-              })
-              break
-            case 'stdout':
-            case 'stderr':
-              next.log.push({
-                stepIndex: next.steps.at(-1)?.index ?? 0,
-                stream: name,
-                text: (d.text as string) ?? '',
-              })
-              break
-            case 'step-end': {
-              const rs = data as RunStep
-              const i = next.steps.findIndex((x) => x.index === rs.index)
-              if (i >= 0) next.steps[i] = rs
-              else next.steps.push(rs)
-              break
-            }
-            case 'run-end': {
-              const st = d.dryRun ? 'ok' : ((d.status as string) ?? 'ok')
-              next.status = st === 'cancelled' ? 'failed' : (st as LiveRun['status'])
-              if (st === 'cancelled' && d.reason) next.error = String(d.reason)
-              break
-            }
-            case 'preview':
-              // dry-run payload; the RunPanel reads it off `live` if needed
-              break
-            case 'error': {
-              const ae = classify(
-                { error: d.error, code: d.code, hint: d.hint },
-                SRC,
-              )
-              next.status = 'error'
-              next.error = ae.detail || ae.title
-              next.errorObj = ae
-              break
-            }
-          }
-          return { live: next }
-        })
-      },
-      onClose: () => {
-        set((s) => {
-          if (!s.live || s.live.status === 'error') return s
-          if (s.live.status === 'starting' || s.live.status === 'running') {
-            return { live: { ...s.live, status: 'ok' } }
-          }
-          return s
-        })
-      },
-      onError: (rawErr) => {
-        const ae = classify(rawErr, SRC)
-        set((s) =>
-          s.live
-            ? { live: { ...s.live, status: 'error', error: ae.detail || ae.title, errorObj: ae } }
-            : s,
-        )
-      },
-    })
+    const abort = api.openRunStream(runbookId, opts, runStreamHandlers(set, runbookId))
     live.abort = abort
     set({ live })
+  },
+
+  attachRun: async (runId) => {
+    if (get().live?.runId === runId) return
+    get().live?.abort()
+    let runbookId = get().live?.runbookId ?? ''
+    try {
+      runbookId = (await api.getRun(runId)).runbookId
+    } catch {
+      /* the stream carries the truth */
+    }
+    const live: LiveRun = {
+      runbookId,
+      runId,
+      status: 'running',
+      steps: [],
+      log: [],
+      abort: () => {},
+    }
+    live.abort = openRunStream('runbook', runId, runStreamHandlers(set, runbookId))
+    set({ live })
+  },
+
+  cancelLiveRun: async () => {
+    const rid = get().live?.runId
+    if (rid == null) {
+      get().live?.abort()
+      return
+    }
+    try {
+      await apiCancelRun('runbook', rid)
+      // leave the stream open — it will emit run-end and settle the view
+    } catch (e) {
+      reportError(e, SRC)
+    }
   },
 
   clearLive: () => {
@@ -301,3 +253,103 @@ export const useRunbookStore = create<RunbookStore>((set, get) => ({
     set({ live: null })
   },
 }))
+
+type Set = (
+  partial:
+    | Partial<RunbookStore>
+    | ((s: RunbookStore) => Partial<RunbookStore>),
+) => void
+
+/**
+ * SSE handlers that fold run events into `live`. Shared by startRun (fresh run)
+ * and attachRun (re-attach to a background run via /runs/runbook/{id}/stream —
+ * the replay rebuilds the step list, then live events continue).
+ */
+function runStreamHandlers(set: Set, runbookId: string) {
+  return {
+    onEvent: (name: string, data: unknown) => {
+      const d = data as Record<string, unknown>
+      set((s) => {
+        if (!s.live) return s
+        // A blank runbookId (attach couldn't look it up) matches anything.
+        if (runbookId && s.live.runbookId && s.live.runbookId !== runbookId) return s
+        const next = { ...s.live, steps: [...s.live.steps], log: [...s.live.log] }
+        switch (name) {
+          case 'run-start':
+            next.runId = (d.runId as number) ?? next.runId
+            if (next.status === 'starting') next.status = 'running'
+            break
+          case 'approval-required':
+            next.runId = (d.runId as number) ?? next.runId
+            next.status = 'awaiting_approval'
+            break
+          case 'approval-granted':
+            next.status = 'running'
+            break
+          case 'step-start':
+            next.steps.push({
+              index: d.index as number,
+              name: (d.name as string) ?? `Step ${d.index}`,
+              executor: (d.executor as string) ?? '',
+              commandRedacted: (d.command as string) ?? '',
+              stdout: '',
+              stderr: '',
+              exitCode: 0,
+              status: 'running',
+              startedAt: Date.now(),
+              finishedAt: 0,
+            })
+            break
+          case 'stdout':
+          case 'stderr':
+            next.log.push({
+              stepIndex: next.steps.at(-1)?.index ?? 0,
+              stream: name,
+              text: (d.text as string) ?? '',
+            })
+            break
+          case 'step-end': {
+            const rs = data as RunStep
+            const i = next.steps.findIndex((x) => x.index === rs.index)
+            if (i >= 0) next.steps[i] = rs
+            else next.steps.push(rs)
+            break
+          }
+          case 'run-end': {
+            const st = d.dryRun ? 'ok' : ((d.status as string) ?? 'ok')
+            next.status = st === 'cancelled' ? 'failed' : (st as LiveRun['status'])
+            if (st === 'cancelled' && d.reason) next.error = String(d.reason)
+            break
+          }
+          case 'preview':
+            break
+          case 'error': {
+            const ae = classify({ error: d.error, code: d.code, hint: d.hint }, SRC)
+            next.status = 'error'
+            next.error = ae.detail || ae.title
+            next.errorObj = ae
+            break
+          }
+        }
+        return { live: next }
+      })
+    },
+    onClose: () => {
+      set((s) => {
+        if (!s.live || s.live.status === 'error') return s
+        if (s.live.status === 'starting' || s.live.status === 'running') {
+          return { live: { ...s.live, status: 'ok' } }
+        }
+        return s
+      })
+    },
+    onError: (rawErr: Error) => {
+      const ae = classify(rawErr, SRC)
+      set((s) =>
+        s.live
+          ? { live: { ...s.live, status: 'error', error: ae.detail || ae.title, errorObj: ae } }
+          : s,
+      )
+    },
+  }
+}

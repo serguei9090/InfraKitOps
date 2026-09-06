@@ -109,6 +109,7 @@ function Drawer({ onClose }: { onClose: () => void }) {
 
 function Row({ run, onDone, onClose }: { run: ActiveRun; onDone: () => void; onClose: () => void }) {
   const navigate = useNavigate()
+  const requestAttach = useRunsStore((s) => s.requestAttach)
   const [stopping, setStopping] = useState(false)
 
   const stop = async () => {
@@ -130,6 +131,7 @@ function Row({ run, onDone, onClose }: { run: ActiveRun; onDone: () => void; onC
         <button
           type="button"
           onClick={() => {
+            requestAttach(run.module, run.id)
             navigate(MODULE_ROUTE[run.module])
             onClose()
           }}

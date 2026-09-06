@@ -4,6 +4,7 @@ import { Boxes, CalendarClock, History, Lock, LockOpen, Network, Package, Plus, 
 import { Button } from '@/components/ui/button'
 import { useBackendStore } from '@/stores/backendStore'
 import { useRunbookStore, type Section } from '@/stores/runbookStore'
+import { useRunsStore } from '@/stores/runsStore'
 import { useVaultStore } from '@/stores/vaultStore'
 import { useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
@@ -57,6 +58,9 @@ export function RunbookConsoleScaffold() {
   const refreshSchedules = useRunbookStore((s) => s.refreshSchedules)
   const createBlank = useRunbookStore((s) => s.createBlank)
   const live = useRunbookStore((s) => s.live)
+  const attachRun = useRunbookStore((s) => s.attachRun)
+  const attachRequest = useRunsStore((s) => s.attachRequest)
+  const consumeAttach = useRunsStore((s) => s.consumeAttach)
   const navigate = useNavigate()
 
   async function newRunbook() {
@@ -70,6 +74,13 @@ export function RunbookConsoleScaffold() {
   useEffect(() => {
     if (status === 'unknown') void refreshBackend()
   }, [status, refreshBackend])
+
+  // Came here from the global Runs drawer → re-attach the live view to that
+  // still-executing server-side run (BR3b).
+  useEffect(() => {
+    const id = consumeAttach('runbook')
+    if (id != null) void attachRun(id)
+  }, [attachRequest, consumeAttach, attachRun])
 
   useEffect(() => {
     if (status === 'available') {

@@ -38,6 +38,7 @@ export function RunView() {
   const live = useAnsibleStore((s) => s.live)
   const replaying = useAnsibleStore((s) => s.replaying)
   const clear = useAnsibleStore((s) => s.clearLive)
+  const cancelLiveRun = useAnsibleStore((s) => s.cancelLiveRun)
   const rerun = useAnsibleStore((s) => s.rerun)
   const lastSpec = useAnsibleStore((s) => s.lastSpec)
   const [showConsole, setShowConsole] = useState(false)
@@ -76,7 +77,7 @@ export function RunView() {
           <PlugZap className="size-4" /> {showConsole ? 'Tree' : 'Console'}
         </Button>
         {running ? (
-          <Button variant="outline" size="sm" onClick={() => live.abort()}>
+          <Button variant="outline" size="sm" onClick={() => void cancelLiveRun()}>
             Stop
           </Button>
         ) : (

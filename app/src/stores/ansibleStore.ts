@@ -4,6 +4,7 @@
  */
 import { create } from 'zustand'
 import * as api from '@/adapters/backend/ansibleClient'
+import { openRunStream, cancelRun as apiCancelRun } from '@/adapters/backend/runsClient'
 import type {
   AnsibleSettings,
   HostFacts,
@@ -224,6 +225,10 @@ interface AnsibleStore {
   startAdhoc: (spec: api.AdhocSpec) => void
   galaxyInstall: (opts: { type?: 'role' | 'collection'; name?: string }) => void
   openReplay: (runId: number) => Promise<void>
+  /** Re-attach the live tree to a server-side run still executing (BR3b). */
+  attachRun: (runId: number) => Promise<void>
+  /** Ask the backend to cancel the run being viewed (not just close the view). */
+  cancelLiveRun: () => Promise<void>
   clearLive: () => void
 }
 
@@ -577,6 +582,33 @@ export const useAnsibleStore = create<AnsibleStore>((set, get) => ({
     try {
       const run = await api.getRun(runId)
       set({ live: { ...replayEvents(run), abort: () => {} }, replaying: true })
+    } catch (e) {
+      reportError(e, SRC)
+    }
+  },
+
+  attachRun: async (runId) => {
+    if (get().live?.runId === runId && !get().replaying) return
+    get().live?.abort()
+    let projectId = get().selectedId ?? ''
+    try {
+      projectId = (await api.getRun(runId)).projectId
+    } catch {
+      /* the run may still be pre-InsertRun; the stream carries the truth */
+    }
+    set({ live: { ...emptyLive(projectId), runId, status: 'running' }, replaying: false })
+    const abort = openRunStream('ansible', runId, streamHandlers(set, get, projectId))
+    set((s) => (s.live ? { live: { ...s.live, abort } } : s))
+  },
+
+  cancelLiveRun: async () => {
+    const rid = get().live?.runId
+    if (rid == null) {
+      get().live?.abort()
+      return
+    }
+    try {
+      await apiCancelRun('ansible', rid)
     } catch (e) {
       reportError(e, SRC)
     }

@@ -17,6 +17,7 @@ import { useBackendStore } from '@/stores/backendStore'
 import { useVaultStore } from '@/stores/vaultStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useAnsibleStore, type Section } from '@/stores/ansibleStore'
+import { useRunsStore } from '@/stores/runsStore'
 import { BackendUnavailable } from '@/adapters/ui/network/BackendUnavailable'
 import { ProjectsView } from './ProjectsView'
 import { InventoryView } from './InventoryView'
@@ -66,9 +67,21 @@ export function AnsibleConsoleScaffold() {
   const pendingCount = useAnsibleStore((s) => s.pendingApprovals.length)
   const multiUser = useAuthStore((s) => s.mode === 'on')
 
+  const attachRun = useAnsibleStore((s) => s.attachRun)
+  const attachRequest = useRunsStore((s) => s.attachRequest)
+  const consumeAttach = useRunsStore((s) => s.consumeAttach)
+
   useEffect(() => {
     if (status === 'unknown') void refreshBackend()
   }, [status, refreshBackend])
+
+  // Came here from the global Runs drawer → re-attach the live tree to that
+  // still-executing server-side run (BR3b). Fires on mount and whenever a new
+  // attach is requested while this console is already open.
+  useEffect(() => {
+    const id = consumeAttach('ansible')
+    if (id != null) void attachRun(id)
+  }, [attachRequest, consumeAttach, attachRun])
 
   useEffect(() => {
     if (status === 'available') {

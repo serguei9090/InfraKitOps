@@ -62,14 +62,14 @@ func (h *RunsHandlers) Active(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{"runs": out})
 }
 
-// Stream: GET /runs/{module}/{id}/stream — replay the persisted event log, then
+// Stream: GET /runs/{id}/stream?module= — replay the persisted event log, then
 // tail live events. Closing the connection ends the view, not the run.
 func (h *RunsHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 	if !h.ok() {
 		sse.RejectCoded(w, string(apierr.CodeInternal), "background runs are not available", "")
 		return
 	}
-	module := chi.URLParam(r, "module")
+	module := r.URL.Query().Get("module")
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if !h.authorize(r, module, id) {
 		sse.RejectCoded(w, string(apierr.CodeNotFound), "run not found", "")
@@ -135,13 +135,13 @@ func (h *RunsHandlers) replayFromStore(r *http.Request, module string, id int64,
 	}
 }
 
-// Cancel: POST /runs/{module}/{id}/cancel
+// Cancel: POST /runs/{id}/cancel?module=
 func (h *RunsHandlers) Cancel(w http.ResponseWriter, r *http.Request) {
 	if !h.ok() {
 		apierr.Write(w, apierr.Unavailable("background runs"))
 		return
 	}
-	module := chi.URLParam(r, "module")
+	module := r.URL.Query().Get("module")
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if !h.authorize(r, module, id) {
 		apierr.Write(w, apierr.NotFound("run not found"))

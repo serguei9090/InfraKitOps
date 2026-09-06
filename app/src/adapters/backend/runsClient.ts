@@ -24,9 +24,9 @@ export const listActiveRuns = () =>
 
 /** Replay the run's persisted event log, then tail live events. */
 export function openRunStream(module: RunModule, id: number, handlers: StreamHandlers): () => void {
-  return openStream(`/runs/${module}/${id}/stream`, {}, handlers)
+  return openStream(`/runs/${id}/stream`, { module }, handlers)
 }
 
 /** Ask the backend to cancel an in-flight run. */
 export const cancelRun = (module: RunModule, id: number) =>
-  backendRequest<{ status: string }>('POST', `/runs/${module}/${id}/cancel`)
+  backendRequest<{ status: string }>('POST', `/runs/${id}/cancel?module=${module}`)
