@@ -1,6 +1,35 @@
 # Monitors module — plan (BR Tier 2)
 
-## Status: M0–M4 done — probes (icmp/tcp/http/dns/tls-cert/domain/ssh), board, alerts, policy, mute, tags, schedule runOnStart, tray, "Save as monitor". M5 (rollups + status page) next. See the Build checklist at the bottom.
+## Status: M0–M5 done — probes (icmp/tcp/http/dns/tls-cert/domain/ssh), board, alerts, policy, mute, tags, schedule runOnStart, tray, "Save as monitor", rollups + incidents + uptime reporting, public status pages, bulk import + templates + dependencies. M6 (app-layer probes) is on request only. See the Build checklist at the bottom.
+
+- **M5 (2026-09-06)** — reporting & scale:
+  - **M5a** (`0b01816`) — `rollup.go`: retention sweep folds raw→1m@24h→1h@7d
+    (cut-offs bucket-aligned so each folds once), 1h pruned @90d; replaces the
+    bare 5000-cap prune on the engine ticker. `monitor_rollup` +
+    `monitor_incident` tables. Engine opens an incident on a down transition,
+    closes on recovery. `countsSince`/`UptimeAt`/`Summary` (24h/7d/30d per
+    monitor + per tag, merging raw + both rollup periods), `Incidents`,
+    `Report` (uptime + MTTR + MTBF + 30d incident list), `Series`
+    (auto-resolution: raw ≤25h, 1m ≤8d, else 1h; unions rollups with
+    not-yet-folded raw). Endpoints `/monitors/summary`, `/{id}/incidents`,
+    `/{id}/series`, `/{id}/report` (`?format=csv`). FE: row + tag uptime
+    pills, 24h/7d/30d stat grid, range-selectable series chart, 30-day
+    incident list, CSV/JSON export.
+  - **M5b** (`0d99542`) — `statusboard.go`: `monitor_status_board`
+    (owner-scoped, token-addressed). CRUD under `/monitors/status-boards` +
+    `/{id}/rotate`. **Public** `GET /api/v1/status/{token}` — no auth in
+    either mode (`publicPath()` in `bearerAuth`, folded into `authExempt`
+    for `--auth on`); stripped payload (name/status/uptime + open incident
+    timestamps). FE: standalone `/status/:token` route (no shell), Settings →
+    Monitors "Status pages" group (add/delete/copy-link/rotate/toggle
+    incidents).
+  - **M5c** (`b58c0c5`) — `bulk.go`: `ParseBulk` (`name,kind,target[,tags]`
+    lines, per-line errors) + `BuildTemplate("web-service")` (http + tls +
+    dns + domain group for one hostname). `POST /monitors/{bulk,template}`.
+    `Monitor.dependsOn` (ALTER, no migration) — a down transition whose
+    parent is already down opens the incident `suppressed=1` and skips
+    notification (still broadcast to the board). FE: "Import" dialog
+    (paste / template tabs) + "Depends on" select in the editor.
 
 - **M0 (2026-09-05)** — `internal/monitor`: `monitor.db` (`--monitor-db`),
   `Probe` iface + `icmp`/`tcp`, `Engine` (ticker per monitor, fail-threshold
@@ -424,14 +453,15 @@ in `app/`.
 - [x] FE: Runbooks → Nodes row "Monitor" button → an ssh `true` check tagged `node: <name>`
 - [ ] *(deferred)* a dedicated `node:` board group view — tag filter already covers it
 
-### M5 — reporting & scale
-- [ ] `monitor_rollup` table + fold sweep (1-min @24h, 1-hour @7d) + raw prune at 24h
-- [ ] `GET /monitors/{id}/incidents` (fold down→up)
-- [ ] uptime % per window (24h/7d/30d) per-monitor + per-tag; `GET /monitors/{id}/report` + CSV/JSON
-- [ ] `status_board` table (token) + `GET /status/{token}` (no auth, stripped)
-- [ ] `POST /monitors/bulk` + `POST /monitors/template`
-- [ ] `monitor.depends_on` + engine suppression
-- [ ] FE: chart resolution picker; incident timeline; report view + export; `/status/:token` route; bulk-import + template dialogs; dependency field
+### M5 — reporting & scale — done
+- [x] `monitor_rollup` table + fold sweep (1-min @24h, 1-hour @7d) + raw prune at 24h + 1h prune @90d
+- [x] `monitor_incident` table; engine open-on-down / close-on-recovery; `GET /monitors/{id}/incidents`
+- [x] uptime % per window (24h/7d/30d) per-monitor + per-tag (`/monitors/summary`); `GET /monitors/{id}/report` + `?format=csv`; MTTR + MTBF
+- [x] `GET /monitors/{id}/series?period=auto|raw|1m|1h` — chart resolution
+- [x] `monitor_status_board` table (token) + `GET /api/v1/status/{token}` (no auth both modes, stripped) + CRUD + rotate
+- [x] `POST /monitors/bulk` + `POST /monitors/template` ("web-service")
+- [x] `monitor.depends_on` + engine suppression (incident `suppressed=1`, no notify)
+- [x] FE: range-selectable series chart; incident list; report CSV/JSON export; `/status/:token` standalone route; Settings "Status pages" group; Import dialog (paste + template); "Depends on" select
 
 ### M6 — app-layer (on request)
 - [ ] `probe_redis.go` (TCP + RESP PING/AUTH)
