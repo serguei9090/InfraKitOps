@@ -1,9 +1,15 @@
 # InfraKit Studio
 
-**A local-first workbench for the generalist SRE / sysadmin / developer** — the person
-who touches Ansible, runbooks, network diagnostics, config files, LLM prompts, and a
-pile of encode/convert/hash utilities in the same week, and doesn't want to host and
-maintain a separate server for each.
+**The infra tool you reach for first.** A local-first workbench for the generalist
+SRE / sysadmin / developer — the person who touches Ansible, runbooks, network
+diagnostics, config files, LLM prompts, and a pile of encode/convert/hash utilities
+in the same week, and doesn't want to stand up a separate server for each just to
+try something.
+
+Start on your laptop with no account and no network. If a workflow proves itself,
+graduate it to a `docker compose up` on a real server — same binary, same UI, now
+multi-user. It's the on-ramp to AWX / Semaphore / Uptime Kuma, not a replacement
+for them.
 
 ![InfraKit Studio — multi-host ping monitor, traceroute, and the tool rail](docs/assets/demo.gif)
 
@@ -18,11 +24,32 @@ Solo desktop use runs with **no account, no telemetry, no network** — the 88
 client-side tools work entirely offline; the backend modules light up when the Go
 sidecar is present.
 
-MIT licensed. **Full documentation — architecture diagrams, one doc per module,
-deployment guides, and a porting/contributing guide — lives in
-[`docs/`](docs/README.md).** See [`CLAUDE.md`](CLAUDE.md) for the stack
-rationale and day-to-day conventions, and [`ROADMAP.md`](ROADMAP.md) for
-what's left, parked, or killed.
+## Try it
+
+**Live demo** (client-only tools, no backend): <https://serguei9090.github.io/InfraKitOps/>
+
+**Desktop** — [latest release](https://github.com/serguei9090/InfraKitOps/releases/latest):
+Windows `.msi` / `.exe`, Linux `.deb` / `.AppImage`. Installs unsigned for now, so
+Windows SmartScreen asks once — *More info → Run anyway*.
+
+**Self-hosted, one line** (full app, multi-user auth on by default):
+
+```bash
+docker run -p 8080:8080 -v infrakit:/data ghcr.io/serguei9090/infrakitops:latest
+```
+
+Open <http://127.0.0.1:8080>; the first start logs a `SETUP-TOKEN` for creating the
+admin account (`docker logs`). The encrypted Vault stays locked until you set a
+passphrase in the UI. For TLS + a reverse proxy + headless Vault unlock, use
+[`deploy/compose.yml`](deploy/compose.yml) (Caddy) — see
+[`docs/deployment/DEPLOY.md`](docs/deployment/DEPLOY.md).
+
+[AGPL-3.0](LICENSE) licensed — run it, fork it, host it; if you host a modified
+version for others, publish your changes. **Full documentation — architecture
+diagrams, one doc per module, deployment guides, and a porting/contributing
+guide — lives in [`docs/`](docs/README.md).** See [`CLAUDE.md`](CLAUDE.md) for
+the stack rationale and day-to-day conventions, and [`ROADMAP.md`](ROADMAP.md)
+for what's left, parked, or killed.
 
 ## Why one app instead of ten
 
@@ -177,4 +204,14 @@ Forking or reusing this codebase elsewhere:
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+**GNU AGPL-3.0-or-later** — see [`LICENSE`](LICENSE).
+
+Plain-English version: you can use, modify, and self-host InfraKit Studio
+freely, including inside a company. The one obligation is the "network use"
+clause — **if you run a modified version as a service other people reach over
+a network, you must offer them your modified source.** Running the stock build,
+or a private fork you don't expose to others, carries no such obligation. New
+modules and adapters contributed back are covered by the same license.
+
+The third-party-binary bundling policy in [Stack](#stack) is separate and
+unchanged: only permissively licensed helpers ship in the installer.

@@ -75,4 +75,6 @@ rather than reference material:
   anyone (human or AI agent) working in this codebase day to day
 - [`../ROADMAP.md`](../ROADMAP.md) — what's left, parked, or killed, kept
   current as work lands
-- [`../LICENSE`](../LICENSE) — MIT
+- [`../LICENSE`](../LICENSE) — GNU AGPL-3.0-or-later
+- [`../SECURITY.md`](../SECURITY.md) — secret handling, the Vault design, threat model
+- [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — how to build, the green gate, commit style
