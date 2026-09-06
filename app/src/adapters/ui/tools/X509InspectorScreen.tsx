@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Loader2, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { SaveAsMonitorButton } from '@/adapters/ui/monitor/SaveAsMonitorButton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -100,6 +101,7 @@ export function X509InspectorScreen() {
                   </div>
                 </div>
               ) : null}
+              {host.trim() ? <SaveAsMonitorButton kind="tls-cert" target={host.trim()} label="Watch expiry" /> : null}
             </div>
           ) : null}
 

@@ -12,6 +12,7 @@ import {
   type ChartSeries,
 } from '@/adapters/ui/network'
 import { Button } from '@/components/ui/button'
+import { SaveAsMonitorButton } from '@/adapters/ui/monitor/SaveAsMonitorButton'
 import { Input } from '@/components/ui/input'
 import { seriesOverTime, type RunEnvelope } from '@/core/network/history'
 import { usePingMonitorStore, type HostTrack } from '@/stores/pingMonitorStore'
@@ -239,6 +240,12 @@ export function PingMonitorScreen() {
                 <HostCard key={t.host} track={t} onRemove={running ? () => removeHost(t.host) : undefined} />
               ))}
             </div>
+            {targetHost ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                Keep watching {targetHost} after you leave:
+                <SaveAsMonitorButton kind="icmp" target={targetHost} label="Save as monitor" />
+              </div>
+            ) : null}
           </div>
         )
       }

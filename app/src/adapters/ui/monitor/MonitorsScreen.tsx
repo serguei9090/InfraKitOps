@@ -54,8 +54,10 @@ export function MonitorsScreen() {
   const setTagFilter = useMonitorStore((s) => s.setTagFilter)
   const checkAll = useMonitorStore((s) => s.checkAll)
 
-  const [editing, setEditing] = useState<Monitor | 'new' | null>(null)
+  const [editing, setEditing] = useState<Partial<Monitor> | 'new' | null>(null)
   const [sweeping, setSweeping] = useState(false)
+  const consumeNew = useMonitorStore((s) => s.consumeNew)
+  const pendingNew = useMonitorStore((s) => s.pendingNew)
 
   const tags = [...new Set(allMonitors.flatMap((m) => tagList(m.tags)))].sort()
   const monitors = tagFilter ? allMonitors.filter((m) => tagList(m.tags).includes(tagFilter)) : allMonitors
@@ -68,6 +70,12 @@ export function MonitorsScreen() {
     if (status === 'available') startPolling()
     return () => stopPolling()
   }, [status, startPolling, stopPolling])
+
+  // "Save as monitor" from another tool (Ping / X.509 / DNS / Whois).
+  useEffect(() => {
+    const spec = consumeNew()
+    if (spec) setEditing(spec)
+  }, [pendingNew, consumeNew])
 
   if (status === 'unavailable') {
     return <BackendUnavailable onRetry={refreshBackend} retrying={reconnecting} />
@@ -378,7 +386,8 @@ function ConfigInput({
   )
 }
 
-function MonitorDialog({ initial, onClose }: { initial: Monitor | null; onClose: () => void }) {
+function MonitorDialog({ initial, onClose }: { initial: Partial<Monitor> | null; onClose: () => void }) {
+  const isEdit = Boolean(initial?.id)
   const save = useMonitorStore((s) => s.save)
   const [name, setName] = useState(initial?.name ?? '')
   const [kind, setKind] = useState<MonitorKind>(initial?.kind ?? 'icmp')
@@ -432,7 +441,7 @@ function MonitorDialog({ initial, onClose }: { initial: Monitor | null; onClose:
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit monitor' : 'New monitor'}</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit monitor" : "New monitor"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
@@ -531,7 +540,7 @@ function MonitorDialog({ initial, onClose }: { initial: Monitor | null; onClose:
             Cancel
           </Button>
           <Button onClick={() => void submit()} disabled={busy || !name.trim() || !target.trim()}>
-            {initial ? 'Save' : 'Create'}
+            {isEdit ? "Save" : "Create"}
           </Button>
         </DialogFooter>
       </DialogContent>

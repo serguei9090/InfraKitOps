@@ -27,6 +27,8 @@ interface MonitorState {
   samplesFor: string | null
   tagFilter: string | null
   settings: MonitorSettings
+  /** a prefilled "New monitor" request from another tool (Ping / X.509 / …) */
+  pendingNew: Partial<Monitor> | null
 
   refresh: () => Promise<void>
   startPolling: () => void
@@ -44,6 +46,8 @@ interface MonitorState {
   loadSettings: () => Promise<void>
   saveSettings: (s: MonitorSettings) => Promise<boolean>
   testChannel: (channel?: string) => Promise<boolean>
+  requestNew: (spec: Partial<Monitor>) => void
+  consumeNew: () => Partial<Monitor> | null
 }
 
 let timer: ReturnType<typeof setInterval> | null = null
@@ -76,6 +80,7 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   samplesFor: null,
   tagFilter: null,
   settings: defaultMonitorSettings(),
+  pendingNew: null,
 
   refresh: async () => {
     if (useBackendStore.getState().status !== 'available') return
@@ -227,5 +232,12 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
       reportError(e, SRC)
       return false
     }
+  },
+
+  requestNew: (spec) => set({ pendingNew: spec }),
+  consumeNew: () => {
+    const p = get().pendingNew
+    if (p) set({ pendingNew: null })
+    return p
   },
 }))
