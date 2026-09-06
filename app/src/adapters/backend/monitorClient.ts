@@ -4,7 +4,16 @@
  */
 import { backendGet, backendRequest } from './backendClient'
 import { openStream, type StreamHandlers } from './sseClient'
-import type { Monitor, MonitorSample, MonitorSettings } from '@/core/monitor/monitorModel'
+import type {
+  Monitor,
+  MonitorIncident,
+  MonitorReport,
+  MonitorSample,
+  MonitorSettings,
+  MonitorSummary,
+  SeriesPeriod,
+  SeriesPoint,
+} from '@/core/monitor/monitorModel'
 
 const arr = <T,>(v: T[] | null | undefined): T[] => v ?? []
 
@@ -30,6 +39,33 @@ export const monitorSamples = (id: string, since = 0, limit = 0) =>
   backendGet<{ samples: MonitorSample[] | null }>(
     `/monitors/${id}/samples?since=${since}${limit ? `&limit=${limit}` : ''}`,
   ).then((r) => arr(r.samples))
+
+// --- M5: reporting -----------------------------------------------
+
+export const monitorIncidents = (id: string, since = 0) =>
+  backendGet<{ incidents: MonitorIncident[] | null }>(
+    `/monitors/${id}/incidents${since ? `?since=${since}` : ''}`,
+  ).then((r) => arr(r.incidents))
+
+export const monitorSummary = () =>
+  backendGet<{
+    monitors: Record<string, MonitorSummary['monitors'][string]> | null
+    tags: Record<string, MonitorSummary['tags'][string]> | null
+  }>('/monitors/summary').then((r) => ({ monitors: r.monitors ?? {}, tags: r.tags ?? {} }))
+
+export const monitorSeries = (id: string, opts: { from?: number; to?: number; period?: string } = {}) => {
+  const q = new URLSearchParams()
+  if (opts.from) q.set('from', String(Math.round(opts.from)))
+  if (opts.to) q.set('to', String(Math.round(opts.to)))
+  if (opts.period) q.set('period', opts.period)
+  const qs = q.toString()
+  return backendGet<{ period: SeriesPeriod; points: SeriesPoint[] | null }>(
+    `/monitors/${id}/series${qs ? `?${qs}` : ''}`,
+  ).then((r) => ({ period: r.period, points: arr(r.points) }))
+}
+
+export const monitorReport = (id: string) =>
+  backendGet<{ report: MonitorReport }>(`/monitors/${id}/report`).then((r) => r.report)
 
 export const pauseMonitor = (id: string, paused: boolean) =>
   backendRequest<{ monitor: Monitor }>('POST', `/monitors/${id}/${paused ? 'pause' : 'resume'}`).then(

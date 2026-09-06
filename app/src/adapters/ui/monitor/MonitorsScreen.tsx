@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BellOff, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { BellOff, Download, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useBackendStore } from '@/stores/backendStore'
 import { useMonitorStore } from '@/stores/monitorStore'
 import {
   configSummary,
+  fmtDuration,
+  fmtUptime,
   isMuted,
   KINDS,
   kindMeta,
@@ -11,13 +13,19 @@ import {
   SSH_PRESETS,
   STATUS_DOT,
   tagList,
-  uptimePct,
+  UPTIME_RANGES,
+  uptimeTone,
   type ConfigField,
   type Monitor,
   type MonitorKind,
+  type MonitorIncident,
   type MonitorSample,
+  type SeriesPoint,
+  type UptimeRange,
+  type UptimeWindows,
 } from '@/core/monitor/monitorModel'
 import { listNodes } from '@/adapters/backend/runbookClient'
+import { monitorReport } from '@/adapters/backend/monitorClient'
 import { LatencyChart } from '@/adapters/ui/network'
 import { BackendUnavailable } from '@/adapters/ui/network/BackendUnavailable'
 import { Button } from '@/components/ui/button'
@@ -35,6 +43,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils'
 
 const NO_SAMPLES: MonitorSample[] = []
+const NO_POINTS: SeriesPoint[] = []
+const NO_INCIDENTS: MonitorIncident[] = []
 
 /**
  * Monitors status board (MONITORS_MODULE_PLAN.md M1). Left: every monitor with
@@ -55,6 +65,7 @@ export function MonitorsScreen() {
   const tagFilter = useMonitorStore((s) => s.tagFilter)
   const setTagFilter = useMonitorStore((s) => s.setTagFilter)
   const checkAll = useMonitorStore((s) => s.checkAll)
+  const summary = useMonitorStore((s) => s.summary)
 
   const [editing, setEditing] = useState<Partial<Monitor> | 'new' | null>(null)
   const [sweeping, setSweeping] = useState(false)
@@ -122,19 +133,23 @@ export function MonitorsScreen() {
           >
             All
           </button>
-          {tags.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTagFilter(t === tagFilter ? null : t)}
-              className={cn(
-                'rounded-full border px-2 py-0.5 text-xs',
-                t === tagFilter ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground',
-              )}
-            >
-              {t}
-            </button>
-          ))}
+          {tags.map((t) => {
+            const u = summary.tags[t]?.['24h']
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTagFilter(t === tagFilter ? null : t)}
+                className={cn(
+                  'rounded-full border px-2 py-0.5 text-xs',
+                  t === tagFilter ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground',
+                )}
+              >
+                {t}
+                {u != null && <span className={cn('ml-1 tabular-nums', uptimeTone(u))}>{fmtUptime(u)}</span>}
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -151,6 +166,7 @@ export function MonitorsScreen() {
               <MonitorRow
                 key={m.id}
                 m={m}
+                uptime={summary.monitors[m.id]?.['24h']}
                 active={m.id === selectedId}
                 onClick={() => void select(m.id === selectedId ? null : m.id)}
               />
@@ -177,7 +193,17 @@ export function MonitorsScreen() {
   )
 }
 
-function MonitorRow({ m, active, onClick }: { m: Monitor; active: boolean; onClick: () => void }) {
+function MonitorRow({
+  m,
+  uptime,
+  active,
+  onClick,
+}: {
+  m: Monitor
+  uptime?: number
+  active: boolean
+  onClick: () => void
+}) {
   return (
     <button
       type="button"
@@ -201,15 +227,57 @@ function MonitorRow({ m, active, onClick }: { m: Monitor; active: boolean; onCli
           {m.kind} · {m.target}
         </div>
       </div>
-      <span className="shrink-0 text-[10px] uppercase text-muted-foreground">
-        {m.status === 'paused' ? 'paused' : relTime(m.lastCheckedAt)}
-      </span>
+      <div className="flex shrink-0 flex-col items-end">
+        {uptime != null && (
+          <span className={cn('text-[11px] tabular-nums', uptimeTone(uptime))} title="24h uptime">
+            {fmtUptime(uptime)}
+          </span>
+        )}
+        <span className="text-[10px] uppercase text-muted-foreground">
+          {m.status === 'paused' ? 'paused' : relTime(m.lastCheckedAt)}
+        </span>
+      </div>
     </button>
   )
 }
 
+async function exportReport(id: string, name: string, fmt: 'json' | 'csv') {
+  const rep = await monitorReport(id)
+  const safe = name.replace(/[^\w.-]+/g, '_') || id
+  let blob: Blob
+  if (fmt === 'json') {
+    blob = new Blob([JSON.stringify(rep, null, 2)], { type: 'application/json' })
+  } else {
+    const cell = (c: string) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)
+    const rows = [
+      ['incident_id', 'started_at', 'ended_at', 'duration_ms', 'ongoing', 'detail'],
+      ...rep.incidents.map((i) => [
+        String(i.id),
+        new Date(i.startedAt).toISOString(),
+        i.endedAt ? new Date(i.endedAt).toISOString() : '',
+        String((i.endedAt || rep.generatedAt) - i.startedAt),
+        i.endedAt ? 'false' : 'true',
+        i.detail ?? '',
+      ]),
+    ]
+    blob = new Blob([rows.map((r) => r.map(cell).join(',')).join('\n')], { type: 'text/csv' })
+  }
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${safe}-report.${fmt}`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 function MonitorDetail({ m, onEdit }: { m: Monitor; onEdit: () => void }) {
   const samples = useMonitorStore((s) => (s.samplesFor === m.id ? s.samples : NO_SAMPLES))
+  const points = useMonitorStore((s) => (s.seriesFor === m.id ? s.seriesPoints : NO_POINTS))
+  const seriesPeriod = useMonitorStore((s) => s.seriesPeriod)
+  const seriesRange = useMonitorStore((s) => s.seriesRange)
+  const setSeriesRange = useMonitorStore((s) => s.setSeriesRange)
+  const incidents = useMonitorStore((s) => (s.incidentsFor === m.id ? s.incidents : NO_INCIDENTS))
+  const win = useMonitorStore((s) => s.summary.monitors[m.id])
   const setPaused = useMonitorStore((s) => s.setPaused)
   const remove = useMonitorStore((s) => s.remove)
   const checkNow = useMonitorStore((s) => s.checkNow)
@@ -223,18 +291,12 @@ function MonitorDetail({ m, onEdit }: { m: Monitor; onEdit: () => void }) {
       {
         host: m.name,
         color: m.status === 'down' ? '#ef4444' : '#4f46e5',
-        points: samples.map((s) => ({ t: s.t, ms: s.ok ? s.value : null })),
+        points: points.map((p) => ({ t: p.t, ms: p.total > 0 && p.value > 0 ? p.value : null })),
       },
     ],
-    [samples, m.name, m.status],
+    [points, m.name, m.status],
   )
-  const windowSec = useMemo(() => {
-    if (samples.length < 2) return 300
-    const span = (samples[samples.length - 1].t - samples[0].t) / 1000
-    return Math.max(300, Math.ceil(span) + 60)
-  }, [samples])
-
-  const up = uptimePct(samples)
+  const windowSec = seriesRange === '24h' ? 86_400 : seriesRange === '7d' ? 604_800 : 2_592_000
   const last = samples.at(-1)
 
   return (
@@ -279,6 +341,12 @@ function MonitorDetail({ m, onEdit }: { m: Monitor; onEdit: () => void }) {
         <Button size="sm" variant="outline" onClick={onEdit}>
           Edit
         </Button>
+        <Button size="sm" variant="outline" onClick={() => void exportReport(m.id, m.name, 'csv')}>
+          <Download className="size-3.5" /> CSV
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => void exportReport(m.id, m.name, 'json')}>
+          <Download className="size-3.5" /> JSON
+        </Button>
         <Button
           size="sm"
           variant="outline"
@@ -290,20 +358,63 @@ function MonitorDetail({ m, onEdit }: { m: Monitor; onEdit: () => void }) {
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 text-center">
-        <Stat label="uptime (window)" value={up == null ? '—' : `${up}%`} />
-        <Stat
-          label={`last ${meta.unit || 'result'}`}
-          value={last ? (meta.unit ? `${Math.round(last.value)} ${meta.unit}` : last.ok ? 'ok' : 'fail') : '—'}
-        />
-        <Stat label="samples" value={String(samples.length)} />
+      <UptimeStats win={win} last={last} meta={meta} />
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">
+            Response {meta.unit || 'time'} · {seriesPeriod === 'raw' ? 'per check' : `${seriesPeriod} buckets`}
+          </p>
+          <div className="flex gap-1">
+            {UPTIME_RANGES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setSeriesRange(r)}
+                className={cn(
+                  'rounded border px-1.5 py-0.5 text-[11px]',
+                  r === seriesRange
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border/60 text-muted-foreground',
+                )}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+        {points.length >= 2 ? (
+          <LatencyChart series={series} windowSec={windowSec} height={180} />
+        ) : (
+          <p className="text-xs text-muted-foreground">Not enough history in this range yet.</p>
+        )}
       </div>
 
-      {samples.length >= 2 ? (
-        <LatencyChart series={series} windowSec={windowSec} height={180} />
-      ) : (
-        <p className="text-xs text-muted-foreground">Waiting for enough samples to chart…</p>
-      )}
+      <div>
+        <p className="mb-1 text-xs font-medium text-muted-foreground">
+          Incidents (30d){incidents.length ? ` · ${incidents.length}` : ''}
+        </p>
+        {incidents.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No downtime recorded in the last 30 days.</p>
+        ) : (
+          <div className="max-h-56 divide-y divide-border/40 overflow-y-auto rounded border border-border/60 text-xs">
+            {incidents.map((i) => (
+              <div key={i.id} className="flex items-center gap-2 px-2 py-1.5">
+                <span
+                  className={cn('size-1.5 shrink-0 rounded-full', i.endedAt ? 'bg-muted-foreground/50' : 'bg-destructive')}
+                />
+                <span className="w-32 shrink-0 text-muted-foreground">{new Date(i.startedAt).toLocaleString()}</span>
+                <span className="w-16 shrink-0 tabular-nums">
+                  {fmtDuration((i.endedAt || Date.now()) - i.startedAt)}
+                </span>
+                {!i.endedAt && <span className="shrink-0 font-medium text-destructive">ongoing</span>}
+                {i.suppressed && <span className="shrink-0 text-muted-foreground">suppressed</span>}
+                <span className="truncate text-muted-foreground">{i.detail}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div>
         <p className="mb-1 text-xs font-medium text-muted-foreground">Recent checks</p>
@@ -324,11 +435,29 @@ function MonitorDetail({ m, onEdit }: { m: Monitor; onEdit: () => void }) {
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function UptimeStats({
+  win,
+  last,
+  meta,
+}: {
+  win: UptimeWindows | undefined
+  last: MonitorSample | undefined
+  meta: ReturnType<typeof kindMeta>
+}) {
   return (
-    <div className="rounded-lg border border-border/60 bg-card p-3">
-      <p className="font-mono text-lg tabular-nums">{value}</p>
-      <p className="text-[11px] text-muted-foreground">{label}</p>
+    <div className="grid grid-cols-4 gap-3 text-center">
+      {(['24h', '7d', '30d'] as UptimeRange[]).map((r) => (
+        <div key={r} className="rounded-lg border border-border/60 bg-card p-3">
+          <p className={cn('font-mono text-lg tabular-nums', uptimeTone(win?.[r]))}>{fmtUptime(win?.[r])}</p>
+          <p className="text-[11px] text-muted-foreground">uptime {r}</p>
+        </div>
+      ))}
+      <div className="rounded-lg border border-border/60 bg-card p-3">
+        <p className="font-mono text-lg tabular-nums">
+          {last ? (meta.unit ? `${Math.round(last.value)} ${meta.unit}` : last.ok ? 'ok' : 'fail') : '—'}
+        </p>
+        <p className="text-[11px] text-muted-foreground">last {meta.unit || 'result'}</p>
+      </div>
     </div>
   )
 }

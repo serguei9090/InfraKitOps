@@ -53,7 +53,7 @@ func Open(dsn string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema + settingsSchema); err != nil {
+	if _, err := db.Exec(schema + settingsSchema + rollupSchema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply monitor schema: %w", err)
 	}
@@ -102,10 +102,14 @@ func (s *Store) PurgeOwner(owner string) error {
 	if owner == "" {
 		return nil
 	}
-	if _, err := s.db.Exec(
-		`DELETE FROM monitor_sample WHERE monitor_id IN (SELECT id FROM monitor WHERE owner = ?)`, owner,
-	); err != nil {
-		return err
+	for _, q := range []string{
+		`DELETE FROM monitor_sample WHERE monitor_id IN (SELECT id FROM monitor WHERE owner = ?)`,
+		`DELETE FROM monitor_rollup WHERE monitor_id IN (SELECT id FROM monitor WHERE owner = ?)`,
+		`DELETE FROM monitor_incident WHERE monitor_id IN (SELECT id FROM monitor WHERE owner = ?)`,
+	} {
+		if _, err := s.db.Exec(q, owner); err != nil {
+			return err
+		}
 	}
 	_, err := s.db.Exec(`DELETE FROM monitor WHERE owner = ?`, owner)
 	return err
@@ -248,8 +252,14 @@ func (s *Store) Delete(owner, id string) error {
 	if _, err := s.Get(owner, id); err != nil {
 		return err
 	}
-	if _, err := s.db.Exec(`DELETE FROM monitor_sample WHERE monitor_id = ?`, id); err != nil {
-		return err
+	for _, q := range []string{
+		`DELETE FROM monitor_sample WHERE monitor_id = ?`,
+		`DELETE FROM monitor_rollup WHERE monitor_id = ?`,
+		`DELETE FROM monitor_incident WHERE monitor_id = ?`,
+	} {
+		if _, err := s.db.Exec(q, id); err != nil {
+			return err
+		}
 	}
 	_, err := s.db.Exec(`DELETE FROM monitor WHERE id = ?`, id)
 	return err

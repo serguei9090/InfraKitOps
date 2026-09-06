@@ -104,8 +104,8 @@ func (e *Engine) Start(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				if err := e.store.prune(); err != nil {
-					obs.Warnf("monitor: prune failed: %v", err)
+				if err := e.store.fold(time.Now()); err != nil {
+					obs.Warnf("monitor: retention sweep failed: %v", err)
 				}
 			}
 		}
@@ -217,11 +217,16 @@ func (e *Engine) tick(ctx context.Context, id string, st *loopState) (sample Sam
 		obs.Warnf("monitor %s: record failed: %v", id, err)
 	}
 
-	// A real up<->down transition → the log sink + the live stream.
+	// A real up<->down transition → incident log + the alert sink + live stream.
 	if changed && (newStatus == StatusDown || (newStatus == StatusUp && m.Status == StatusDown)) {
 		ev := "recovered"
 		if newStatus == StatusDown {
 			ev = "down"
+			if err := e.store.OpenIncident(id, m.Owner, s.T, s.Detail); err != nil {
+				obs.Warnf("monitor %s: open incident: %v", id, err)
+			}
+		} else if err := e.store.CloseIncident(id, s.T); err != nil {
+			obs.Warnf("monitor %s: close incident: %v", id, err)
 		}
 		alert := AlertEvent{Monitor: *m, Event: ev, At: s.T, Detail: s.Detail}
 		if e.alerts != nil {

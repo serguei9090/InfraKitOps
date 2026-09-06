@@ -3,8 +3,10 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -136,6 +138,94 @@ func (h *MonitorHandlers) Samples(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"samples": smp})
+}
+
+// Incidents: GET /monitors/{id}/incidents?since=&limit=
+func (h *MonitorHandlers) Incidents(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
+	if since == 0 {
+		since = time.Now().Add(-30 * 24 * time.Hour).UnixMilli()
+	}
+	inc, err := h.Store.Incidents(owner(r), chi.URLParam(r, "id"), since, atoiOr(r.URL.Query().Get("limit"), 0))
+	if err != nil {
+		monitorErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"incidents": inc})
+}
+
+// Series: GET /monitors/{id}/series?from=&to=&period=auto|raw|1m|1h
+func (h *MonitorHandlers) Series(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	from, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
+	to, _ := strconv.ParseInt(r.URL.Query().Get("to"), 10, 64)
+	period, points, err := h.Store.Series(owner(r), chi.URLParam(r, "id"), from, to, r.URL.Query().Get("period"))
+	if err != nil {
+		monitorErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"period": period, "points": points})
+}
+
+// Summary: GET /monitors/summary — per-monitor + per-tag uptime windows.
+func (h *MonitorHandlers) Summary(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	perMon, perTag, err := h.Store.Summary(owner(r), time.Now())
+	if err != nil {
+		monitorErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"monitors": perMon, "tags": perTag})
+}
+
+// Report: GET /monitors/{id}/report?format=json|csv
+func (h *MonitorHandlers) Report(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	rep, err := h.Store.Report(owner(r), chi.URLParam(r, "id"), time.Now())
+	if err != nil {
+		monitorErr(w, err)
+		return
+	}
+	if r.URL.Query().Get("format") == "csv" {
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-report.csv"`, rep.Monitor.ID))
+		cw := csv.NewWriter(w)
+		_ = cw.Write([]string{"incident_id", "started_at", "ended_at", "duration_ms", "ongoing", "detail"})
+		now := rep.GeneratedAt
+		for _, in := range rep.Incidents {
+			ongoing := "false"
+			if in.EndedAt == 0 {
+				ongoing = "true"
+			}
+			_ = cw.Write([]string{
+				strconv.FormatInt(in.ID, 10),
+				time.UnixMilli(in.StartedAt).UTC().Format(time.RFC3339),
+				endedCSV(in.EndedAt),
+				strconv.FormatInt(in.Duration(now), 10),
+				ongoing,
+				in.Detail,
+			})
+		}
+		cw.Flush()
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"report": rep})
+}
+
+func endedCSV(ms int64) string {
+	if ms == 0 {
+		return ""
+	}
+	return time.UnixMilli(ms).UTC().Format(time.RFC3339)
 }
 
 // SetPaused: POST /monitors/{id}/pause | /resume

@@ -7,16 +7,27 @@ import { create } from 'zustand'
 import * as api from '@/adapters/backend/monitorClient'
 import {
   defaultMonitorSettings,
+  rangeSinceMs,
   type Monitor,
   type MonitorAlert,
+  type MonitorIncident,
   type MonitorSample,
   type MonitorSettings,
+  type MonitorSummary,
+  type SeriesPeriod,
+  type SeriesPoint,
+  type UptimeRange,
 } from '@/core/monitor/monitorModel'
 import { useBackendStore } from './backendStore'
 import { reportError } from './errorStore'
 
 const SRC = 'Monitors'
 const POLL_MS = 10_000
+const SUMMARY_MS = 60_000
+
+const EMPTY_SUMMARY: MonitorSummary = { monitors: {}, tags: {} }
+const NO_INCIDENTS: MonitorIncident[] = []
+const NO_POINTS: SeriesPoint[] = []
 
 interface MonitorState {
   monitors: Monitor[]
@@ -30,12 +41,26 @@ interface MonitorState {
   /** a prefilled "New monitor" request from another tool (Ping / X.509 / …) */
   pendingNew: Partial<Monitor> | null
 
+  /** M5 — per-monitor + per-tag uptime windows (GET /monitors/summary) */
+  summary: MonitorSummary
+  /** M5 — selected monitor's incidents + downsampled chart series */
+  incidents: MonitorIncident[]
+  incidentsFor: string | null
+  seriesRange: UptimeRange
+  seriesPoints: SeriesPoint[]
+  seriesPeriod: SeriesPeriod
+  seriesFor: string | null
+
   refresh: () => Promise<void>
   startPolling: () => void
   stopPolling: () => void
   setTagFilter: (tag: string | null) => void
   select: (id: string | null) => Promise<void>
   loadSamples: (id: string) => Promise<void>
+  loadSummary: () => Promise<void>
+  loadIncidents: (id: string) => Promise<void>
+  loadSeries: (id: string) => Promise<void>
+  setSeriesRange: (r: UptimeRange) => void
   save: (m: Partial<Monitor>) => Promise<Monitor | null>
   remove: (id: string) => Promise<void>
   setPaused: (id: string, paused: boolean) => Promise<void>
@@ -51,6 +76,7 @@ interface MonitorState {
 }
 
 let timer: ReturnType<typeof setInterval> | null = null
+let summaryTimer: ReturnType<typeof setInterval> | null = null
 let stopStream: (() => void) | null = null
 /** last-seen lastChangeAt per monitor, to fire a toast once per transition */
 const seenChange = new Map<string, number>()
@@ -81,6 +107,13 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   tagFilter: null,
   settings: defaultMonitorSettings(),
   pendingNew: null,
+  summary: EMPTY_SUMMARY,
+  incidents: NO_INCIDENTS,
+  incidentsFor: null,
+  seriesRange: '24h',
+  seriesPoints: NO_POINTS,
+  seriesPeriod: 'raw',
+  seriesFor: null,
 
   refresh: async () => {
     if (useBackendStore.getState().status !== 'available') return
@@ -89,7 +122,10 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
       announce(next)
       set({ monitors: next, loaded: true, error: null })
       const sel = get().selectedId
-      if (sel && next.some((m) => m.id === sel)) void get().loadSamples(sel)
+      if (sel && next.some((m) => m.id === sel)) {
+        void get().loadSamples(sel)
+        void get().loadIncidents(sel)
+      }
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e), loaded: true })
     }
@@ -99,7 +135,9 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
     if (timer) return
     void get().refresh()
     void get().loadSettings()
+    void get().loadSummary()
     timer = setInterval(() => void get().refresh(), POLL_MS)
+    summaryTimer = setInterval(() => void get().loadSummary(), SUMMARY_MS)
     stopStream = api.openMonitorStream({
       onEvent: (name, data) => {
         if (name !== 'monitor-alert') return
@@ -118,6 +156,10 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
       clearInterval(timer)
       timer = null
     }
+    if (summaryTimer) {
+      clearInterval(summaryTimer)
+      summaryTimer = null
+    }
     stopStream?.()
     stopStream = null
   },
@@ -125,8 +167,15 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
   setTagFilter: (tag) => set({ tagFilter: tag }),
 
   select: async (id) => {
-    set({ selectedId: id, samples: id === get().samplesFor ? get().samples : [] })
-    if (id) await get().loadSamples(id)
+    set({
+      selectedId: id,
+      samples: id === get().samplesFor ? get().samples : [],
+      incidents: id === get().incidentsFor ? get().incidents : NO_INCIDENTS,
+      seriesPoints: id === get().seriesFor ? get().seriesPoints : NO_POINTS,
+    })
+    if (id) {
+      await Promise.all([get().loadSamples(id), get().loadIncidents(id), get().loadSeries(id)])
+    }
   },
 
   loadSamples: async (id) => {
@@ -136,6 +185,39 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
     } catch {
       /* leave stale */
     }
+  },
+
+  loadSummary: async () => {
+    try {
+      set({ summary: await api.monitorSummary() })
+    } catch {
+      /* keep last */
+    }
+  },
+
+  loadIncidents: async (id) => {
+    try {
+      const incidents = await api.monitorIncidents(id)
+      set({ incidents, incidentsFor: id })
+    } catch {
+      /* leave stale */
+    }
+  },
+
+  loadSeries: async (id) => {
+    try {
+      const since = rangeSinceMs(get().seriesRange)
+      const { period, points } = await api.monitorSeries(id, { from: since, to: Date.now(), period: 'auto' })
+      set({ seriesPoints: points, seriesPeriod: period, seriesFor: id })
+    } catch {
+      /* leave stale */
+    }
+  },
+
+  setSeriesRange: (r) => {
+    set({ seriesRange: r })
+    const id = get().selectedId
+    if (id) void get().loadSeries(id)
   },
 
   save: async (m) => {
@@ -173,7 +255,7 @@ export const useMonitorStore = create<MonitorState>((set, get) => ({
     try {
       await api.checkMonitor(id)
       await get().refresh()
-      await get().loadSamples(id)
+      await Promise.all([get().loadSamples(id), get().loadIncidents(id), get().loadSeries(id), get().loadSummary()])
     } catch (e) {
       reportError(e, SRC)
     }

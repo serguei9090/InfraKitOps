@@ -108,6 +108,86 @@ export interface MonitorSample {
   detail?: string
 }
 
+// --- M5: reporting -------------------------------------------------
+
+/** A maximal down span for a monitor (GET /monitors/{id}/incidents). */
+export interface MonitorIncident {
+  id: number
+  monitorId: string
+  startedAt: number
+  endedAt: number // 0 = ongoing
+  detail?: string
+  suppressed?: boolean
+}
+
+/** ok-ratio (0..1) over trailing windows. */
+export interface UptimeWindows {
+  '24h': number
+  '7d': number
+  '30d': number
+}
+
+export interface MonitorSummary {
+  monitors: Record<string, UptimeWindows>
+  tags: Record<string, UptimeWindows>
+}
+
+export interface MonitorReport {
+  monitor: Monitor
+  uptime: UptimeWindows
+  mttrMs: number
+  mtbfMs: number
+  incidents: MonitorIncident[]
+  generatedAt: number
+}
+
+export type SeriesPeriod = 'raw' | '1m' | '1h'
+
+/** One downsampled chart point (GET /monitors/{id}/series). */
+export interface SeriesPoint {
+  t: number
+  ok: number // raw: 0|1 · rollup: ok-ratio 0..1
+  value: number // avg ms of the ok samples
+  min: number
+  max: number
+  total: number
+}
+
+export const UPTIME_RANGES = ['24h', '7d', '30d'] as const
+export type UptimeRange = (typeof UPTIME_RANGES)[number]
+
+export function rangeSinceMs(r: UptimeRange, now = Date.now()): number {
+  const d = r === '24h' ? 1 : r === '7d' ? 7 : 30
+  return now - d * 86_400_000
+}
+
+/** Format an ok-ratio as a percentage; more decimals near 100%. */
+export function fmtUptime(r: number | undefined | null): string {
+  if (r == null) return '—'
+  const pct = r * 100
+  return `${pct >= 99.95 ? pct.toFixed(2) : pct.toFixed(1)}%`
+}
+
+export function fmtDuration(ms: number): string {
+  if (ms <= 0) return '0s'
+  const s = Math.round(ms / 1000)
+  if (s < 60) return `${s}s`
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h${m % 60 ? ` ${m % 60}m` : ''}`
+  const d = Math.floor(h / 24)
+  return `${d}d${h % 24 ? ` ${h % 24}h` : ''}`
+}
+
+/** color for an uptime pill — green ≥ 99.9%, amber ≥ 99%, red below. */
+export function uptimeTone(r: number | undefined | null): string {
+  if (r == null) return 'text-muted-foreground'
+  if (r >= 0.999) return 'text-emerald-500'
+  if (r >= 0.99) return 'text-amber-500'
+  return 'text-destructive'
+}
+
 export interface KindMeta {
   kind: MonitorKind
   label: string
