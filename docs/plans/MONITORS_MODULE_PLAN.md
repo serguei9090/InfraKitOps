@@ -1,6 +1,6 @@
 # Monitors module — plan (BR Tier 2)
 
-## Status: M0 + M1 + M2 done (icmp/tcp/http/dns/tls-cert/domain probes + board + per-kind dialog). M3 next. See the Build checklist at the bottom.
+## Status: M0–M3 done — probes (icmp/tcp/http/dns/tls-cert/domain), board, alerts (webhook/SMTP/desktop-SSE), policy, mute, tags, schedule runOnStart, tray. M4 next. See the Build checklist at the bottom.
 
 - **M0 (2026-09-05)** — `internal/monitor`: `monitor.db` (`--monitor-db`),
   `Probe` iface + `icmp`/`tcp`, `Engine` (ticker per monitor, fail-threshold
@@ -390,36 +390,32 @@ in `app/`.
 - [x] `monitorModel.ts` — `domain` kind; `KindMeta.defaultIntervalSec` + `configFields` (ConfigField descriptors); `configSummary()`
 - [x] `MonitorsScreen` `<ConfigInput>` — generic per-kind field group; kind switch pulls default interval + clears stale config; detail shows the summary line
 
-### M3 — notifications (backend)
-- [ ] `internal/monitor/notify/{notify,webhook,smtp,desktop}.go`
-- [ ] `monitor_settings` table + `GET/PUT /monitors/settings` + `POST /monitors/settings/test`
-- [ ] schema migration: `monitor.channel`, `alert_after_sec`, `renotify_every_sec`, `notify_on_recovery`, `tags`
-- [ ] `monitor_mute` table + engine mute check (skip `notify`, keep probing)
-- [ ] engine: policy — track `downSince`, notify at `alertAfterSec` wall-clock, re-notify loop, recovery notify; wire the sink to `notify.Dispatch`
-- [ ] `GET /monitors?tag=` filter
-- [ ] `GET /monitors/stream` SSE — status-change fan-out (add a subscriber list to `Engine`)
-- [ ] `POST /monitors/check-all`
-- [ ] `--monitor-webhook` / `--monitor-smtp-*` flags + `INFRAKIT_*` env
-- [ ] Vault wiring for SMTP pass + webhook signing key
+### M3 — notifications (backend) — done
+- [x] `internal/monitor/notify.go` — `Notifier` (webhook slack/discord/generic + SMTP none/starttls/tls + `{{secret:}}` via Vault; `desktop` = the SSE)
+- [x] `settings.go` — per-owner `Settings` blob (`monitor_settings`), `GET/PUT /monitors/settings` (secrets redacted) + `POST /monitors/settings/test`
+- [x] schema: `monitor.tags / channel / alert_after_sec / renotify_every_sec / muted_until`
+- [x] `monitor.muted_until` + `POST /monitors/{id}/{mute,unmute}` + engine skip
+- [x] engine: `loopState` + `applyNotifyPolicy` (alert-after wall-clock, re-notify, recovery, restart-safe `alerted` seed); async `fire()`
+- [x] `GET /monitors?tag=` · `POST /monitors/check-all` · `GET /monitors/stream` (Engine.Subscribe/broadcast)
+- [x] `--monitor-webhook` / `INFRAKIT_MONITOR_WEBHOOK` fallback; Vault resolver wired in main.go
 
-### M3 — schedules (backend, `internal/orchestrator` + `internal/ansible`)
-- [ ] `RunSchedule.runOnStart` + `Schedule.runOnStart` bool + `ALTER TABLE` migrations
-- [ ] both schedulers: on `Start()`, fire each enabled `runOnStart` schedule once (≤1/boot), then normal loop
-- [ ] schedule API: accept/return the flag
+### M3 — schedules (backend) — done
+- [x] `RunSchedule.RunOnStart` / ansible `Schedule.RunOnStart` (JSON blob — no migration)
+- [x] both schedulers: `runOnStart(ctx)` after `reanchor()` in `loop()` — fire enabled runOnStart schedules once/boot; missed windows still skipped
 
-### M3 — Tauri (`app/src-tauri/`)
-- [ ] tray icon + menu (Show / Quit)
-- [ ] window `close` → `hide` when `keepMonitoringInBackground` pref set
-- [ ] `lib.rs` — don't kill the sidecar on window close when the pref is on
+### M3 — Tauri — done (cargo check/test green; tray behaviour needs a desktop build to hand-verify)
+- [x] `tray-icon` feature; tray icon + Show/Quit menu + left-click show
+- [x] `KeepAlive` state + `set_keep_alive` command; `on_window_event` CloseRequested → `prevent_close` + `hide` when set
+- [x] sidecar still killed on real quit (ExitRequested unchanged)
 
-### M3 — frontend
-- [ ] `monitorStore` — subscribe `/monitors/stream` when board open; tag-filter state
-- [ ] `monitorClient` — settings CRUD, test, check-all
-- [ ] `adapters/ui/settings/sections/MonitorSettings.tsx` + `registry.tsx` entry (full panel spec above)
-- [ ] `MonitorsScreen` — tag filter bar + per-tag summary; "Run all checks now"; per-monitor channel/policy/mute in editor; "muted" pill
-- [ ] runbook + ansible schedule editors — "Run once when the app/backend starts" checkbox
-- [ ] "Save as monitor" — `PingMonitorScreen`, `X509InspectorScreen`, `DnsLookupScreen`, `WhoisScreen`
-- [ ] desktop — Tauri notification on `monitor-alert` SSE
+### M3 — frontend — done
+- [x] `monitorStore` — settings state + load/save/test; `/monitors/stream` consumed while board open (down → toast + refresh); `tagFilter`; `checkAll`/`mute`/`unmute`; `pendingNew`/`requestNew`/`consumeNew`
+- [x] `monitorClient` — settings CRUD, test, checkAll, mute/unmute, `openMonitorStream`, `listMonitors(tag?)`
+- [x] `MonitorSettings.tsx` + `registry.tsx` "monitors" entry — channel / webhook / SMTP / policy / probe-on-start / desktop keep-alive; Send test
+- [x] `MonitorsScreen` — tag filter bar, "Run all checks now", "muted" pill (row + detail), Snooze 1h / Unmute, Tags + Alert-channel in the editor
+- [x] runbook + ansible `SchedulesView` — "Run once when the app / backend starts" switch
+- [x] `SaveAsMonitorButton` — X.509 "Watch expiry" + Ping "Save as monitor" (DNS / Whois: same one-liner, deferred)
+- [x] `desktopKeepAlive.ts` — localStorage pref + `invoke('set_keep_alive')`, re-synced on boot; the `monitor-alert` SSE toast already covers desktop notification wiring for now
 
 ### M4 — `ssh` probe
 - [ ] `probe_ssh.go` — `executor.SSHRun` + node resolver + Vault; assert `exitZero` / `stdoutMatches` / `stdoutNumber op n`; value = number or 0/1
