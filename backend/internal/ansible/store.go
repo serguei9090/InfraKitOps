@@ -421,6 +421,21 @@ func (s *Store) setRunStatus(id int64, status string) error {
 	return err
 }
 
+// MarkRunningInterrupted flips every still-"running" / "awaiting_approval" run
+// to "interrupted" — any such row was left behind by a previous process that
+// exited mid-run. Called once on startup. Returns the number of rows fixed.
+func (s *Store) MarkRunningInterrupted() (int64, error) {
+	res, err := s.db.Exec(
+		`UPDATE ansible_run SET status = ?, finished_at = ? WHERE status IN ('running','awaiting_approval')`,
+		StatusInterrupted, time.Now().UnixMilli(),
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // ListPendingApprovals returns runs parked awaiting approval. Any authenticated
 // operator may see (and approve) another's — that's the point of the gate.
 func (s *Store) ListPendingApprovals() ([]Run, error) {

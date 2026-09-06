@@ -2,11 +2,10 @@ package ansible
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"time"
-
-	"github.com/infrakit/backend/internal/sse"
 )
 
 // AdhocSpec is one `ansible <pattern> -m <module> -a <args>` request.
@@ -20,22 +19,13 @@ type AdhocSpec struct {
 	OneLine   bool   `json:"oneLine,omitempty"`
 }
 
-// RunAdhoc runs an ad-hoc module against a pattern, streaming SSE events the
-// same way playbook runs do (with a synthetic play + task so the tree renders).
-func (e *Engine) RunAdhoc(ctx context.Context, owner string, mode RuntimeMode, spec AdhocSpec, out chan<- sse.Message) int64 {
-	send := func(ev string, data any) {
-		select {
-		case out <- sse.Message{Event: ev, Data: data}:
-		case <-ctx.Done():
-		}
-	}
-
+// prepareAdhoc validates spec, builds the argv, inserts the run row and returns
+// the synthetic play + task events that make the tree render.
+func (e *Engine) prepareAdhoc(owner string, spec AdhocSpec) (*preparedRun, []map[string]any, error) {
 	proj, err := e.store.GetProject(owner, spec.ProjectID)
 	if err != nil {
-		send("error", map[string]string{"error": "project not found"})
-		return 0
+		return nil, nil, errors.New("project not found")
 	}
-	runner := e.activeRunner(ctx)
 
 	pattern := nz(spec.Pattern, "all")
 	module := nz(spec.Module, "command")
@@ -57,27 +47,15 @@ func (e *Engine) RunAdhoc(ctx context.Context, owner string, mode RuntimeMode, s
 		args = append(args, "--one-line")
 	}
 
-	evFile, everr := os.CreateTemp(runner.TempDir(), "infrakit-ansible-events-*.ndjson")
-	if everr != nil {
-		send("error", map[string]string{"error": everr.Error()})
-		return 0
-	}
-	evPath := evFile.Name()
-	_ = evFile.Close()
-	defer os.Remove(evPath)
-
-	req := RunReq{
-		Tool: "ansible", Dir: proj.Path, Argv: args,
-		Env: append(e.callbackEnv(evPath), factCacheEnv(proj.Path)...),
-	}
-
 	redArgv := "ansible " + strings.Join(args, " ")
 	run := &Run{
 		Owner: owner, ProjectID: proj.ID, Playbook: "(ad-hoc) " + module, Status: StatusRunning,
 		Argv: redArgv, TriggeredBy: "adhoc", StartedAt: time.Now().UnixMilli(),
 	}
-	runID, _ := e.store.InsertRun(run)
-	send("run-start", map[string]any{"runId": runID, "argv": redArgv})
+	runID, err := e.store.InsertRun(run)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	taskName := module
 	if spec.Args != "" {
@@ -87,5 +65,39 @@ func (e *Engine) RunAdhoc(ctx context.Context, owner string, mode RuntimeMode, s
 		{"e": "play_start", "play": "ad-hoc: " + pattern, "hosts": []string{}},
 		{"e": "task_start", "task": taskName, "action": module, "uuid": "adhoc-0"},
 	}
-	return e.execRun(ctx, runner, req, evPath, run, runID, pre, out)
+	return &preparedRun{runID: runID, run: run, proj: proj, args: args, redArgv: redArgv}, pre, nil
+}
+
+// executeAdhoc runs a prepared ad-hoc run to completion.
+func (e *Engine) executeAdhoc(ctx context.Context, pr *preparedRun, pre []map[string]any, emit Emitter) int64 {
+	runner := e.activeRunner(ctx)
+
+	evFile, everr := os.CreateTemp(runner.TempDir(), "infrakit-ansible-events-*.ndjson")
+	if everr != nil {
+		_ = e.store.FinishRun(pr.runID, StatusFailed, "", "")
+		emit("error", map[string]string{"error": everr.Error()})
+		emit("run-end", map[string]any{"runId": pr.runID, "status": StatusFailed})
+		return pr.runID
+	}
+	evPath := evFile.Name()
+	_ = evFile.Close()
+	defer os.Remove(evPath)
+
+	req := RunReq{
+		Tool: "ansible", Dir: pr.proj.Path, Argv: pr.args,
+		Env: append(e.callbackEnv(evPath), factCacheEnv(pr.proj.Path)...),
+	}
+	return e.execRun(ctx, runner, req, evPath, pr.run, pr.runID, pre, emit)
+}
+
+// RunAdhoc runs an ad-hoc module against a pattern synchronously, emitting SSE
+// events the same way playbook runs do. The API layer uses StartAdhocBackground.
+func (e *Engine) RunAdhoc(ctx context.Context, owner string, _ RuntimeMode, spec AdhocSpec, emit Emitter) int64 {
+	pr, pre, err := e.prepareAdhoc(owner, spec)
+	if err != nil {
+		emit("error", map[string]string{"error": err.Error()})
+		return 0
+	}
+	emit("run-start", map[string]any{"runId": pr.runID, "argv": pr.redArgv})
+	return e.executeAdhoc(ctx, pr, pre, emit)
 }

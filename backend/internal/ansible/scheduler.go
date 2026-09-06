@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/infrakit/backend/internal/orchestrator"
-	"github.com/infrakit/backend/internal/sse"
 )
 
 // Scheduler cron-fires enabled Ansible Schedules (AN4b). Polls the store on a
@@ -131,16 +130,10 @@ func (s *Scheduler) fire(ctx context.Context, sc Schedule) {
 	}
 	_ = s.store.saveScheduleRaw(owner, sc)
 
-	ch := make(chan sse.Message, 64)
-	go func() {
-		for range ch {
-		}
-	}()
 	runCtx, cancel := context.WithTimeout(ctx, 6*time.Hour)
 	defer cancel()
 	mode := RuntimeMode(s.store.GetSettings()["ansibleRuntime"])
-	runID := s.engine.Run(runCtx, owner, mode, "schedule", job.Spec(), ch)
-	close(ch)
+	runID := s.engine.Run(runCtx, owner, mode, "schedule", job.Spec(), func(string, any) {})
 
 	if run, gerr := s.store.GetRun(owner, runID); gerr == nil && run != nil {
 		sc.LastStatus, sc.LastRunID = run.Status, runID

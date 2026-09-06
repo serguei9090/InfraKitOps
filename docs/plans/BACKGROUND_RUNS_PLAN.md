@@ -1,6 +1,18 @@
 # Background runs — plan
 
-## Status: not started
+## Status: BR1 done (Ansible backend). BR2–BR4 pending.
+
+- **BR1 (2026-09-05)** — `internal/runstream` hub + Ansible wired. Playbook,
+  job and ad-hoc runs execute under a request-independent context registered
+  with the hub; the old `GET …/run/stream` endpoints now start a *background*
+  run and replay+tail it (survives navigation), and there are new
+  `POST /ansible/{projects/{id},jobs/{id},adhoc}/run` → `{runId}` plus
+  module-agnostic `GET /runs/active`, `GET /runs/{module}/{id}/stream`,
+  `POST /runs/{module}/{id}/cancel`. Boot recovery marks orphaned
+  `running`/`awaiting_approval` rows `interrupted`; graceful shutdown
+  cancels in-flight runs. Synchronous fallback kept for when the hub is
+  absent (tests / `--ansible-db off`). Frontend still uses the GET stream —
+  BR3 switches it.
 
 ## Problem
 

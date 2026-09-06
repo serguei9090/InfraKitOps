@@ -21,6 +21,7 @@ import (
 	"github.com/infrakit/backend/internal/obs"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/promptstore"
+	"github.com/infrakit/backend/internal/runstream"
 	"github.com/infrakit/backend/internal/vault"
 )
 
@@ -77,6 +78,9 @@ type Options struct {
 	AnsibleStore   *ansible.Store
 	AnsibleEngine  *ansible.Engine
 	AnsibleRuntime *ansible.Runtime
+	// RunHub is the background-run registry (BACKGROUND_RUNS_PLAN.md). Nil →
+	// the /runs/* endpoints 503 and runs stay tied to their request.
+	RunHub *runstream.Hub
 }
 
 // NewRouter returns the fully wired API handler.
@@ -106,7 +110,8 @@ func NewRouter(opts Options) http.Handler {
 		History: opts.LLMHistory, Usage: opts.LLMUsage,
 	}
 	mh := &api.MCPHandlers{Manager: opts.MCP}
-	anh := &api.AnsibleHandlers{Store: opts.AnsibleStore, Engine: opts.AnsibleEngine, Runtime: opts.AnsibleRuntime, Vault: opts.Vault}
+	anh := &api.AnsibleHandlers{Store: opts.AnsibleStore, Engine: opts.AnsibleEngine, Runtime: opts.AnsibleRuntime, Vault: opts.Vault, Hub: opts.RunHub}
+	runsH := &api.RunsHandlers{Hub: opts.RunHub, Ansible: opts.AnsibleStore}
 	ph := &api.PromptHandlers{Store: opts.Prompts}
 	fh := &api.FormHandlers{Store: opts.Forms}
 	adminH := &api.AdminHandlers{Backup: opts.Backup}
@@ -322,8 +327,10 @@ func NewRouter(opts Options) http.Handler {
 				r.Post("/{id}/publish", anh.PublishProject)
 				r.Get("/{id}/galaxy/install/stream", anh.GalaxyInstallStream)
 				r.Get("/{id}/run/stream", anh.RunStream)
+				r.Post("/{id}/run", anh.StartRun)
 			})
 			r.Get("/adhoc/stream", anh.AdhocStream)
+			r.Post("/adhoc", anh.StartAdhoc)
 			r.Get("/doc", anh.Doc)
 			r.Get("/galaxy/search", anh.GalaxySearch)
 			r.Route("/jobs", func(r chi.Router) {
@@ -333,6 +340,7 @@ func NewRouter(opts Options) http.Handler {
 				r.Delete("/{id}", anh.DeleteJob)
 				r.Post("/{id}/publish", anh.PublishJob)
 				r.Get("/{id}/run/stream", anh.JobRunStream)
+				r.Post("/{id}/run", anh.StartJobRun)
 			})
 			r.Get("/runs/pending-approvals", anh.PendingApprovals)
 			r.Post("/runs/{id}/approve", anh.ApproveRun)
@@ -344,6 +352,13 @@ func NewRouter(opts Options) http.Handler {
 			})
 			r.Get("/runs", anh.ListRuns)
 			r.Get("/runs/{id}", anh.GetRun)
+		})
+
+		// Background runs (BACKGROUND_RUNS_PLAN.md) — module-agnostic.
+		r.Route("/runs", func(r chi.Router) {
+			r.Get("/active", runsH.Active)
+			r.Get("/{module}/{id}/stream", runsH.Stream)
+			r.Post("/{module}/{id}/cancel", runsH.Cancel)
 		})
 
 		r.Route("/vault", func(r chi.Router) {

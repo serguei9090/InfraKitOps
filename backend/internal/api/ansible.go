@@ -17,6 +17,7 @@ import (
 	"github.com/infrakit/backend/internal/ansible"
 	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/orchestrator"
+	"github.com/infrakit/backend/internal/runstream"
 	"github.com/infrakit/backend/internal/sse"
 	"github.com/infrakit/backend/internal/userctx"
 	"github.com/infrakit/backend/internal/vault"
@@ -37,6 +38,7 @@ type AnsibleHandlers struct {
 	Engine  *ansible.Engine
 	Runtime *ansible.Runtime
 	Vault   *vault.Registry // for ansible-vault password resolution (AN4)
+	Hub     *runstream.Hub  // background-run registry; nil → synchronous fallback
 }
 
 func (h *AnsibleHandlers) ok() bool {
@@ -831,14 +833,25 @@ func (h *AnsibleHandlers) AdhocStream(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	if h.Hub == nil || !h.Engine.HasHub() {
+		ch := make(chan sse.Message, 256)
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		go func() {
+			h.Engine.RunAdhoc(ctx, owner(r), h.mode(), spec, chanEmit(ctx, ch))
+			close(ch)
+		}()
+		sw.Pump(ctx, ch)
+		return
+	}
+	runID, err := h.Engine.StartAdhocBackground(owner(r), h.mode(), spec)
+	if err != nil {
+		streamOneError(sw, r, err)
+		return
+	}
 	ch := make(chan sse.Message, 256)
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-	go func() {
-		h.Engine.RunAdhoc(ctx, owner(r), h.mode(), spec, ch)
-		close(ch)
-	}()
-	sw.Pump(ctx, ch)
+	go h.Hub.Subscribe(r.Context(), runstream.Key{Module: "ansible", ID: runID}, ch)
+	sw.Pump(r.Context(), ch)
 }
 
 // GalaxySearch: GET /ansible/galaxy/search?type=collection|role&q=
@@ -979,19 +992,56 @@ func (h *AnsibleHandlers) Lint(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{"result": res})
 }
 
+// streamRun starts a playbook run in the background (surviving this connection)
+// and streams its replay+tail to the client. Kept for FE compatibility until
+// BR3 switches callers to POST + GET /runs/ansible/{id}/stream.
 func (h *AnsibleHandlers) streamRun(w http.ResponseWriter, r *http.Request, spec ansible.RunSpec, triggeredBy string) {
 	sw, err := sse.New(w)
 	if err != nil {
 		return
 	}
+	if h.Hub == nil || !h.Engine.HasHub() {
+		h.streamRunSync(w, r, sw, spec, triggeredBy)
+		return
+	}
+	runID, err := h.Engine.StartBackground(owner(r), h.mode(), triggeredBy, spec)
+	if err != nil {
+		streamOneError(sw, r, err)
+		return
+	}
+	ch := make(chan sse.Message, 256)
+	go h.Hub.Subscribe(r.Context(), runstream.Key{Module: "ansible", ID: runID}, ch)
+	sw.Pump(r.Context(), ch)
+}
+
+// streamRunSync is the pre-hub path: the run is tied to this request.
+func (h *AnsibleHandlers) streamRunSync(w http.ResponseWriter, r *http.Request, sw *sse.Writer, spec ansible.RunSpec, triggeredBy string) {
 	ch := make(chan sse.Message, 256)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	go func() {
-		h.Engine.Run(ctx, owner(r), h.mode(), triggeredBy, spec, ch)
+		h.Engine.Run(ctx, owner(r), h.mode(), triggeredBy, spec, chanEmit(ctx, ch))
 		close(ch)
 	}()
 	sw.Pump(ctx, ch)
+}
+
+// chanEmit adapts a message channel to an ansible.Emitter.
+func chanEmit(ctx context.Context, ch chan<- sse.Message) ansible.Emitter {
+	return func(ev string, data any) {
+		select {
+		case ch <- sse.Message{Event: ev, Data: data}:
+		case <-ctx.Done():
+		}
+	}
+}
+
+// streamOneError pushes a single SSE error event on an already-open stream.
+func streamOneError(sw *sse.Writer, r *http.Request, err error) {
+	ch := make(chan sse.Message, 1)
+	ch <- sse.Message{Event: "error", Data: map[string]string{"error": err.Error()}}
+	close(ch)
+	sw.Pump(r.Context(), ch)
 }
 
 // ListRuns: GET /ansible/runs?projectId=&limit=
@@ -1005,6 +1055,86 @@ func (h *AnsibleHandlers) ListRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"runs": runs})
+}
+
+// StartRun: POST /ansible/projects/{id}/run  {playbook,inventory,...} → {runId}
+// Non-blocking — the run executes in the background; watch it via
+// GET /runs/ansible/{runId}/stream.
+func (h *AnsibleHandlers) StartRun(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var spec ansible.RunSpec
+	if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	spec.ProjectID = chi.URLParam(r, "id")
+	if strings.TrimSpace(spec.Playbook) == "" {
+		apierr.Write(w, apierr.Validation("a playbook is required"))
+		return
+	}
+	audit(r, "ansible_run", spec.Playbook, nil)
+	h.startBackground(w, r, func() (int64, error) {
+		return h.Engine.StartBackground(owner(r), h.mode(), "local", spec)
+	})
+}
+
+// StartJobRun: POST /ansible/jobs/{id}/run  {extraVars?} → {runId}
+func (h *AnsibleHandlers) StartJobRun(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	job, err := h.Store.GetJob(owner(r), chi.URLParam(r, "id"))
+	if err != nil {
+		apierr.Write(w, apierr.NotFound("job not found"))
+		return
+	}
+	spec := job.Spec()
+	var body struct {
+		ExtraVars string `json:"extraVars"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if body.ExtraVars != "" {
+		spec.ExtraVars = body.ExtraVars
+	}
+	audit(r, "ansible_job_run", job.Name, map[string]string{"job": job.ID})
+	h.startBackground(w, r, func() (int64, error) {
+		return h.Engine.StartBackground(owner(r), h.mode(), "job", spec)
+	})
+}
+
+// StartAdhoc: POST /ansible/adhoc  {projectId,pattern,module,args,...} → {runId}
+func (h *AnsibleHandlers) StartAdhoc(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	var spec ansible.AdhocSpec
+	if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
+		apierr.Write(w, apierr.Validation(err.Error()))
+		return
+	}
+	if strings.TrimSpace(spec.ProjectID) == "" {
+		apierr.Write(w, apierr.Validation("a projectId is required"))
+		return
+	}
+	audit(r, "ansible_adhoc", nz(spec.Module, "command"), map[string]string{"pattern": spec.Pattern})
+	h.startBackground(w, r, func() (int64, error) {
+		return h.Engine.StartAdhocBackground(owner(r), h.mode(), spec)
+	})
+}
+
+func (h *AnsibleHandlers) startBackground(w http.ResponseWriter, r *http.Request, start func() (int64, error)) {
+	if h.Hub == nil || !h.Engine.HasHub() {
+		apierr.Write(w, apierr.Unavailable("background runs"))
+		return
+	}
+	id, err := start()
+	if err != nil {
+		ansibleErr(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"runId": id})
 }
 
 // GetRun: GET /ansible/runs/{id} — includes the event blob for replay.

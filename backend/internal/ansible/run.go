@@ -13,8 +13,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/infrakit/backend/internal/sse"
+	"github.com/infrakit/backend/internal/runstream"
 )
+
+// Emitter delivers one SSE event from a running job. It must not block for
+// long — the runstream hub fans out asynchronously and the scheduler discards.
+type Emitter func(ev string, data any)
 
 // Engine runs playbooks and records them.
 type Engine struct {
@@ -23,6 +27,7 @@ type Engine struct {
 	cfgDir       string
 	cbDir        string // materialized callback plugin dir
 	nodeResolver NodeResolver
+	hub          *runstream.Hub // background-run registry (BACKGROUND_RUNS_PLAN.md); nil in tests
 
 	apprMu   sync.Mutex
 	approves map[int64]pendingApproval
@@ -155,39 +160,62 @@ func (e *Engine) argv(spec RunSpec, playbookAbs string) []string {
 	return a
 }
 
-// Run executes spec, streaming SSE events, and records the run. Returns the
-// run id. `mode` is the resolved runtime mode.
-func (e *Engine) Run(ctx context.Context, owner string, mode RuntimeMode, triggeredBy string, spec RunSpec, out chan<- sse.Message) int64 {
-	send := func(ev string, data any) {
-		select {
-		case out <- sse.Message{Event: ev, Data: data}:
-		case <-ctx.Done():
-		}
-	}
+// preparedRun is a validated, inserted run row ready to execute.
+type preparedRun struct {
+	runID   int64
+	run     *Run
+	proj    *Project
+	args    []string
+	redArgv string
+	spec    RunSpec
+}
 
+// prepareRun validates spec, builds the argv and inserts the run row. The
+// caller emits run-start then calls executeRun.
+func (e *Engine) prepareRun(owner, triggeredBy string, spec RunSpec) (*preparedRun, error) {
 	proj, err := e.store.GetProject(owner, spec.ProjectID)
 	if err != nil {
-		send("error", map[string]string{"error": "project not found"})
-		return 0
+		return nil, errors.New("project not found")
 	}
 	playbookAbs, err := safeJoin(proj.Path, spec.Playbook)
 	if err != nil {
-		send("error", map[string]string{"error": "bad playbook path"})
-		return 0
+		return nil, errors.New("bad playbook path")
 	}
-
 	args := e.argv(spec, playbookAbs)
 	redArgv := "ansible-playbook " + strings.Join(args, " ")
 	run := &Run{
 		Owner: owner, ProjectID: proj.ID, JobID: spec.JobID, Playbook: spec.Playbook, Status: StatusRunning,
 		Argv: redArgv, TriggeredBy: nz(triggeredBy, "local"), StartedAt: time.Now().UnixMilli(),
 	}
-	runID, _ := e.store.InsertRun(run)
-	send("run-start", map[string]any{"runId": runID, "argv": redArgv})
+	runID, err := e.store.InsertRun(run)
+	if err != nil {
+		return nil, err
+	}
+	return &preparedRun{runID: runID, run: run, proj: proj, args: args, redArgv: redArgv, spec: spec}, nil
+}
+
+// Run executes spec synchronously, emitting SSE events via emit, and records the
+// run. Returns the run id. The API layer uses StartBackground instead; the
+// scheduler calls this directly with a discarding emitter.
+func (e *Engine) Run(ctx context.Context, owner string, mode RuntimeMode, triggeredBy string, spec RunSpec, emit Emitter) int64 {
+	pr, err := e.prepareRun(owner, triggeredBy, spec)
+	if err != nil {
+		emit("error", map[string]string{"error": err.Error()})
+		return 0
+	}
+	emit("run-start", map[string]any{"runId": pr.runID, "argv": pr.redArgv})
+	return e.executeRun(ctx, mode, pr, emit)
+}
+
+// executeRun runs a prepared playbook run to completion: approval gate → runner
+// resolution → execRun. `mode` is accepted for signature stability; the active
+// runner is resolved from settings via ctx.
+func (e *Engine) executeRun(ctx context.Context, _ RuntimeMode, pr *preparedRun, emit Emitter) int64 {
+	runID, run, proj, args, spec := pr.runID, pr.run, pr.proj, pr.args, pr.spec
 
 	// U3 gate — parks before touching the runtime so approval doesn't need
 	// ansible to be present.
-	if !e.gate(ctx, runID, run, spec.RequiresApproval, out) {
+	if !e.gate(ctx, runID, run, spec.RequiresApproval, emit) {
 		return runID
 	}
 
@@ -195,8 +223,8 @@ func (e *Engine) Run(ctx context.Context, owner string, mode RuntimeMode, trigge
 
 	fail := func(msg string) int64 {
 		_ = e.store.FinishRun(runID, StatusFailed, "", "")
-		send("error", map[string]string{"error": msg})
-		send("run-end", map[string]any{"runId": runID, "status": StatusFailed})
+		emit("error", map[string]string{"error": msg})
+		emit("run-end", map[string]any{"runId": runID, "status": StatusFailed})
 		return runID
 	}
 
@@ -223,7 +251,7 @@ func (e *Engine) Run(ctx context.Context, owner string, mode RuntimeMode, trigge
 		Tool: "ansible-playbook", Dir: proj.Path, Argv: args,
 		Env: append(e.callbackEnv(evPath), factCacheEnv(proj.Path)...),
 	}
-	return e.execRun(ctx, runner, req, evPath, run, runID, nil, out)
+	return e.execRun(ctx, runner, req, evPath, run, runID, nil, emit)
 }
 
 // callbackEnv is the environment that enables the streaming callback plugin and
@@ -253,15 +281,9 @@ func factCacheEnv(projectDir string) []string {
 
 // gate blocks a real multi-user run until a second operator approves it.
 // Returns false when the run was denied (already recorded + run-end sent).
-func (e *Engine) gate(ctx context.Context, runID int64, run *Run, requires bool, out chan<- sse.Message) bool {
+func (e *Engine) gate(ctx context.Context, runID int64, run *Run, requires bool, send Emitter) bool {
 	if !requires || run.Owner == "" || run.TriggeredBy == "schedule" {
 		return true
-	}
-	send := func(ev string, data any) {
-		select {
-		case out <- sse.Message{Event: ev, Data: data}:
-		case <-ctx.Done():
-		}
 	}
 	run.Status = StatusAwaitingApproval
 	_ = e.store.setRunStatus(runID, StatusAwaitingApproval)
@@ -285,15 +307,8 @@ func (e *Engine) gate(ctx context.Context, runID int64, run *Run, requires bool,
 // for a play + task node). Returns runID.
 func (e *Engine) execRun(
 	ctx context.Context, runner Runner, req RunReq, evPath string, run *Run, runID int64,
-	preEvents []map[string]any, out chan<- sse.Message,
+	preEvents []map[string]any, send Emitter,
 ) int64 {
-	send := func(ev string, data any) {
-		select {
-		case out <- sse.Message{Event: ev, Data: data}:
-		case <-ctx.Done():
-		}
-	}
-
 	var events strings.Builder
 	for _, ev := range preEvents {
 		if b, err := json.Marshal(ev); err == nil {

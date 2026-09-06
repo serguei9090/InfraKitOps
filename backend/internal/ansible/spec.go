@@ -137,4 +137,7 @@ const (
 	StatusUnreachable      = "unreachable"
 	StatusCancelled        = "cancelled"
 	StatusAwaitingApproval = "awaiting_approval"
+	// StatusInterrupted marks a run whose backend process died mid-flight
+	// (distinct from a user cancel). Set by boot recovery.
+	StatusInterrupted = "interrupted"
 )

@@ -41,6 +41,7 @@ import (
 	"github.com/infrakit/backend/internal/obs"
 	"github.com/infrakit/backend/internal/orchestrator"
 	"github.com/infrakit/backend/internal/promptstore"
+	"github.com/infrakit/backend/internal/runstream"
 	"github.com/infrakit/backend/internal/server"
 	"github.com/infrakit/backend/internal/tlscert"
 	"github.com/infrakit/backend/internal/tools/iperf"
@@ -258,6 +259,23 @@ func main() {
 		}
 	}
 
+	// Background-run registry (BACKGROUND_RUNS_PLAN.md) — a run outlives the
+	// request that starts it; its event log lives under <data-dir>/runs/.
+	var runHub *runstream.Hub
+	if dir, err := appDataDir(); err == nil {
+		runHub = runstream.New(dir)
+		if ansibleEngine != nil {
+			ansibleEngine.SetHub(runHub)
+		}
+		if ansibleStore != nil {
+			if n, rerr := ansibleStore.MarkRunningInterrupted(); rerr != nil {
+				obs.Warnf("ansible: boot recovery failed: %v", rerr)
+			} else if n > 0 {
+				obs.Infof("ansible: marked %d interrupted run(s) from a previous process", n)
+			}
+		}
+	}
+
 	defer iperf.StopServer() // kill any managed `iperf3 -s` child
 
 	var authSvc *auth.Service
@@ -398,6 +416,7 @@ func main() {
 		AnsibleStore:   ansibleStore,
 		AnsibleEngine:  ansibleEngine,
 		AnsibleRuntime: ansibleRuntime,
+		RunHub:         runHub,
 		AppVersion:     api.Version,
 		HistoryPolicy: history.PrunePolicy{
 			RetentionDays: *retentionDays,
@@ -436,6 +455,9 @@ func main() {
 
 	go func() {
 		<-ctx.Done()
+		if runHub != nil {
+			runHub.CancelAll() // stop in-flight background runs before exit
+		}
 		if backupSched != nil {
 			if p, err := backupSched.Once(); err != nil {
 				slog.Warn("shutdown backup failed", "err", err)
