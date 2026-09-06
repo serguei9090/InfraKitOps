@@ -1,6 +1,6 @@
 # Background runs — plan
 
-## Status: BR1 + BR2 done (backend). BR3 (frontend) + BR4 pending.
+## Status: BR1–BR3 done. BR4 (continuous monitors) not started.
 
 - **BR1 (2026-09-05)** — `internal/runstream` hub + Ansible wired. Playbook,
   job and ad-hoc runs execute under a request-independent context registered
@@ -25,6 +25,24 @@
   `"runbook"` (owner check + step-by-step DB replay for pre-hub runs).
   `orchestrator.Store.MarkRunningInterrupted()` + boot recovery in main.go.
   Scheduler passes a no-op emitter.
+- **BR3 (2026-09-05)** — frontend. `runsClient` (`listActiveRuns` /
+  `openRunStream` / `cancelRun`) + `runsStore` (adaptive poll of
+  `/runs/active` — 4s busy / 20s idle, paused when the backend is down).
+  Global **Runs drawer** in the shell header (`adapters/ui/runs/RunsDrawer`,
+  mirrors the error-history drawer) — spinner + count badge, hidden when
+  nothing runs; rows show target · module · status · elapsed, cancel, and
+  re-attach. `{Ansible,Runbook}ConsoleScaffold` consume a drawer
+  `attachRequest` on mount / on change and call `store.attachRun(id)` →
+  opens `/runs/{module}/{id}/stream`, whose replay rebuilds the tree/step
+  list before tailing. runbook event-folding extracted to a shared
+  `runStreamHandlers`. Stop buttons (`RunView`, `RunPanel`) now
+  `cancelLiveRun()` → `POST /runs/{id}/cancel` (a bare SSE abort no longer
+  stops the run). **Routing note**: the `/runs/{id}/stream|cancel` routes
+  carry `?module=` as a query param — chi requires one param name (`{id}`)
+  at that tree position and the runbook `/runs/{id}` route already owns it.
+  Executor fix rode along: `cmd.WaitDelay = 3s` so a cancelled shell step
+  whose grandchild holds the stdout pipe still returns promptly.
+  Verified in-browser end-to-end.
 
 ## Problem
 
