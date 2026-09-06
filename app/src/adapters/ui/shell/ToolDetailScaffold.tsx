@@ -87,15 +87,14 @@ export function ToolScaffoldHeader({
   }
 
   return (
-    <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-5">
-      <h1 className="text-[17px] font-semibold tracking-tight">{title}</h1>
-      <div className="flex-1" />
+    <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-4 sm:px-5">
+      <h1 className="min-w-0 flex-1 truncate text-[17px] font-semibold tracking-tight">{title}</h1>
       {headerActions}
       {download ? (
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1.5"
+          className="shrink-0 gap-1.5"
           onClick={() => downloadBlob(download.content, download.fileName, download.mimeType)}
         >
           <Download className="size-4" />
@@ -104,7 +103,7 @@ export function ToolScaffoldHeader({
       ) : null}
       {preview ? (
         <Dialog>
-          <DialogTrigger render={<Button variant="ghost" size="sm" className="gap-1.5" />}>
+          <DialogTrigger render={<Button variant="ghost" size="sm" className="shrink-0 gap-1.5" />}>
             <Eye className="size-4" />
             Preview
           </DialogTrigger>
@@ -117,7 +116,7 @@ export function ToolScaffoldHeader({
         </Dialog>
       ) : null}
       {copyText !== undefined ? (
-        <Button variant="ghost" size="sm" onClick={handleCopy} className="gap-1.5">
+        <Button variant="ghost" size="sm" onClick={handleCopy} className="shrink-0 gap-1.5">
           <Copy className="size-4" />
           {copied ? 'Copied' : 'Copy'}
         </Button>

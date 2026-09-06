@@ -190,7 +190,7 @@ export function PlaygroundView() {
       )}
 
       <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-4 py-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 px-4 py-2">
         <Button
           size="xs"
           variant={showHistory ? 'default' : 'ghost'}
@@ -200,7 +200,7 @@ export function PlaygroundView() {
           <History className="size-3.5" />
         </Button>
         <Select value={connId} onValueChange={(v) => v && setConnId(v)}>
-          <SelectTrigger size="sm" className="w-48">
+          <SelectTrigger size="sm" className="w-40 sm:w-48">
             <SelectValue placeholder="connection">
               {(v) => connections.find((c) => c.id === v)?.name ?? 'connection'}
             </SelectValue>
@@ -215,7 +215,7 @@ export function PlaygroundView() {
         </Select>
 
         <Select value={model} onValueChange={(v) => v && setModel(v)}>
-          <SelectTrigger size="sm" className="w-56">
+          <SelectTrigger size="sm" className="w-44 sm:w-56">
             <SelectValue placeholder={connModels.length ? 'model' : 'no models — test the connection'} />
           </SelectTrigger>
           <SelectContent>

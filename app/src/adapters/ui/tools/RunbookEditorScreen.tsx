@@ -186,7 +186,7 @@ export function RunbookEditorScreen() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-4">
+      <div className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/60 bg-background px-4 py-2">
         <Button variant="ghost" size="icon-sm" aria-label="Back" onClick={() => navigate('/tools/runbook')}>
           <ArrowLeft className="size-4" />
         </Button>
@@ -194,7 +194,7 @@ export function RunbookEditorScreen() {
           value={viewedSpec.name}
           readOnly={readOnly}
           onChange={(e) => patchSpec({ name: e.target.value })}
-          className="h-9 max-w-sm border-0 px-1 text-lg font-semibold shadow-none focus-visible:ring-0"
+          className="h-9 w-40 min-w-40 flex-1 border-0 px-1 text-lg font-semibold shadow-none focus-visible:ring-0 sm:max-w-sm"
           placeholder="Runbook name"
         />
         <div className="flex items-center gap-1 text-xs text-muted-foreground">

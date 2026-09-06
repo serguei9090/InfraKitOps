@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BellOff, Download, FileUp, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { BellOff, ChevronLeft, Download, FileUp, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useBackendStore } from '@/stores/backendStore'
 import { useMonitorStore } from '@/stores/monitorStore'
 import {
@@ -102,7 +102,7 @@ export function MonitorsScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border/60 px-4">
+      <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2">
         <h1 className="text-sm font-semibold">Monitors</h1>
         <span className="text-xs text-muted-foreground">
           {monitors.length} · {monitors.filter((m) => m.status === 'down').length} down
@@ -161,7 +161,12 @@ export function MonitorsScreen() {
       )}
 
       <div className="flex min-h-0 flex-1">
-        <div className="w-[22rem] shrink-0 overflow-y-auto border-r border-border/60">
+        <div
+          className={cn(
+            'w-full shrink-0 overflow-y-auto border-border/60 md:w-[22rem] md:border-r',
+            selected && 'hidden md:block',
+          )}
+        >
           {!loaded ? (
             <p className="p-4 text-xs text-muted-foreground">Loading…</p>
           ) : monitors.length === 0 ? (
@@ -181,9 +186,13 @@ export function MonitorsScreen() {
           )}
         </div>
 
-        <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className={cn('min-w-0 flex-1 overflow-y-auto', !selected && 'hidden md:block')}>
           {selected ? (
-            <MonitorDetail m={selected} onEdit={() => setEditing(selected)} />
+            <MonitorDetail
+              m={selected}
+              onEdit={() => setEditing(selected)}
+              onBack={() => void select(null)}
+            />
           ) : (
             <p className="p-6 text-sm text-muted-foreground">Select a monitor to see its history.</p>
           )}
@@ -392,7 +401,7 @@ async function exportReport(id: string, name: string, fmt: 'json' | 'csv') {
   URL.revokeObjectURL(url)
 }
 
-function MonitorDetail({ m, onEdit }: { m: Monitor; onEdit: () => void }) {
+function MonitorDetail({ m, onEdit, onBack }: { m: Monitor; onEdit: () => void; onBack: () => void }) {
   const samples = useMonitorStore((s) => (s.samplesFor === m.id ? s.samples : NO_SAMPLES))
   const points = useMonitorStore((s) => (s.seriesFor === m.id ? s.seriesPoints : NO_POINTS))
   const seriesPeriod = useMonitorStore((s) => s.seriesPeriod)
@@ -422,7 +431,14 @@ function MonitorDetail({ m, onEdit }: { m: Monitor; onEdit: () => void }) {
   const last = samples.at(-1)
 
   return (
-    <div className="space-y-4 p-6">
+    <div className="space-y-4 p-4 sm:p-6">
+      <button
+        type="button"
+        onClick={onBack}
+        className="-ml-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground md:hidden"
+      >
+        <ChevronLeft className="size-3.5" /> All monitors
+      </button>
       <div className="flex items-start gap-3">
         <span className={cn('mt-1.5 size-3 shrink-0 rounded-full', STATUS_DOT[m.status])} />
         <div className="min-w-0 flex-1">
@@ -567,7 +583,7 @@ function UptimeStats({
   meta: ReturnType<typeof kindMeta>
 }) {
   return (
-    <div className="grid grid-cols-4 gap-3 text-center">
+    <div className="grid grid-cols-2 gap-3 text-center lg:grid-cols-4">
       {(['24h', '7d', '30d'] as UptimeRange[]).map((r) => (
         <div key={r} className="rounded-lg border border-border/60 bg-card p-3">
           <p className={cn('font-mono text-lg tabular-nums', uptimeTone(win?.[r]))}>{fmtUptime(win?.[r])}</p>

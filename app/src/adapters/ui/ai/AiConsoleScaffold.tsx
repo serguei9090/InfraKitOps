@@ -66,14 +66,14 @@ export function AiConsoleScaffold() {
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <Header>
-        <nav className="flex items-center gap-0.5 overflow-x-auto">
+        <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
           {NAV.map((n) => (
             <button
               key={n.id}
               type="button"
               onClick={() => setSection(n.id)}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm',
+                'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm',
                 section === n.id
                   ? 'bg-primary/15 text-primary font-medium'
                   : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
@@ -85,7 +85,9 @@ export function AiConsoleScaffold() {
           ))}
         </nav>
         <div className="flex-1" />
-        <VaultDialog />
+        <div className="shrink-0">
+          <VaultDialog />
+        </div>
       </Header>
 
       <div className="min-h-0 flex-1 overflow-auto">
@@ -111,9 +113,9 @@ export function AiConsoleScaffold() {
 
 function Header({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-5">
-      <h1 className="text-[17px] font-semibold tracking-tight">AI Hub</h1>
-      <div className="mx-2 h-5 w-px bg-border/60" />
+    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-4 sm:px-5">
+      <h1 className="shrink-0 whitespace-nowrap text-[17px] font-semibold tracking-tight">AI Hub</h1>
+      <div className="mx-2 h-5 w-px shrink-0 bg-border/60" />
       {children}
     </div>
   )

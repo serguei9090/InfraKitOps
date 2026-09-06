@@ -121,7 +121,7 @@ export function AnsibleConsoleScaffold() {
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <Header>
-        <nav className="flex items-center gap-0.5 overflow-x-auto">
+        <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
           {NAV.map((n) => (
             <button
               key={n.id}
@@ -131,7 +131,7 @@ export function AnsibleConsoleScaffold() {
                 setSection(n.id)
               }}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm',
+                'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm',
                 section === n.id && !forceRuntime
                   ? 'bg-primary/15 text-primary font-medium'
                   : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
@@ -149,7 +149,7 @@ export function AnsibleConsoleScaffold() {
                 setSection('approvals')
               }}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm',
+                'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm',
                 section === 'approvals' && !forceRuntime
                   ? 'bg-primary/15 text-primary font-medium'
                   : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
@@ -170,7 +170,7 @@ export function AnsibleConsoleScaffold() {
           type="button"
           onClick={() => setShowRuntime(!showRuntime)}
           className={cn(
-            'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm',
+            'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm',
             forceRuntime
               ? 'bg-primary/15 text-primary font-medium'
               : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
@@ -224,9 +224,9 @@ export function AnsibleConsoleScaffold() {
 
 function Header({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-5">
-      <h1 className="text-[17px] font-semibold tracking-tight">Ansible</h1>
-      <div className="mx-2 h-5 w-px bg-border/60" />
+    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-4 sm:px-5">
+      <h1 className="shrink-0 text-[17px] font-semibold tracking-tight">Ansible</h1>
+      <div className="mx-2 h-5 w-px shrink-0 bg-border/60" />
       {children}
     </div>
   )
