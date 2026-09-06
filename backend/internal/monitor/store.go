@@ -63,6 +63,7 @@ func Open(dsn string) (*Store, error) {
 		`ALTER TABLE monitor ADD COLUMN channel TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE monitor ADD COLUMN alert_after_sec INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE monitor ADD COLUMN renotify_every_sec INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE monitor ADD COLUMN muted_until INTEGER NOT NULL DEFAULT 0`,
 	} {
 		if _, err := db.Exec(col); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			_ = db.Close()
@@ -110,7 +111,7 @@ func (s *Store) PurgeOwner(owner string) error {
 	return err
 }
 
-const monCols = `id, owner, name, kind, target, interval_sec, timeout_sec, fail_threshold, enabled, config_json, status, last_checked_at, last_change_at, created_at, tags, channel, alert_after_sec, renotify_every_sec`
+const monCols = `id, owner, name, kind, target, interval_sec, timeout_sec, fail_threshold, enabled, config_json, status, last_checked_at, last_change_at, created_at, tags, channel, alert_after_sec, renotify_every_sec, muted_until`
 
 func scanMonitor(sc interface{ Scan(...any) error }) (Monitor, error) {
 	var m Monitor
@@ -118,7 +119,7 @@ func scanMonitor(sc interface{ Scan(...any) error }) (Monitor, error) {
 	var enabled int
 	if err := sc.Scan(&m.ID, &m.Owner, &m.Name, &m.Kind, &m.Target, &m.IntervalSec, &m.TimeoutSec,
 		&m.FailThreshold, &enabled, &cfg, &m.Status, &m.LastCheckedAt, &m.LastChangeAt, &m.CreatedAt,
-		&m.Tags, &m.Channel, &m.AlertAfterSec, &m.RenotifyEverySec); err != nil {
+		&m.Tags, &m.Channel, &m.AlertAfterSec, &m.RenotifyEverySec, &m.MutedUntil); err != nil {
 		return Monitor{}, err
 	}
 	m.Enabled = enabled != 0
@@ -128,8 +129,9 @@ func scanMonitor(sc interface{ Scan(...any) error }) (Monitor, error) {
 	return m, nil
 }
 
-// List returns the caller's monitors, newest first.
-func (s *Store) List(owner string) ([]Monitor, error) {
+// List returns the caller's monitors, newest first. tag != "" filters to
+// monitors carrying that tag.
+func (s *Store) List(owner, tag string) ([]Monitor, error) {
 	clause, args := ownerClause(owner)
 	rows, err := s.db.Query(`SELECT `+monCols+` FROM monitor WHERE 1=1`+clause+` ORDER BY created_at DESC`, args...)
 	if err != nil {
@@ -142,9 +144,26 @@ func (s *Store) List(owner string) ([]Monitor, error) {
 		if err != nil {
 			return nil, err
 		}
+		if tag != "" && !containsFold(m.TagList(), tag) {
+			continue
+		}
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+// SetMute sets (or clears, until <= 0) a monitor's alert-mute deadline.
+func (s *Store) SetMute(owner, id string, until int64) (*Monitor, error) {
+	if _, err := s.Get(owner, id); err != nil {
+		return nil, err
+	}
+	if until < 0 {
+		until = 0
+	}
+	if _, err := s.db.Exec(`UPDATE monitor SET muted_until = ? WHERE id = ?`, until, id); err != nil {
+		return nil, err
+	}
+	return s.Get(owner, id)
 }
 
 // ListEnabled returns every enabled monitor across all owners — for boot resume.
@@ -208,7 +227,7 @@ func (s *Store) Put(owner string, m Monitor) (*Monitor, error) {
 		enabled = 1
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO monitor (`+monCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		`INSERT INTO monitor (`+monCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		 ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, target=excluded.target,
 		   interval_sec=excluded.interval_sec, timeout_sec=excluded.timeout_sec,
 		   fail_threshold=excluded.fail_threshold, enabled=excluded.enabled, config_json=excluded.config_json,
@@ -216,7 +235,7 @@ func (s *Store) Put(owner string, m Monitor) (*Monitor, error) {
 		   renotify_every_sec=excluded.renotify_every_sec`,
 		m.ID, m.Owner, m.Name, m.Kind, m.Target, m.IntervalSec, m.TimeoutSec, m.FailThreshold, enabled,
 		string(cfg), m.Status, m.LastCheckedAt, m.LastChangeAt, m.CreatedAt,
-		strings.TrimSpace(m.Tags), m.Channel, m.AlertAfterSec, m.RenotifyEverySec,
+		strings.TrimSpace(m.Tags), m.Channel, m.AlertAfterSec, m.RenotifyEverySec, m.MutedUntil,
 	)
 	if err != nil {
 		return nil, err

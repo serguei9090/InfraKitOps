@@ -2,16 +2,19 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/infrakit/backend/internal/apierr"
 	"github.com/infrakit/backend/internal/monitor"
+	"github.com/infrakit/backend/internal/sse"
 )
 
 // MonitorHandlers wires /monitors* (MONITORS_MODULE_PLAN.md). Nil Store/Engine
@@ -40,12 +43,12 @@ func monitorErr(w http.ResponseWriter, err error) {
 	apierr.Write(w, apierr.Validation(err.Error()))
 }
 
-// List: GET /monitors
+// List: GET /monitors?tag=
 func (h *MonitorHandlers) List(w http.ResponseWriter, r *http.Request) {
 	if !h.guard(w) {
 		return
 	}
-	ms, err := h.Store.List(owner(r))
+	ms, err := h.Store.List(owner(r), r.URL.Query().Get("tag"))
 	if err != nil {
 		monitorErr(w, err)
 		return
@@ -221,6 +224,88 @@ func redactSettings(s monitor.Settings) monitor.Settings {
 		s.SMTP.Password = "••••"
 	}
 	return s
+}
+
+// Mute: POST /monitors/{id}/mute {untilMs}  ·  Unmute: POST /monitors/{id}/unmute
+func (h *MonitorHandlers) Mute(mute bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !h.guard(w) {
+			return
+		}
+		var until int64
+		if mute {
+			var body struct {
+				UntilMs int64 `json:"untilMs"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			until = body.UntilMs
+			if until == 0 {
+				until = time.Now().Add(time.Hour).UnixMilli() // default: 1h snooze
+			}
+		}
+		m, err := h.Store.SetMute(owner(r), chi.URLParam(r, "id"), until)
+		if err != nil {
+			monitorErr(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"monitor": m})
+	}
+}
+
+// CheckAll: POST /monitors/check-all — probe every enabled monitor now.
+func (h *MonitorHandlers) CheckAll(w http.ResponseWriter, r *http.Request) {
+	if !h.guard(w) {
+		return
+	}
+	list, err := h.Store.List(owner(r), "")
+	if err != nil {
+		monitorErr(w, err)
+		return
+	}
+	n := 0
+	for _, m := range list {
+		if !m.Enabled {
+			continue
+		}
+		n++
+		mm := m
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			h.Engine.CheckNow(ctx, mm)
+		}()
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"checking": n})
+}
+
+// Stream: GET /monitors/stream — SSE of status-change events for the caller.
+func (h *MonitorHandlers) Stream(w http.ResponseWriter, r *http.Request) {
+	if !h.ok() {
+		sse.RejectCoded(w, string(apierr.CodeInternal), "the Monitors module is not available", "")
+		return
+	}
+	sw, err := sse.New(w)
+	if err != nil {
+		return
+	}
+	me := owner(r)
+	events, unsub := h.Engine.Subscribe()
+	defer unsub()
+
+	msgs := make(chan sse.Message, 16)
+	go func() {
+		defer close(msgs)
+		for ev := range events {
+			if ev.Monitor.Owner != "" && ev.Monitor.Owner != me {
+				continue
+			}
+			msgs <- sse.Message{Event: "monitor-alert", Data: map[string]any{
+				"id": ev.Monitor.ID, "name": ev.Monitor.Name, "kind": ev.Monitor.Kind,
+				"target": ev.Monitor.Target, "event": ev.Event, "detail": ev.Detail, "at": ev.At,
+			}}
+		}
+	}()
+	sw.Pump(r.Context(), msgs)
 }
 
 // CheckNow: POST /monitors/{id}/check — run one probe immediately.

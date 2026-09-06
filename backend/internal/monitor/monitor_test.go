@@ -69,7 +69,7 @@ func TestStoreCRUD(t *testing.T) {
 	if up.Name != "gateway" || up.IntervalSec != minIntervalSec || up.ID != m.ID {
 		t.Fatalf("edit = %+v", up)
 	}
-	list, _ := s.List("alice")
+	list, _ := s.List("alice", "")
 	if len(list) != 1 {
 		t.Fatalf("List = %d", len(list))
 	}

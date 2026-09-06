@@ -51,6 +51,9 @@ type Monitor struct {
 	// AlertAfterSec / RenotifyEverySec override Settings when > 0. (M3)
 	AlertAfterSec    int `json:"alertAfterSec,omitempty"`
 	RenotifyEverySec int `json:"renotifyEverySec,omitempty"`
+	// MutedUntil: unix ms; while now < MutedUntil the monitor still probes +
+	// records but sends no alerts. (M3)
+	MutedUntil int64 `json:"mutedUntil,omitempty"`
 
 	Status        string `json:"status"`
 	LastCheckedAt int64  `json:"lastCheckedAt"`

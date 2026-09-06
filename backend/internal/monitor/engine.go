@@ -18,6 +18,43 @@ type Engine struct {
 
 	alerts   func(AlertEvent) // optional, set by SetAlertSink (a log line)
 	notifier *Notifier        // optional, set by SetNotifier (webhook / email)
+
+	subsMu  sync.Mutex
+	subs    map[int]chan AlertEvent
+	nextSub int
+}
+
+// Subscribe returns a channel of status-change events + an unsubscribe func.
+// Feeds GET /monitors/stream (and the desktop notification channel).
+func (e *Engine) Subscribe() (<-chan AlertEvent, func()) {
+	ch := make(chan AlertEvent, 16)
+	e.subsMu.Lock()
+	if e.subs == nil {
+		e.subs = map[int]chan AlertEvent{}
+	}
+	id := e.nextSub
+	e.nextSub++
+	e.subs[id] = ch
+	e.subsMu.Unlock()
+	return ch, func() {
+		e.subsMu.Lock()
+		if _, ok := e.subs[id]; ok {
+			delete(e.subs, id)
+			close(ch)
+		}
+		e.subsMu.Unlock()
+	}
+}
+
+func (e *Engine) broadcast(ev AlertEvent) {
+	e.subsMu.Lock()
+	for _, ch := range e.subs {
+		select {
+		case ch <- ev:
+		default: // slow subscriber — drop, it will re-sync on its next poll
+		}
+	}
+	e.subsMu.Unlock()
 }
 
 // NewEngine wires the engine to its store.
@@ -180,14 +217,17 @@ func (e *Engine) tick(ctx context.Context, id string, st *loopState) (sample Sam
 		obs.Warnf("monitor %s: record failed: %v", id, err)
 	}
 
-	// A real up<->down transition → the log sink.
-	if changed && e.alerts != nil &&
-		(newStatus == StatusDown || (newStatus == StatusUp && m.Status == StatusDown)) {
+	// A real up<->down transition → the log sink + the live stream.
+	if changed && (newStatus == StatusDown || (newStatus == StatusUp && m.Status == StatusDown)) {
 		ev := "recovered"
 		if newStatus == StatusDown {
 			ev = "down"
 		}
-		e.alerts(AlertEvent{Monitor: *m, Event: ev, At: s.T, Detail: s.Detail})
+		alert := AlertEvent{Monitor: *m, Event: ev, At: s.T, Detail: s.Detail}
+		if e.alerts != nil {
+			e.alerts(alert)
+		}
+		e.broadcast(alert)
 	}
 
 	if e.notifier != nil {
@@ -209,11 +249,15 @@ func (e *Engine) applyNotifyPolicy(m *Monitor, newStatus string, s Sample, st *l
 		renotify = set.RenotifyEverySec
 	}
 	now := time.UnixMilli(s.T)
+	muted := m.MutedUntil > now.UnixMilli()
 
 	switch newStatus {
 	case StatusDown:
 		if st.downSince.IsZero() {
 			st.downSince = now
+		}
+		if muted {
+			return // still probing + recording, just no alerts this window
 		}
 		switch {
 		case !st.alerted && now.Sub(st.downSince) >= time.Duration(after)*time.Second:
@@ -224,7 +268,7 @@ func (e *Engine) applyNotifyPolicy(m *Monitor, newStatus string, s Sample, st *l
 			st.lastNotify = now
 		}
 	case StatusUp:
-		if st.alerted && set.NotifyOnRecovery {
+		if st.alerted && !muted && set.NotifyOnRecovery {
 			e.fire(m, "recovered", s.Detail)
 		}
 		st.downSince, st.alerted, st.lastNotify = time.Time{}, false, time.Time{}
