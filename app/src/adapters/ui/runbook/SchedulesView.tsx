@@ -248,6 +248,19 @@ function ScheduleDialog({ draft, published, argSpecFor, onClose, onSave }: Dialo
               Enabled
             </label>
 
+            <label className="flex items-center gap-2 text-sm">
+              <Switch
+                checked={d.runOnStart ?? false}
+                onCheckedChange={(v) => setD((c) => ({ ...c!, runOnStart: v === true }))}
+              />
+              <span>
+                Run once when the app / backend starts
+                <span className="block text-xs text-muted-foreground">
+                  Fires immediately on start, then follows the cron. No missed windows are replayed.
+                </span>
+              </span>
+            </label>
+
             <DialogFooter>
               <DialogClose render={<Button variant="outline">Cancel</Button>} />
               <Button type="submit" disabled={!cronOk || !runbookId}>

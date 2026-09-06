@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { BellOff, Pause, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useBackendStore } from '@/stores/backendStore'
 import { useMonitorStore } from '@/stores/monitorStore'
 import {
   configSummary,
+  isMuted,
   KINDS,
   kindMeta,
   relTime,
   STATUS_DOT,
+  tagList,
   uptimePct,
   type ConfigField,
   type Monitor,
@@ -42,14 +44,21 @@ export function MonitorsScreen() {
   const refreshBackend = useBackendStore((s) => s.refresh)
   const reconnecting = useBackendStore((s) => s.reconnecting)
 
-  const monitors = useMonitorStore((s) => s.monitors)
+  const allMonitors = useMonitorStore((s) => s.monitors)
   const loaded = useMonitorStore((s) => s.loaded)
   const selectedId = useMonitorStore((s) => s.selectedId)
   const startPolling = useMonitorStore((s) => s.startPolling)
   const stopPolling = useMonitorStore((s) => s.stopPolling)
   const select = useMonitorStore((s) => s.select)
+  const tagFilter = useMonitorStore((s) => s.tagFilter)
+  const setTagFilter = useMonitorStore((s) => s.setTagFilter)
+  const checkAll = useMonitorStore((s) => s.checkAll)
 
   const [editing, setEditing] = useState<Monitor | 'new' | null>(null)
+  const [sweeping, setSweeping] = useState(false)
+
+  const tags = [...new Set(allMonitors.flatMap((m) => tagList(m.tags)))].sort()
+  const monitors = tagFilter ? allMonitors.filter((m) => tagList(m.tags).includes(tagFilter)) : allMonitors
 
   useEffect(() => {
     if (status === 'unknown') void refreshBackend()
@@ -64,7 +73,7 @@ export function MonitorsScreen() {
     return <BackendUnavailable onRetry={refreshBackend} retrying={reconnecting} />
   }
 
-  const selected = monitors.find((m) => m.id === selectedId) ?? null
+  const selected = allMonitors.find((m) => m.id === selectedId) ?? null
 
   return (
     <div className="flex h-full flex-col">
@@ -74,10 +83,50 @@ export function MonitorsScreen() {
           {monitors.length} · {monitors.filter((m) => m.status === 'down').length} down
         </span>
         <div className="flex-1" />
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={sweeping || allMonitors.length === 0}
+          onClick={async () => {
+            setSweeping(true)
+            await checkAll()
+            setTimeout(() => setSweeping(false), 1800)
+          }}
+        >
+          <RefreshCw className={cn('size-4', sweeping && 'animate-spin')} /> Run all checks now
+        </Button>
         <Button size="sm" onClick={() => setEditing('new')}>
           <Plus className="size-4" /> New monitor
         </Button>
       </header>
+
+      {tags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/40 px-4 py-2">
+          <button
+            type="button"
+            onClick={() => setTagFilter(null)}
+            className={cn(
+              'rounded-full border px-2 py-0.5 text-xs',
+              !tagFilter ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground',
+            )}
+          >
+            All
+          </button>
+          {tags.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTagFilter(t === tagFilter ? null : t)}
+              className={cn(
+                'rounded-full border px-2 py-0.5 text-xs',
+                t === tagFilter ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground',
+              )}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1">
         <div className="w-[22rem] shrink-0 overflow-y-auto border-r border-border/60">
@@ -130,7 +179,14 @@ function MonitorRow({ m, active, onClick }: { m: Monitor; active: boolean; onCli
     >
       <span className={cn('size-2.5 shrink-0 rounded-full', STATUS_DOT[m.status])} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{m.name}</div>
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-medium">{m.name}</span>
+          {isMuted(m) && (
+            <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-muted px-1 text-[9px] text-muted-foreground">
+              <BellOff className="size-2.5" /> muted
+            </span>
+          )}
+        </div>
         <div className="truncate text-[11px] text-muted-foreground">
           {m.kind} · {m.target}
         </div>
@@ -147,7 +203,10 @@ function MonitorDetail({ m, onEdit }: { m: Monitor; onEdit: () => void }) {
   const setPaused = useMonitorStore((s) => s.setPaused)
   const remove = useMonitorStore((s) => s.remove)
   const checkNow = useMonitorStore((s) => s.checkNow)
+  const mute = useMonitorStore((s) => s.mute)
+  const unmute = useMonitorStore((s) => s.unmute)
   const meta = kindMeta(m.kind)
+  const muted = isMuted(m)
 
   const series = useMemo(
     () => [
@@ -173,39 +232,52 @@ function MonitorDetail({ m, onEdit }: { m: Monitor; onEdit: () => void }) {
       <div className="flex items-start gap-3">
         <span className={cn('mt-1.5 size-3 shrink-0 rounded-full', STATUS_DOT[m.status])} />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-semibold">{m.name}</h2>
             <span className="text-xs uppercase text-muted-foreground">{m.status}</span>
+            {muted && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1 text-[10px] text-muted-foreground">
+                <BellOff className="size-2.5" /> muted
+              </span>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
-            {meta.label} · <span className="font-mono">{m.target}</span> · every {m.intervalSec}s ·{' '}
-            down after {m.failThreshold} fails
+            {meta.label} · <span className="font-mono">{m.target}</span> · every {m.intervalSec}s · down after{' '}
+            {m.failThreshold} fails
           </p>
           {configSummary(m.kind, m.config) ? (
             <p className="text-[11px] text-muted-foreground/80">{configSummary(m.kind, m.config)}</p>
           ) : null}
         </div>
-        <div className="flex shrink-0 gap-1.5">
-          <Button size="sm" variant="outline" onClick={() => void checkNow(m.id)}>
-            <RefreshCw className="size-3.5" /> Check now
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => void setPaused(m.id, m.enabled)}>
-            {m.enabled ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
-            {m.enabled ? 'Pause' : 'Resume'}
-          </Button>
-          <Button size="sm" variant="outline" onClick={onEdit}>
-            Edit
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              if (confirm(`Delete monitor "${m.name}"?`)) void remove(m.id)
-            }}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        <Button size="sm" variant="outline" onClick={() => void checkNow(m.id)}>
+          <RefreshCw className="size-3.5" /> Check now
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => void setPaused(m.id, m.enabled)}>
+          {m.enabled ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+          {m.enabled ? 'Pause' : 'Resume'}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => (muted ? void unmute(m.id) : void mute(m.id, Date.now() + 3_600_000))}
+        >
+          <BellOff className="size-3.5" /> {muted ? 'Unmute' : 'Snooze 1h'}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onEdit}>
+          Edit
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            if (confirm(`Delete monitor "${m.name}"?`)) void remove(m.id)
+          }}
+        >
+          <Trash2 className="size-3.5" />
+        </Button>
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-center">
@@ -314,6 +386,8 @@ function MonitorDialog({ initial, onClose }: { initial: Monitor | null; onClose:
   const [intervalSec, setIntervalSec] = useState(initial?.intervalSec ?? kindMeta(initial?.kind ?? 'icmp').defaultIntervalSec)
   const [failThreshold, setFailThreshold] = useState(initial?.failThreshold ?? 3)
   const [config, setConfig] = useState<Record<string, unknown>>(initial?.config ?? {})
+  const [tags, setTags] = useState(initial?.tags ?? '')
+  const [channel, setChannel] = useState(initial?.channel ?? '')
   const [intervalTouched, setIntervalTouched] = useState(false)
   const [busy, setBusy] = useState(false)
   const meta = kindMeta(kind)
@@ -347,6 +421,8 @@ function MonitorDialog({ initial, onClose }: { initial: Monitor | null; onClose:
       intervalSec,
       failThreshold,
       config,
+      tags: tags.trim(),
+      channel,
     })
     setBusy(false)
     if (saved) onClose()
@@ -420,6 +496,33 @@ function MonitorDialog({ initial, onClose }: { initial: Monitor | null; onClose:
                 value={failThreshold}
                 onChange={(e) => setFailThreshold(Math.max(1, Number(e.target.value) || 3))}
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="mon-tags">Tags</Label>
+              <Input
+                id="mon-tags"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="prod, web"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Alert channel</Label>
+              <Select value={channel || 'default'} onValueChange={(v) => setChannel(!v || v === 'default' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Use default</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="webhook">Webhook</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="desktop">Desktop</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

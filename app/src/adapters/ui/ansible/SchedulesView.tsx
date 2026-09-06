@@ -153,6 +153,13 @@ export function SchedulesView() {
             />
             Enabled
           </label>
+          <label className="flex items-center gap-2 text-xs">
+            <Switch
+              checked={editing.runOnStart ?? false}
+              onCheckedChange={(c) => setEditing((p) => ({ ...p, runOnStart: c }))}
+            />
+            Run once when the app / backend starts
+          </label>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" onClick={() => setEditing(null)}>
               Cancel

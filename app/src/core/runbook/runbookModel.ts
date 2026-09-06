@@ -130,6 +130,8 @@ export interface RunSchedule {
   runbookId: string
   cron: string
   enabled: boolean
+  /** fire once on scheduler start regardless of cron timing (MONITORS_MODULE_PLAN M3c) */
+  runOnStart?: boolean
   version: number
   args: Record<string, string>
   nextRunAt: number

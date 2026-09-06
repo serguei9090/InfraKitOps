@@ -141,6 +141,8 @@ export interface Schedule {
   name: string
   cron: string
   enabled: boolean
+  /** fire once on scheduler start regardless of cron (MONITORS_MODULE_PLAN M3c) */
+  runOnStart?: boolean
   nextRunAt: number
   lastRunAt: number
   lastStatus?: string
