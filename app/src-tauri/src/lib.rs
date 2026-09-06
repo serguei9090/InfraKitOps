@@ -1,10 +1,31 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use tauri::{Manager, RunEvent};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
+
+/// When true, closing the window hides it to the tray instead of quitting, so
+/// the backend sidecar (and its monitors) keep running. Toggled from
+/// Settings → Monitors on the desktop build (MONITORS_MODULE_PLAN.md M3).
+struct KeepAlive(AtomicBool);
+
+#[tauri::command]
+fn set_keep_alive(state: tauri::State<'_, KeepAlive>, enabled: bool) {
+    state.0.store(enabled, Ordering::Relaxed);
+}
+
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+}
 
 /// Connection details for the `infrakit-backend` network sidecar, shared with
 /// the frontend via the `backend_endpoint` command. `endpoint` is empty when
@@ -132,7 +153,20 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![backend_endpoint])
+        .invoke_handler(tauri::generate_handler![backend_endpoint, set_keep_alive])
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let keep = window
+                    .app_handle()
+                    .state::<KeepAlive>()
+                    .0
+                    .load(Ordering::Relaxed);
+                if keep {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -141,6 +175,33 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            app.manage(KeepAlive(AtomicBool::new(false)));
+
+            let show = MenuItem::with_id(app, "show", "Show InfraKit Studio", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+            TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("InfraKit Studio")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+
             let state = start_backend(app);
             app.manage(state);
             Ok(())

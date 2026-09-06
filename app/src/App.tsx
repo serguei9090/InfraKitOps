@@ -6,6 +6,7 @@ import { useBackendStore } from './stores/backendStore'
 import { useRunsStore } from './stores/runsStore'
 import { AuthGate, ForcedPasswordChange } from './adapters/ui/auth/AuthGate'
 import { ErrorBoundary } from './adapters/ui/errors/ErrorBoundary'
+import { syncKeepAliveOnBoot } from './adapters/backend/desktopKeepAlive'
 
 function App() {
   const ready = useAuthStore((s) => s.ready)
@@ -29,6 +30,7 @@ function App() {
   // even when no run screen is mounted (BACKGROUND_RUNS_PLAN.md).
   useEffect(() => {
     startRunsPolling()
+    void syncKeepAliveOnBoot()
   }, [startRunsPolling])
 
   // Until the /health probe resolves we don't know whether to gate — a brief

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { isTauri } from '@tauri-apps/api/core'
+import { keepMonitoringInBackground, setKeepMonitoringInBackground } from '@/adapters/backend/desktopKeepAlive'
 import { useBackendStore } from '@/stores/backendStore'
 import { useMonitorStore } from '@/stores/monitorStore'
 import { defaultMonitorSettings, type MonitorSettings as Settings } from '@/core/monitor/monitorModel'
@@ -32,6 +34,12 @@ export function MonitorSettings() {
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
+  const [keepAlive, setKeepAlive] = useState(keepMonitoringInBackground())
+
+  const setKeepAlivePref = (on: boolean) => {
+    setKeepAlive(on)
+    void setKeepMonitoringInBackground(on)
+  }
 
   useEffect(() => {
     if (status === 'unknown') void refreshBackend()
@@ -206,6 +214,11 @@ export function MonitorSettings() {
       </SettingsGroup>
 
       <SettingsGroup title="Behaviour">
+        {isTauri() && (
+          <SettingsRow label="Keep monitoring when the window is closed" hint="Minimises to the tray; the backend keeps running">
+            <Switch checked={keepAlive} onCheckedChange={setKeepAlivePref} />
+          </SettingsRow>
+        )}
         <SettingsRow label="Probe all monitors on start" hint="Probe once on backend start">
           <Switch checked={draft.runAllOnStart} onCheckedChange={(v) => set('runAllOnStart', v)} />
         </SettingsRow>
