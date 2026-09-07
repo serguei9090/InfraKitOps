@@ -67,9 +67,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ubuntu-22.04: the AppImage tooling (linuxdeploy/FUSE) aborts on the
-        # 24.04 runner image.
-        os: [windows-latest, ubuntu-22.04]
+        os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
