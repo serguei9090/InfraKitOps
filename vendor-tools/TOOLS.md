@@ -9,6 +9,12 @@ SHA-256-verified by `fetch-tools.sh` / `.ps1` from the pins in
 if it is MIT / BSD-2/3-Clause / ISC / Apache-2.0 / MPL-2.0. No GPL/LGPL bundling.
 No NPSL (nmap).
 
+**Pin note (2026-09-07):** `userdocs/iperf3-static` rebuilds and re-uploads its
+release assets in place, so the `3.21` binaries changed hash without a version
+bump. The four `iperf3` SHA-256s in `tools.lock` were re-pinned to the current
+assets (verified: `file` reports a static-PIE ELF/Mach-O x86-64/arm64 from the
+same tagged release URL, same reputable build repo).
+
 | Tool | Version | SPDX | Bundled for | Source | Why not a Go library |
 |------|---------|------|-------------|--------|----------------------|
 | **iperf3** | 3.21 | BSD-3-Clause | linux/amd64, linux/arm64, darwin/amd64, darwin/arm64 | [userdocs/iperf3-static](https://github.com/userdocs/iperf3-static) (build repo MIT; binary BSD-3, static musl — no libc/OpenSSL/Cygwin deps) | No trustworthy protocol-compatible pure-Go implementation exists; `iperf3 --json` is the interface. |
