@@ -2,7 +2,14 @@
 
 > [!NOTE]
 > ### 🎓 Educational & Academic Research Notice
-> This project is a personal learning and portfolio project developed strictly for **educational purposes, academic research, and exploring emerging technical concepts** (AI systems, cloud infrastructure, SRE, and modern software architectures).
+> This project is engineered as a **personal learning sandbox, architectural demonstration, and academic research project** exploring local-first SRE tooling and offline architectures.
+> - **Status:** Personal Sandbox / Portfolio Showcase.
+> - **License:** Open source under the [GNU AGPLv3](LICENSE). Free for community use, study, and modification.
+> - **Warranty:** Provided AS-IS for educational exploration with no commercial SLA or warranty.
+
+---
+
+
 >
 > - **Status:** Personal Sandbox / Portfolio Piece.
 > - **Terms of Use:** Free for personal exploration, educational study, and non-commercial research.
