@@ -1,6 +1,8 @@
-import { Loader2, Unplug } from 'lucide-react'
+import { Download, Loader2, Unplug } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useBackendStore } from '@/stores/backendStore'
+import { DEMO_MODE, DOCKER_ONELINER, RELEASES_URL } from '@/lib/demoMode'
+import { readEndpointOverride } from '@/adapters/backend/endpointOverride'
 
 interface BackendUnavailableProps {
   onRetry: () => void
@@ -19,6 +21,39 @@ export function BackendUnavailable({ onRetry, retrying, reason }: BackendUnavail
   // button reads "Connecting…" during warm-up rather than an idle "Retry".
   const autoReconnecting = useBackendStore((s) => s.reconnecting)
   const busy = retrying || autoReconnecting
+
+  // On the public demo, this module simply isn't available — point at the
+  // download instead of dev-setup instructions (unless the visitor has
+  // already wired their own backend via the endpoint override).
+  if (DEMO_MODE && !readEndpointOverride()) {
+    return (
+      <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center">
+        <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <Unplug className="size-6" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold">Not on the live demo</h2>
+          <p className="text-sm text-muted-foreground">
+            {reason ??
+              'This module runs commands on the InfraKit backend — SSH, Ansible, network probes, LLM calls. The live demo is client-only. Run it locally to use this.'}
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button size="sm" render={<a href={RELEASES_URL} target="_blank" rel="noreferrer" />} className="gap-1.5">
+            <Download className="size-4" /> Download the app
+          </Button>
+        </div>
+        <div className="w-full space-y-1 text-left text-xs text-muted-foreground">
+          <p>…or one line with Docker:</p>
+          <pre className="overflow-x-auto rounded-md bg-muted p-2 font-mono">{DOCKER_ONELINER}</pre>
+          <p>
+            Already running a backend? Set it in <span className="font-medium text-foreground">Settings → Backend → Endpoint override</span>.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center">
       <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">

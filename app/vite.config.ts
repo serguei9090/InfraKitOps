@@ -16,6 +16,10 @@ const appVersion = JSON.parse(
 // through vitest/config. Keeping the plugins under plain Vite's defineConfig
 // and merging the `test` block in separately sidesteps that.
 const viteConfig = defineConfig({
+  // Served from '/' for the desktop shell and a normal deploy; the GitHub
+  // Pages demo sets VITE_BASE=/InfraKitOps/ so hashed asset URLs resolve
+  // under the project subpath.
+  base: process.env.VITE_BASE || '/',
   plugins: [react(), tailwindcss()],
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),

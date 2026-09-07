@@ -12,6 +12,8 @@
  * See SETTINGS_MODULE_PLAN.md §S3 and PACKAGING_PLAN.md P7f.
  */
 
+import { DEMO_MODE } from '@/lib/demoMode'
+
 const KEY = 'infrakit:backend-endpoint'
 
 export interface EndpointOverride {
@@ -61,6 +63,9 @@ export interface ResolvedEndpoint {
 export function resolveWebEndpoint(): ResolvedEndpoint {
   const ov = readEndpointOverride()
   if (ov) return { endpoint: ov.url, token: ov.token, available: true }
+  // The public demo build never auto-connects to a baked-in backend — a
+  // visitor opts in with an explicit endpoint override (handled above).
+  if (DEMO_MODE) return { endpoint: '', token: '', available: false }
   const url = trimUrl((import.meta.env.VITE_BACKEND_URL as string | undefined) ?? '')
   const token = (import.meta.env.VITE_BACKEND_TOKEN as string | undefined) ?? ''
   return { endpoint: url, token, available: url.length > 0 }

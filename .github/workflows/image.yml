@@ -1,16 +1,18 @@
 name: image
 
-# Build-only gate for the hosted-deployment container (DEPLOY_PLAN.md D3).
-# Nothing is pushed to a registry — this just proves the Dockerfile builds
-# and the resulting image serves /api/v1/health before it reaches anyone's
-# `docker compose up`.
+# Builds the hosted-deployment container, smoke-tests it, and — on main or a
+# version tag — publishes it to GitHub Container Registry.
 #
-# To start publishing later: set `push: true` on the build step, add a
-# registry-login step, and give it tags. That is a small, self-contained diff.
+#   ghcr.io/<owner>/infrakitops:latest      (main)
+#   ghcr.io/<owner>/infrakitops:0.5.0       (tag v0.5.0)
+#   ghcr.io/<owner>/infrakitops:sha-<short>
+#
+# Pull requests build + smoke-test only; nothing is pushed.
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
     paths:
       - 'Dockerfile'
       - '.dockerignore'
@@ -28,6 +30,13 @@ on:
       - '.github/workflows/image.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/infrakitops
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -36,25 +45,43 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Build image (amd64, load into the local daemon)
+      - name: Registry login (skipped on PRs)
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags & labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=match,pattern=v(.*),group=1
+            type=sha,prefix=sha-
+
+      - name: Build
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: false
-          load: true
+          load: true                                   # keep it in the local daemon for the smoke test
+          push: ${{ github.event_name != 'pull_request' }}
           platforms: linux/amd64
-          tags: infrakit-studio:ci
+          # always build a stable local tag; add the registry tags on push
+          tags: |
+            infrakit-studio:ci
+            ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=ci-${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.version || format('ci-{0}', github.sha) }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Smoke test — the image serves the API
         run: |
-          # --entrypoint sh overrides the image's exec-form ENTRYPOINT so this
-          # actually runs as a shell script — `docker run image sh -c '...'`
-          # alone just appends "sh -c ..." as CLI args to infrakit-backend,
-          # which silently ignores them (exec-form ENTRYPOINT always wins).
           docker run -d --name ik \
             -e INFRAKIT_AUTH=on \
             -e INFRAKIT_VAULT_PASSPHRASE_FILE=/tmp/vp \

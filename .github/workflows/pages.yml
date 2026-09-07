@@ -1,0 +1,64 @@
+name: demo (GitHub Pages)
+
+# Builds the frontend in demo mode (VITE_DEMO_MODE=1) and publishes the static
+# bundle to GitHub Pages: https://<owner>.github.io/InfraKitOps/
+#
+# The 88 client-side tools run fully in the browser. The backend-driven modules
+# (Network, Runbooks, Ansible, AI) render a "download the app / run the
+# container" card instead of a dev-setup snippet — see src/lib/demoMode.ts.
+#
+# One-time setup: repo Settings → Pages → Build and deployment → Source =
+# "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One live deploy at a time; let an in-progress run finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: build (demo mode, project subpath)
+        working-directory: app
+        env:
+          VITE_DEMO_MODE: '1'
+          VITE_BASE: /InfraKitOps/
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+          # SPA history fallback — Pages has no rewrite rules, so a refreshed
+          # deep link 404s onto this copy of the shell.
+          cp dist/index.html dist/404.html
+          # tell Pages not to run Jekyll over the Vite output
+          touch dist/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

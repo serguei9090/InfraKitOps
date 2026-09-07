@@ -14,6 +14,7 @@ import { RunsButton } from '@/adapters/ui/runs/RunsDrawer'
 import { ErrorBoundary } from '@/adapters/ui/errors/ErrorBoundary'
 import { UserMenu } from '@/adapters/ui/auth/UserMenu'
 import { AppSidebar } from './AppSidebar'
+import { DemoBanner } from './DemoBanner'
 import { moduleContainingRoute } from './moduleTaxonomy'
 
 /**
@@ -71,6 +72,7 @@ export function AppShellScaffold() {
           </button>
           <UserMenu />
         </header>
+        <DemoBanner />
         <div className="flex flex-1 overflow-hidden">
           <AppSidebar />
           <div className="w-px shrink-0 bg-border/60" />

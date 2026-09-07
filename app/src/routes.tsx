@@ -140,4 +140,7 @@ export const router = createBrowserRouter([
       { path: 'tools/iperf3', lazy: () => import('./adapters/ui/tools/Iperf3Screen').then((m) => ({ Component: m.Iperf3Screen })) },
     ],
   },
-])
+], {
+  // '/' normally; '/InfraKitOps/' on the GitHub Pages demo (Vite `base`).
+  basename: import.meta.env.BASE_URL.replace(/\/$/, '') || undefined,
+})
