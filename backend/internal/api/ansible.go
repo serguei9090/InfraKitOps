@@ -1040,7 +1040,7 @@ func chanEmit(ctx context.Context, ch chan<- sse.Message) func(ev string, data a
 // streamOneError pushes a single SSE error event on an already-open stream.
 func streamOneError(sw *sse.Writer, r *http.Request, err error) {
 	ch := make(chan sse.Message, 1)
-	ch <- sse.Message{Event: "error", Data: map[string]string{"error": err.Error()}}
+	ch <- sse.Message{Event: "error", Data: map[string]string{"error": err.Error(), "code": string(apierr.CodeInternal)}}
 	close(ch)
 	sw.Pump(r.Context(), ch)
 }
