@@ -1,5 +1,17 @@
 # InfraKit Studio
 
+> [!NOTE]
+> ### 🎓 Educational & Academic Research Notice
+> This project is a personal learning and portfolio project developed strictly for **educational purposes, academic research, and exploring emerging technical concepts** (AI systems, cloud infrastructure, SRE, and modern software architectures).
+>
+> - **Status:** Personal Sandbox / Portfolio Piece.
+> - **Terms of Use:** Free for personal exploration, educational study, and non-commercial research.
+> - **Production / Commercial Use:** For enterprise or commercial production usage, prior authorization and permission from the author are required.
+> - **Purpose:** Academic research, technical skill development, and architectural prototyping.
+
+---
+
+
 **The infra tool you reach for first.** A local-first workbench for the generalist
 SRE / sysadmin / developer — the person who touches Ansible, runbooks, network
 diagnostics, config files, LLM prompts, and a pile of encode/convert/hash utilities
