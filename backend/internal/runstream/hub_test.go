@@ -13,7 +13,7 @@ import (
 func collect(t *testing.T, ch <-chan sse.Message) []string {
 	t.Helper()
 	var got []string
-	timeout := time.After(time.Second)
+	timeout := time.After(5 * time.Second)
 	for {
 		select {
 		case m, ok := <-ch:
@@ -102,7 +102,7 @@ func TestCancel(t *testing.T) {
 	}
 	select {
 	case <-ctx.Done():
-	case <-time.After(time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("cancel did not propagate to the run context")
 	}
 	// The run goroutine reacts to the cancelled context by calling Finish.

@@ -67,7 +67,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        # ubuntu-22.04: the AppImage tooling (linuxdeploy/FUSE) aborts on the
+        # 24.04 runner image.
+        os: [windows-latest, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -110,6 +112,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # run the AppImage runtime without FUSE on the CI runner
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+          NO_STRIP: 'true'
         with:
           projectPath: app
           releaseId: ${{ needs.create-release.outputs.release_id }}
