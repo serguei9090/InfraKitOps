@@ -33,11 +33,25 @@ jobs:
       tag: ${{ steps.v.outputs.tag }}
       release_id: ${{ steps.rel.outputs.id }}
     steps:
+      - uses: actions/checkout@v4
       - id: v
         run: |
           if [ -n "${{ inputs.version }}" ]; then V="${{ inputs.version }}"; else V="${GITHUB_REF_NAME#v}"; fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "tag=v$V"    >> "$GITHUB_OUTPUT"
+      - name: Assemble the release body (CHANGELOG section + install guide)
+        env:
+          V: ${{ steps.v.outputs.version }}
+        run: |
+          # this version's section from CHANGELOG.md, up to the next "## ["
+          awk -v v="$V" '
+            index($0, "## [" v "]") == 1 { grab = 1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md > body.md
+          printf '\n---\n\n' >> body.md
+          cat .github/release-body.md >> body.md
+          echo "::group::release body"; cat body.md; echo "::endgroup::"
       - id: rel
         uses: softprops/action-gh-release@v2
         with:
@@ -45,33 +59,8 @@ jobs:
           name: InfraKit Studio ${{ steps.v.outputs.tag }}
           draft: true
           prerelease: false
-          body: |
-            ## Desktop app
-
-            Install and run — a local backend starts automatically, no
-            configuration, single-user.
-
-            | OS | File |
-            |----|------|
-            | Windows | `.msi` (or `_x64-setup.exe` for the NSIS installer) |
-            | Linux | `.deb` (Debian/Ubuntu) or `.AppImage` (portable) |
-
-            ## Self-hosted web (`infrakit-studio-web-<v>-<os>.zip`)
-
-            Run it for a team. The **same backend binary** serves the app UI
-            and the API on one port — the desktop build uses it as a sidecar,
-            here it runs standalone with `--static-dir`.
-
-            ```
-            unzip infrakit-studio-web-<v>-linux-amd64.zip -d infrakit
-            cd infrakit && ./run.sh          # Windows: run.bat
-            ```
-
-            Open `http://127.0.0.1:8080`; the first start prints a
-            `SETUP-TOKEN` for creating the admin account. To expose it on a
-            network add TLS — see `README.md` in the zip and
-            `docs/deployment/DEPLOY.md` in the repo. A `Dockerfile` +
-            `deploy/compose.yml` (Caddy HTTPS) are also in the repo.
+          generate_release_notes: true
+          body_path: body.md
 
   desktop:
     needs: create-release
