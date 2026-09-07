@@ -63,17 +63,17 @@ jobs:
             type=match,pattern=v(.*),group=1
             type=sha,prefix=sha-
 
-      - name: Build
+      - name: Build (+ push when not a PR)
         uses: docker/build-push-action@v6
         with:
           context: .
-          load: true                                   # keep it in the local daemon for the smoke test
+          # PR: keep it local for the smoke test. Push events: push to GHCR.
+          # (the two are mutually exclusive here — buildx pushes every tag, so
+          #  the bare local tag can't ride along on a push.)
+          load: ${{ github.event_name == 'pull_request' }}
           push: ${{ github.event_name != 'pull_request' }}
           platforms: linux/amd64
-          # always build a stable local tag; add the registry tags on push
-          tags: |
-            infrakit-studio:ci
-            ${{ steps.meta.outputs.tags }}
+          tags: ${{ github.event_name == 'pull_request' && 'infrakit-studio:ci' || steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version || format('ci-{0}', github.sha) }}
@@ -82,12 +82,19 @@ jobs:
 
       - name: Smoke test — the image serves the API
         run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            IMG=infrakit-studio:ci
+          else
+            IMG="${{ env.IMAGE }}:sha-$(echo ${{ github.sha }} | cut -c1-7)"
+            docker pull "$IMG"
+          fi
+          echo "testing $IMG"
           docker run -d --name ik \
             -e INFRAKIT_AUTH=on \
             -e INFRAKIT_VAULT_PASSPHRASE_FILE=/tmp/vp \
             -p 8080:8080 \
             --entrypoint sh \
-            infrakit-studio:ci \
+            "$IMG" \
             -c 'echo ci-passphrase-123456 > /tmp/vp && exec infrakit-backend'
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:8080/api/v1/health | grep -q '"authMode":"on"'; then
