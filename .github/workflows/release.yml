@@ -110,12 +110,15 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # run the AppImage runtime without FUSE on the CI runner
           APPIMAGE_EXTRACT_AND_RUN: '1'
           NO_STRIP: 'true'
         with:
           projectPath: app
           releaseId: ${{ needs.create-release.outputs.release_id }}
+          # Linux: ship the .deb only — the AppImage step SIGABRTs on the CI
+          # runner (tracked for a later release). Debian/Ubuntu/Mint users get
+          # the .deb; everyone else has the web bundle zip or the container.
+          args: ${{ runner.os == 'Linux' && '--bundles deb' || '' }}
 
   # Build the frontend once; every web-bundle variant reuses it.
   web-frontend:

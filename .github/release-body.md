@@ -8,21 +8,23 @@ starts automatically, no configuration, single-user.
 | OS | File |
 |----|------|
 | Windows | `.msi` (or `_x64-setup.exe` for the NSIS installer) |
-| Linux | `.deb` (Debian / Ubuntu) or `.AppImage` (portable) |
+| Linux | `.deb` (Debian / Ubuntu / Mint) — AppImage tracked for a later release |
 
 The builds are **not code-signed** yet, so Windows SmartScreen shows an
 "unknown publisher" prompt once — *More info → Run anyway*.
 
 ### Self-hosted (team, multi-user)
 
-One line with Docker:
+Build from source — no registry needed:
 
 ```bash
-docker run -p 8080:8080 -v infrakit:/data ghcr.io/serguei9090/infrakitops:latest
+git clone https://github.com/serguei9090/InfraKitOps && cd InfraKitOps
+docker build -t infrakit-studio . && docker run -p 8080:8080 -v infrakit:/data infrakit-studio
 ```
 
-Or grab `infrakit-studio-web-<version>-<os>.zip` below — the same backend
-binary serves the UI and the API on one port:
+Or `docker compose up -d --build` from `deploy/` for the Caddy TLS setup. Or
+grab `infrakit-studio-web-<version>-<os>.zip` below — the same backend binary
+serves the UI and the API on one port:
 
 ```bash
 unzip infrakit-studio-web-<version>-linux-amd64.zip -d infrakit

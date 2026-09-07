@@ -29,20 +29,31 @@ sidecar is present.
 **Live demo** (client-only tools, no backend): <https://serguei9090.github.io/InfraKitOps/>
 
 **Desktop** — [latest release](https://github.com/serguei9090/InfraKitOps/releases/latest):
-Windows `.msi` / `.exe`, Linux `.deb` / `.AppImage`. Installs unsigned for now, so
-Windows SmartScreen asks once — *More info → Run anyway*.
+Windows `.msi` / `.exe`, Linux `.deb`. Installs unsigned for now, so Windows
+SmartScreen asks once — *More info → Run anyway*.
 
-**Self-hosted, one line** (full app, multi-user auth on by default):
+**Self-hosted — build from source** (no registry, always works):
 
 ```bash
-docker run -p 8080:8080 -v infrakit:/data ghcr.io/serguei9090/infrakitops:latest
+git clone https://github.com/serguei9090/InfraKitOps
+cd InfraKitOps
+docker build -t infrakit-studio .
+docker run -p 8080:8080 -v infrakit:/data infrakit-studio
 ```
 
 Open <http://127.0.0.1:8080>; the first start logs a `SETUP-TOKEN` for creating the
 admin account (`docker logs`). The encrypted Vault stays locked until you set a
-passphrase in the UI. For TLS + a reverse proxy + headless Vault unlock, use
-[`deploy/compose.yml`](deploy/compose.yml) (Caddy) — see
-[`docs/deployment/DEPLOY.md`](docs/deployment/DEPLOY.md).
+passphrase in the UI.
+
+For TLS + a reverse proxy + headless Vault unlock, use
+[`deploy/compose.yml`](deploy/compose.yml) (`docker compose up -d --build`,
+Caddy in front) — see [`docs/deployment/DEPLOY.md`](docs/deployment/DEPLOY.md).
+
+**Or pull the pre-built image** (once the GHCR package is public):
+
+```bash
+docker run -p 8080:8080 -v infrakit:/data ghcr.io/serguei9090/infrakitops:latest
+```
 
 [AGPL-3.0](LICENSE) licensed — run it, fork it, host it; if you host a modified
 version for others, publish your changes. **Full documentation — architecture

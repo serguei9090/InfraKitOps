@@ -74,6 +74,9 @@ deployment.
 ### Known limits
 
 - Desktop installers are **not code-signed** — Windows SmartScreen warns once.
+- Linux desktop ships as `.deb` only for now; the AppImage build is tracked
+  for a later release. Linux users can also run the web-bundle zip or the
+  container.
 - The Ansible control node does not run on native Windows; use the Docker /
   Podman, WSL, or remote-SSH runner.
 - Multi-user mode targets a small trusted team, not hostile public
