@@ -1,23 +1,17 @@
 # InfraKit Studio
 
 > [!NOTE]
-> ### 🎓 Educational & Academic Research Notice
-> This project is engineered as a **personal learning sandbox, architectural demonstration, and academic research project** exploring local-first SRE tooling and offline architectures.
-> - **Status:** Personal Sandbox / Portfolio Showcase.
-> - **License:** Open source under the [GNU AGPLv3](LICENSE). Free for community use, study, and modification.
-> - **Warranty:** Provided AS-IS for educational exploration with no commercial SLA or warranty.
-
----
-
-
+> ### 🎓 Personal project — built for learning, shared openly
+> A personal learning sandbox, architecture demonstration, and portfolio piece
+> exploring local-first SRE / sysadmin tooling. Alpha, and maintained by one
+> person in spare time.
 >
-> - **Status:** Personal Sandbox / Portfolio Piece.
-> - **Terms of Use:** Free for personal exploration, educational study, and non-commercial research.
-> - **Production / Commercial Use:** For enterprise or commercial production usage, prior authorization and permission from the author are required.
-> - **Purpose:** Academic research, technical skill development, and architectural prototyping.
+> - **License:** open source under the [GNU AGPL-3.0](LICENSE) — free to use,
+>   study, modify, self-host, and run commercially; if you host a modified
+>   version as a network service, you must publish your changes.
+> - **Warranty:** provided AS-IS, no SLA or support commitment.
 
 ---
-
 
 **The infra tool you reach for first.** A local-first workbench for the generalist
 SRE / sysadmin / developer — the person who touches Ansible, runbooks, network
