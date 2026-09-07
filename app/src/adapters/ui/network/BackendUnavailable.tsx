@@ -1,8 +1,37 @@
-import { Download, Loader2, Unplug } from 'lucide-react'
+import { useState } from 'react'
+import { Check, Copy, Download, Loader2, Unplug } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useBackendStore } from '@/stores/backendStore'
 import { DEMO_MODE, DOCKER_ONELINER, RELEASES_URL } from '@/lib/demoMode'
 import { readEndpointOverride } from '@/adapters/backend/endpointOverride'
+
+/** A shell command shown in full (wraps) with a copy button. */
+function CommandBlock({ command }: { command: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="flex items-start gap-1.5 rounded-md bg-muted p-2">
+      <code className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-foreground">
+        {command}
+      </code>
+      <button
+        type="button"
+        aria-label="Copy command"
+        className="shrink-0 rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(command)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1500)
+          } catch {
+            /* clipboard blocked */
+          }
+        }}
+      >
+        {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+      </button>
+    </div>
+  )
+}
 
 interface BackendUnavailableProps {
   onRetry: () => void
@@ -43,9 +72,9 @@ export function BackendUnavailable({ onRetry, retrying, reason }: BackendUnavail
             <Download className="size-4" /> Download the app
           </Button>
         </div>
-        <div className="w-full space-y-1 text-left text-xs text-muted-foreground">
+        <div className="w-full space-y-1.5 text-left text-xs text-muted-foreground">
           <p>…or one line with Docker:</p>
-          <pre className="overflow-x-auto rounded-md bg-muted p-2 font-mono">{DOCKER_ONELINER}</pre>
+          <CommandBlock command={DOCKER_ONELINER} />
           <p>
             Already running a backend? Set it in <span className="font-medium text-foreground">Settings → Backend → Endpoint override</span>.
           </p>
